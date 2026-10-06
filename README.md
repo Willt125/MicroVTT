@@ -16,7 +16,7 @@ Status: early development. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
 
 ## Development
 
-Requires Node 22+ and pnpm 10.
+Requires Node 22+ (24 recommended, see `.nvmrc`) and pnpm 11.
 
 ```sh
 pnpm install
