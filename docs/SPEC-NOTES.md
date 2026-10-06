@@ -135,38 +135,67 @@ The file extension is `.vtt`, the MIME type is `text/vtt`, and the charset is al
 
 ## Auto-caption input (YouTube), as it meets the spec
 
-Based on the format `yt-dlp` downloads. It has to be confirmed against real sample fixtures
-(see PLAN.md).
+Measured from three real `yt-dlp` `.auto.en-orig.vtt` downloads (5m48s, 48m33s, 4h18m29s). They
+are kept locally in `tests/private-fixtures/` and are not committed. A synthetic fixture with the
+same structure is at `packages/core/test/fixtures/autocaption-sample.vtt`.
 
-- **Header lines.** The file begins `WEBVTT` + LF + `Kind: captions` + LF + `Language: en` + LF + LF.
-  The parser accepts it: the block straight after the signature line is collected with the
-  _in header_ flag and discarded (§6.1). The syntax (§4.1) requires two or more line terminators
-  after the signature line, so the validator reports an error. In strict export, those lines move
-  into a `NOTE` block. In preserve mode they are kept, and the output is not claimed as conformant.
+**Layout.** UTF-8 with no BOM, LF line endings, no cue IDs, and every cue has the settings
+`align:start position:0%`. Each caption line goes through two cues:
+
+```
+00:00:04.080 --> 00:00:06.630 align:start position:0%     ← "growing" cue (about 1–3 s)
+<previous line, plain text, or a single space>
+and<00:00:04.400><c> just</c><00:00:04.640><c> one</c>…     ← new line with per-word timing
+
+00:00:06.630 --> 00:00:06.640 align:start position:0%     ← 10 ms hand-off cue
+and just one prompt is all it took.                        ← the completed line, plain text
+<a single space>
+```
+
+The cues are back-to-back: each one ends exactly where the next starts, and **none overlap**.
+The rolling effect comes from repeating the text, not from overlapping times. Payload lines made
+of a single U+0020 space are common (a blank top or bottom line).
+
+**How each feature meets the spec:**
+
+- **Header lines** `Kind: captions` / `Language: en` come directly after `WEBVTT`. The parser
+  accepts and discards them (the block after the signature is collected with the _in header_ flag,
+  §6.1). They are **not conforming syntax**: §4.1 requires two or more line terminators after
+  the signature line. In strict export, those lines move into a `NOTE` block. Preserve mode keeps
+  them, and the output is not claimed as conformant.
 - **Cue settings** `align:start position:0%` are valid (§4.4).
-- **Word timing.** `<00:00:01.234><c> word</c>` uses cue timestamps and class spans with no class
-  names. This is valid syntax as long as the timestamps are strictly increasing and fall inside the
-  cue's interval (§4.2). Recognizer output can break that, so it is a likely validator hit, and the
-  cleanup step must clamp or drop those timestamps.
-- **Rolling captions.** Overlapping cues and very short (about 10 ms) hand-off cues are both valid.
-  Start times are non-decreasing, as required. De-rolling is an editorial transformation,
-  not a conformance fix.
+- **Word timing** `<hh:mm:ss.mmm><c> word</c>` uses cue timestamps and class spans with no class
+  names, which is valid. The first word of each line has no timestamp (it starts at the cue start).
+  §4.2 requires each cue timestamp to be strictly greater than the previous one and than the cue
+  start, and less than the cue end. **Real files break this rarely:** the 4h18m sample has 2
+  violations in about 38k timed words (one duplicate timestamp, one 10 ms past the cue end). The
+  validator must report them, and the cleanup step clamps them.
+- **Escaping.** `&gt;&gt;` (the `>>` speaker-change marker; 2,312 times in the 48 min sample) and
+  `&amp;` appear correctly escaped. Non-ASCII text occurs (`°`). No sample contains `-->` in a payload.
+- **Sound tags** `[Music]`, `[Applause]`, `[music]`, `[laughter]`, … are plain text. Their case
+  differs between videos.
+- **Timing.** Start times are non-decreasing and every end is after its start. Hours are always
+  written.
+
+The cleanup ("de-roll") step should take the timed line from each growing cue (it gives word
+timings) and ignore the repeated line and the hand-off cues. About 1–6% of growing cues have no
+word timings (sound tags, short lines). Those lines get their timing from the cue itself.
 
 ## Browser support relevant to us (MDN BCD 8.1.4)
 
-| Feature                                                  | Chrome   | Firefox  | Safari   | Consequence                                                                                 |
-| -------------------------------------------------------- | -------- | -------- | -------- | ------------------------------------------------------------------------------------------- |
-| `VTTCue`                                                 | 23       | 31       | 6        | Native track preview works everywhere.                                                      |
-| `VTTCue.lineAlign`, `positionAlign`                      | **no**   | 31       | 14.1     | Chrome ignores them, so native preview is wrong in Chrome.                                  |
-| `VTTRegion` / `VTTCue.region`                            | **no**   | 59       | 7 / 14.1 | No regions in Chrome's native rendering.                                                    |
-| `::cue`                                                  | 26       | 55       | 7        |                                                                                             |
-| `:past` / `:future`                                      | 23       | **no**   | 7        | Karaoke-style timestamps are not styled in Firefox.                                         |
-| `TextDecoderStream`, `Blob.stream()`                     | 71 / 76  | 105 / 69 | 14.1     | Streaming import works everywhere.                                                          |
-| OPFS (`StorageManager.getDirectory`, sync access handle) | 86 / 102 | 111      | 15.2     | Autosave and the waveform-peak cache work everywhere.                                       |
-| `showOpenFilePicker` / `showSaveFilePicker`              | 86       | **no**   | **no**   | In-place "Save" in Chromium only. Elsewhere, fall back to `<input type=file>` and download. |
-| WebCodecs `AudioDecoder`                                 | 94       | 130      | **26**   | Streamed waveform peaks for long media. Safari before 26 gets no long-media waveform.       |
-| `requestVideoFrameCallback`                              | 83       | 132      | 15.4     | Frame-accurate playhead sync.                                                               |
-| `launchQueue` (PWA file handling)                        | 102      | no       | no       | "Open with MicroVTT" for the installed PWA works in Chromium only.                          |
+| Feature                                                  | Chrome   | Firefox  | Safari   | Consequence                                                                                                            |
+| -------------------------------------------------------- | -------- | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `VTTCue`                                                 | 23       | 31       | 6        | Native track preview works everywhere.                                                                                 |
+| `VTTCue.lineAlign`, `positionAlign`                      | **no**   | 31       | 14.1     | Chrome ignores them, so native preview is wrong in Chrome.                                                             |
+| `VTTRegion` / `VTTCue.region`                            | **no**   | 59       | 7 / 14.1 | No regions in Chrome's native rendering.                                                                               |
+| `::cue`                                                  | 26       | 55       | 7        |                                                                                                                        |
+| `:past` / `:future`                                      | 23       | **no**   | 7        | Karaoke-style timestamps are not styled in Firefox.                                                                    |
+| `TextDecoderStream`, `Blob.stream()`                     | 71 / 76  | 105 / 69 | 14.1     | Streaming import works everywhere.                                                                                     |
+| OPFS (`StorageManager.getDirectory`, sync access handle) | 86 / 102 | 111      | 15.2     | Autosave and the waveform-peak cache work everywhere.                                                                  |
+| `showOpenFilePicker` / `showSaveFilePicker`              | 86       | **no**   | **no**   | In-place "Save" in Chromium only. Elsewhere, fall back to `<input type=file>` and download.                            |
+| WebCodecs `AudioDecoder`                                 | 94       | 130      | **26**   | Streamed waveform peaks for long media. Decided by feature detection, not browser version (see PLAN.md decisions log). |
+| `requestVideoFrameCallback`                              | 83       | 132      | 15.4     | Frame-accurate playhead sync.                                                                                          |
+| `launchQueue` (PWA file handling)                        | 102      | no       | no       | "Open with MicroVTT" for the installed PWA works in Chromium only.                                                     |
 
 **Conclusion:** native `<track>` rendering is not spec-faithful in any single browser, so MicroVTT
 needs its own renderer (§7) for the preview. Native `<track>` rendering stays available as a

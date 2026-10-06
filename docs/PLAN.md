@@ -88,26 +88,25 @@ tune later. **We don't have a reliable source for that percentile, and it turns 
 for the caption side.** Caption files are small compared with the media, so we can afford to size
 for YouTube's maximum upload length of **12 hours** and cover every video.
 
-Estimate for a YouTube auto-caption `.vtt`, as downloaded by tools like `yt-dlp`. The model:
-about 150 spoken words per minute, every word carrying its own timestamp tag, and each roughly
-3-second caption line emitted twice (a "growing" cue plus a 10 ms hand-off cue that repeats the
-previous line):
+**Measured** from three real auto-caption files (`yt-dlp`, `en-orig`):
 
-| Video length       | Cues (approx.) | File size (approx.) |
-| ------------------ | -------------- | ------------------- |
-| 10 min             | 400 to 800     | 75 to 150 KB        |
-| 1 h                | 2.5k to 5k     | 0.5 to 1 MB         |
-| 12 h (YouTube max) | 30k to 60k     | 5 to 12 MB          |
+| Sample   | Cues          | Timed words    | Size           | Per hour                  |
+| -------- | ------------- | -------------- | -------------- | ------------------------- |
+| 5m48s    | 289           | about 900      | 48 KB          | 2,969 cues, 497 KB        |
+| 48m33s   | 2,427         | about 6.3k     | 358 KB         | 2,997 cues, 442 KB        |
+| 4h18m29s | 12,263        | about 38k      | 2.0 MB         | 2,846 cues, 470 KB        |
+| **12 h** | **about 36k** | **about 110k** | **about 6 MB** | extrapolated, YouTube max |
 
-These numbers are modeled, not measured. **Phase 1 needs real auto-caption samples to confirm
-them.** The ranges cover slow and fast speech.
+About half of the cues are 10 ms hand-off cues, so after the de-roll cleanup a 12 h document
+holds roughly 18k caption lines. The earlier model (0.5–1 MB/h) was at the high end. Real files
+come in at under 0.5 MB/h.
 
 What this means for implementation:
 
 - **The `.vtt` side is modest.** 60k cues is well within what plain JS objects, a Worker parser and
   a virtualized table handle. We drop the struct-of-arrays storage and OPFS text spill-over from
   the earlier plan: complexity with no payoff at this size.
-- **Design targets:** smooth editing at **≤ 100k cues** (the 12 h worst case with headroom).
+- **Design targets:** smooth editing at **≤ 100k cues** (almost 3× the measured 12 h worst case).
   Import, validation and export keep working, just slower, up to **≤ 50 MB**. Above that we warn
   but still try.
 - **The real scaling problem is the media.** A 12 h video is gigabytes, and decoding its audio into
@@ -115,9 +114,10 @@ What this means for implementation:
   - Playback always goes through an object URL, so the file is never read into memory.
   - Waveform peaks are computed _streamingly_: WebCodecs `AudioDecoder` plus a demuxer for
     MP4/WebM in a Worker, reduced to a few hundred peaks per second and cached in OPFS per file.
-  - Fallback where `AudioDecoder` is missing (Safari before 26): `decodeAudioData` in segments is
-    not possible for these containers, so long media gets no waveform there, only a timeline. The
-    85th-percentile question decides whether that fallback is acceptable.
+  - Where streamed decoding isn't available, long media gets no waveform, only the timeline and
+    playback. This is detected by feature (`AudioDecoder` exists and `isConfigSupported()` accepts
+    the file's audio codec), never by browser version. Short media can still use `decodeAudioData`
+    under a duration cap (to be set by measurement in Phase 5).
 - Import: `File.stream()` → `TextDecoderStream` → incremental parser in a Worker, with progress
   and cancellation.
 - Export: chunked serialization to a `Blob` (or `FileSystemWritableFileStream` in Chromium).
@@ -151,8 +151,8 @@ followed by a blank line. In strict export, MicroVTT moves those lines into a `N
 conforming and keeps the information. Preserve mode keeps them as they are, with the output flagged
 as non-conformant. See `SPEC-NOTES.md`.
 
-Open item: YouTube's exact auto-caption format has changed over time. We need **real samples**
-(short, 1 h and long ones) committed as fixtures before building the cleanup step.
+The auto-caption format is documented from three real samples in `SPEC-NOTES.md`. YouTube has
+changed it before, so the detector should key on structure rather than exact strings.
 
 ## Phased roadmap
 
@@ -163,7 +163,8 @@ Each phase ends green in CI with its acceptance criteria met.
 - [x] Gather sources: spec ED (pinned), WPT suites (vendored), MDN compat data.
 - [x] Monorepo scaffold, TS/Svelte/Vite/Vitest/ESLint/Prettier, CI workflow.
 - [x] Seed module (`timestamp`) with tests to prove the pipeline.
-- [ ] Decide the open questions below.
+- [x] Measure real auto-caption samples (see Sizing).
+- [ ] Decide the remaining open questions below.
 
 ### Phase 1: Core parser (spec §6)
 
@@ -235,14 +236,19 @@ Each phase ends green in CI with its acceptance criteria met.
   spec renderer (Phase 6), because they are the primary use case and YouTube ignores most
   positioning and styling anyway. Native `<track>` preview covers the time in between.
 
+- **2026-10-06:** Three real auto-caption samples received (see Sizing and `SPEC-NOTES.md`). They
+  stay local in the gitignored `tests/private-fixtures/` because they are third-party transcripts and
+  the repo will eventually be public. A synthetic fixture with the same structure is committed.
+- **2026-10-06:** "No waveform for long video on Safari ≤ 26." Implemented as feature detection
+  (above). Note: MDN data says Safari 26 _added_ `AudioDecoder`, so with feature detection Safari 26
+  will get the streamed waveform if its decoder supports the file's codec. Pinning Safari 26 to
+  "no waveform" would need user-agent sniffing. Not planned unless testing shows Safari 26's
+  decoder misbehaves.
+
 ## Open questions for the owner
 
-1. **Auto-caption samples:** can you provide real YouTube auto-caption `.vtt` files (short, about 1 h,
-   and long) to commit as fixtures? Phase 1 benchmarks and the Phase 4 cleanup depend on them.
-2. **Waveform fallback:** is "no waveform for long media on Safari before 26" acceptable? The
-   alternative is a capped-duration fallback that decodes the whole file.
-3. **Converters:** which formats beyond SRT matter, and how early? (YouTube accepts `.vtt`
+1. **Converters:** which formats beyond SRT matter, and how early? (YouTube accepts `.vtt`
    directly, so this may be low priority.)
-4. **Non-conformant export:** should preserve mode be the default when editing an imported file
+2. **Non-conformant export:** should preserve mode be the default when editing an imported file
    (minimal diffs), or should strict mode be the default (always conforming)? The spec allows either.
    Strict is the safer default for a tool that advertises compliance.
