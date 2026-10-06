@@ -105,8 +105,12 @@ a stable code, a severity, a source range, and a link to the spec anchor. Non-ex
   position alignment (or `auto`), size, text alignment (`start|center|end|left|right`), text.
 - Region properties: id, width, lines, region anchor x/y, viewport anchor x/y, scroll.
 - Cue kinds by payload: caption/subtitle text, chapter title text, metadata text.
-- The setter semantics should match the `VTTCue`/`VTTRegion` IDL (§9), as tested by
-  `tests/wpt/api/`, so the model can be mirrored into native `VTTCue` objects.
+- Pause-on-exit is not part of the syntax (it is always false for parsed cues), so the model
+  omits it.
+- Values follow the `VTTCue`/`VTTRegion` IDL (§9) so the model can be mirrored into native
+  objects. `updateCue` applies the attribute rules: unknown enum strings are ignored,
+  `position`/`size` outside 0..100 throw `IndexSizeError`, and `line` may be any finite number.
+  The API can express states the syntax cannot; `repair` converts those (see below).
 
 ### Serializer (`core/serialize`)
 
@@ -121,25 +125,30 @@ Not specified by the spec beyond "must generate conforming files". Our rules:
 ### Repair (`core/repair`): export-time fixes
 
 Most conformance comes free from serializing the model, because the parser only stores valid
-values: invalid or duplicate settings are already gone, the cue-text tree builder has already fixed
-misnesting and closed open spans, and timestamps are re-formatted. These rules need an active fix,
-and each applied fix goes into the export report:
+values: invalid or duplicate settings are already gone, timestamps are re-formatted, and
+settings are written in canonical form. The rest is fixed by `repair`, which reports every
+change with the validator's diagnostic code. The full list of rules and fixes is generated into
+`docs/DIAGNOSTICS.md`. The judgment calls:
 
-| Rule (§4)                                                                              | Fix                                                                                                            |
-| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Text after the signature line before the first blank line (e.g. `Kind:`/`Language:`)   | Move into a `NOTE` block                                                                                       |
-| Cue start times not non-decreasing                                                     | Stable sort by start time                                                                                      |
-| Cue end ≤ start                                                                        | Needs judgment. The default is decided in Phase 2, and the editor flags it before export                       |
-| Duplicate cue IDs                                                                      | Add a numeric suffix (`id-2`, …), keeping the IDs unique                                                       |
-| `-->` in payload or NOTE text                                                          | Escape as `--&gt;` (payload) or break the sequence (NOTE)                                                      |
-| Cue timestamp not strictly increasing, or outside (start, end)                         | Drop that timestamp tag and keep the text                                                                      |
-| Cue region reference to an undefined region, region with no `id`, duplicate region ids | Drop the reference, drop the region, drop earlier duplicates (cues bind to the last region with that id, §6.3) |
-| `<lang>` with an invalid BCP 47 tag                                                    | Unwrap the span and keep its content                                                                           |
-| STYLE block CSS that doesn't parse, or uses properties outside §8                      | Drop the offending rules or declarations                                                                       |
-| File-type rules (§4.6), e.g. overlapping chapter cues                                  | Only when the user picks a strict file type. Otherwise the file is treated as captions                         |
+- **End not after start:** end = start + 1 ms.
+- **Ignored text** (header lines, stray blocks, STYLE/REGION after the first cue, cues with broken
+  timings) is kept as a NOTE comment, never dropped and never moved into effect.
+- **Values the syntax cannot express:**
+  - `line` auto, or outside 0..100, with `snapToLines` false renders as 100% (the cue
+    computed line rule, §3), so it is written as `line:100%`.
+  - A fractional line number is rounded.
+  - A line or position alignment without a line or position is dropped.
+- **Cue text with errors** is rebuilt from the tree parsers build, so what viewers see is kept:
+  - out-of-order or out-of-range timestamp tags are dropped;
+  - invalid `<lang>` spans and `<v>` spans without a voice are unwrapped;
+  - a ruby span without `<rt>` is unwrapped;
+  - text after the last `<rt>` moves out of the ruby span.
+- **Chapters** (when the file type is chapters): an overlapping chapter is shortened to end where
+  the next one starts.
+- **Strings** are normalized the way parsers read them (NUL → U+FFFD, CR → LF) before anything else.
 
-Anything the parser discards on import (junk lines, invalid settings, STYLE/REGION blocks that
-appear after the first cue) is reported at import time, because by export it no longer exists.
+Import also reports what the parser discards (junk lines, invalid settings, late STYLE/REGION
+blocks), because by export it no longer exists in parser terms.
 
 ### Renderer (`web/render`), spec §7 "Rendering" and §8 "CSS extensions"
 
@@ -247,7 +256,9 @@ side-by-side "what browser X will show" mode.
 - `tests/wpt/file-parsing/*.vtt`: 11 files with invalid signatures, all of which must be rejected.
 - `tests/wpt/cue-text-parsing/*.dat`: 78 cue-text tree tests. Each input is wrapped in a one-cue
   file, as WPT's `common.js` does, and compared with a serialization of the §6.5 DOM mapping.
-- `tests/wpt/api/`: VTTCue/VTTRegion setter semantics, for the Phase 2 model.
+- `tests/wpt/api/`: VTTCue/VTTRegion behaviour in the browser. These need a real `<video>` and
+  `<track>`, so they do not run against the core; Phase 3's Playwright tests check our model
+  against native `VTTCue` objects instead.
 - Our own unit tests cover what WPT does not: numeric character references (C1 remapping,
   surrogates, overflow), annotations, the language stack, chapter titles, streaming across
   chunk boundaries, source ranges, and timestamps beyond the safe-integer range.
