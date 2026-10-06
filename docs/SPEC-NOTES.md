@@ -125,18 +125,18 @@ values: invalid or duplicate settings are already gone, the cue-text tree builde
 misnesting and closed open spans, and timestamps are re-formatted. These rules need an active fix,
 and each applied fix goes into the export report:
 
-| Rule (§4)                                                                              | Fix                                                                                         |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Text after the signature line before the first blank line (e.g. `Kind:`/`Language:`)   | Move into a `NOTE` block                                                                    |
-| Cue start times not non-decreasing                                                     | Stable sort by start time                                                                   |
-| Cue end ≤ start                                                                        | Needs judgment. The default is decided in Phase 2, and the editor flags it before export    |
-| Duplicate cue IDs                                                                      | Add a numeric suffix (`id-2`, …), keeping the IDs unique                                    |
-| `-->` in payload or NOTE text                                                          | Escape as `--&gt;` (payload) or break the sequence (NOTE)                                   |
-| Cue timestamp not strictly increasing, or outside (start, end)                         | Drop that timestamp tag and keep the text                                                   |
-| Cue region reference to an undefined region, region with no `id`, duplicate region ids | Drop the reference, drop the region, keep the last region with that id (as the parser does) |
-| `<lang>` with an invalid BCP 47 tag                                                    | Unwrap the span and keep its content                                                        |
-| STYLE block CSS that doesn't parse, or uses properties outside §8                      | Drop the offending rules or declarations                                                    |
-| File-type rules (§4.6), e.g. overlapping chapter cues                                  | Only when the user picks a strict file type. Otherwise the file is treated as captions      |
+| Rule (§4)                                                                              | Fix                                                                                                            |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Text after the signature line before the first blank line (e.g. `Kind:`/`Language:`)   | Move into a `NOTE` block                                                                                       |
+| Cue start times not non-decreasing                                                     | Stable sort by start time                                                                                      |
+| Cue end ≤ start                                                                        | Needs judgment. The default is decided in Phase 2, and the editor flags it before export                       |
+| Duplicate cue IDs                                                                      | Add a numeric suffix (`id-2`, …), keeping the IDs unique                                                       |
+| `-->` in payload or NOTE text                                                          | Escape as `--&gt;` (payload) or break the sequence (NOTE)                                                      |
+| Cue timestamp not strictly increasing, or outside (start, end)                         | Drop that timestamp tag and keep the text                                                                      |
+| Cue region reference to an undefined region, region with no `id`, duplicate region ids | Drop the reference, drop the region, drop earlier duplicates (cues bind to the last region with that id, §6.3) |
+| `<lang>` with an invalid BCP 47 tag                                                    | Unwrap the span and keep its content                                                                           |
+| STYLE block CSS that doesn't parse, or uses properties outside §8                      | Drop the offending rules or declarations                                                                       |
+| File-type rules (§4.6), e.g. overlapping chapter cues                                  | Only when the user picks a strict file type. Otherwise the file is treated as captions                         |
 
 Anything the parser discards on import (junk lines, invalid settings, STYLE/REGION blocks that
 appear after the first cue) is reported at import time, because by export it no longer exists.
