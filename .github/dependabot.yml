@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # Keep workflow actions current so runner-runtime deprecations don't pile up again.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    groups:
+      github-actions:
+        patterns: ['*']
