@@ -16,8 +16,9 @@ MicroVTT is an offline, in-browser WebVTT editor with these properties:
 - **Fully offline.** It makes no network requests at runtime. It ships as a single
   self-contained `.html` file that works from `file://`, and later as a hosted PWA that can be
   installed and then works offline (Phase 7, once quality is there).
-- **Import and export.** It reads and writes `.vtt` losslessly. Converters for other formats
-  (SRT first) come later.
+- **Import and export.** WebVTT is the primary format. It imports any `.vtt` the spec parser
+  accepts, including invalid ones, and **every export is a conforming file**: problems are fixed on
+  export and listed in an export report. SRT import and export come next, and SCC is a long-term goal.
 - **Full spec, not just what YouTube uses.** Every WebVTT feature (regions, styling, ruby,
   voices, karaoke timestamps, chapters and metadata) is supported for editing, validation and
   export, for the players and viewers that support it.
@@ -49,15 +50,16 @@ choice cheap to revisit until Phase 3.
 packages/core            DOM-free, zero deps, runs in Worker or Node
   timestamp              collect/format timestamps (done: seed module)
   decode                 bytes → string per UTF-8 decode; streaming; remembers BOM/line endings
-  cst                    lossless concrete syntax tree: blocks with source spans
+  source                 source map: every block/cue/setting keeps its span for diagnostics
   parse                  spec §6 parser → model + CST (incremental, chunk-fed)
   cuetext                spec §6.4 cue text tokenizer/tree builder + entity table
   model                  Document { header, styles[], regions[], cues[], comments[] }
   validate               spec §4 syntax checks → Diagnostic[] (code, severity, range, spec link)
-  serialize              strict (always conforming) and preserve (round-trip) modes; streaming
+  repair                 export-time fixes for rules the model alone can't guarantee; fix report
+  serialize              canonical, always-conforming output; streaming
   edit                   pure operations: shift/scale, split/merge, renumber IDs, sort, etc.
   autocaption            detect + de-roll + re-segment YouTube auto-captions, keeping word timings
-  convert/*              SRT ↔ VTT first; others on demand
+  convert/*              SRT ↔ VTT next; SCC (CEA-608) long-term
 apps/web                 Svelte 5 SPA
   worker                 import/parse/validate/serialize off the main thread
   store                  document state, undo/redo (command log), autosave to OPFS; waveform-peak cache
@@ -69,10 +71,13 @@ tests/wpt                vendored WPT webvtt suites (BSD-3), driven by core test
 
 Key decisions:
 
-1. **Lossless CST under a semantic model.** Every block records its source span. Edits mark
-   blocks dirty. Preserve-mode export re-emits clean blocks byte-for-byte and serializes dirty ones
-   canonically. This is how we satisfy "may round-trip errors in unedited sections, must not
-   claim conformance". The export dialog states whether the output is conformant.
+1. **Export always conforms. Parsed values live in the model, fixes run at export.** Export runs
+   three steps: _repair_ (the fixes the model can't guarantee by construction, see `SPEC-NOTES.md`),
+   then _serialize_ canonically from the model, then _re-validate_. Re-validation must report zero
+   errors, and CI enforces that as an invariant, not a hope. Every change repair makes is listed in
+   the export report. Things the parser silently discards (junk lines, invalid settings) are
+   reported as import diagnostics, so nothing disappears without the user seeing it. Source spans
+   are kept for jump-to-error, not for byte-exact re-emission.
 2. **Parse ≠ validate.** The parser follows §6 exactly, as the WPT tests require. The validator
    checks §4 syntax on the CST. They never share leniency logic.
 3. **Integer milliseconds** for all times. Conversion to float seconds happens only at the VTTCue boundary.
@@ -143,13 +148,11 @@ What this means for implementation:
    is never silently reduced, because other players and viewers support features YouTube doesn't. A
    "YouTube upload" check is an optional, warnings-only lint that lists features YouTube is likely
    to drop. It never strips anything. Which features YouTube actually honors needs testing
-   against real uploads before we hard-code that list. SRT export arrives with the converters.
+   against real uploads before we hard-code that list.
 
 Conformance note: the auto-caption header (`WEBVTT` followed directly by `Kind: captions` and
-`Language: en` lines) parses fine but is **not conforming syntax**, because the signature line must be
-followed by a blank line. In strict export, MicroVTT moves those lines into a `NOTE` block, which is
-conforming and keeps the information. Preserve mode keeps them as they are, with the output flagged
-as non-conformant. See `SPEC-NOTES.md`.
+`Language: en` lines) parses fine but is **not conforming syntax**. Export moves those lines into a
+`NOTE` block, which conforms and keeps the information. See `SPEC-NOTES.md`.
 
 The auto-caption format is documented from three real samples in `SPEC-NOTES.md`. YouTube has
 changed it before, so the detector should key on structure rather than exact strings.
@@ -164,7 +167,7 @@ Each phase ends green in CI with its acceptance criteria met.
 - [x] Monorepo scaffold, TS/Svelte/Vite/Vitest/ESLint/Prettier, CI workflow.
 - [x] Seed module (`timestamp`) with tests to prove the pipeline.
 - [x] Measure real auto-caption samples (see Sizing).
-- [ ] Decide the remaining open questions below.
+- [x] Decide the open questions (see Decisions log).
 
 ### Phase 1: Core parser (spec §6)
 
@@ -177,10 +180,11 @@ Each phase ends green in CI with its acceptance criteria met.
 
 ### Phase 2: Model, validator, serializer
 
-- Lossless CST, document model with VTTCue-compatible setter semantics (WPT `api/` tests).
+- Source-mapped document model with VTTCue-compatible setter semantics (WPT `api/` tests).
 - Validator covering every §4 rule, with stable diagnostic codes and spec links.
-- Strict and preserve serializers. Edit operations.
-- **Accept:** property tests for round-trip pass. Every syntax rule in §4 has a positive and a
+- Repair pass, canonical serializer, export report. Edit operations.
+- **Accept:** property tests: `parse(serialize(doc))` equals `doc`, and validating
+  `serialize(repair(parse(f)))` gives zero errors for **any** input `f`, including fuzzed garbage. Every syntax rule in §4 has a positive and a
   negative fixture. Exporting any parsed file in strict mode yields zero diagnostics.
 
 ### Phase 3: Editor UI MVP
@@ -225,8 +229,15 @@ Each phase ends green in CI with its acceptance criteria met.
 
 ### Phase 8: Converters
 
-- SRT import and export (with encoding detection for non-UTF-8 SRT), then others by demand
-  (SBV, TTML/IMSC subset, ASS/SSA text-only).
+- **SRT** (next): import with encoding detection (SRT is often Windows-1252 or similar, unlike `.vtt`)
+  and its common quirks (comma decimal separator, `<font>` tags, numbering); export with the
+  WebVTT-only features flattened and a report of what was lost.
+- **SCC** (long-term): Scenarist files carry CEA-608 byte pairs with 29.97 fps (drop-frame)
+  timecode. Import needs a 608 decoder (pop-on, roll-up and paint-on modes, the 608 character
+  set, 15 rows × 32 columns). Export is _constrained_: line breaking to 32 columns, character
+  mapping, and timing that accounts for 608's two-bytes-per-frame bandwidth, so long captions have
+  to be loaded early. The CTA-608 standard is paywalled, so the work will lean on open references and
+  sample files. Expect this to be the largest converter.
 
 ## Decisions log
 
@@ -239,16 +250,12 @@ Each phase ends green in CI with its acceptance criteria met.
 - **2026-10-06:** Three real auto-caption samples received (see Sizing and `SPEC-NOTES.md`). They
   stay local in the gitignored `tests/private-fixtures/` because they are third-party transcripts and
   the repo will eventually be public. A synthetic fixture with the same structure is committed.
-- **2026-10-06:** "No waveform for long video on Safari ≤ 26." Implemented as feature detection
-  (above). Note: MDN data says Safari 26 _added_ `AudioDecoder`, so with feature detection Safari 26
-  will get the streamed waveform if its decoder supports the file's codec. Pinning Safari 26 to
-  "no waveform" would need user-agent sniffing. Not planned unless testing shows Safari 26's
-  decoder misbehaves.
+- **2026-10-06:** Waveform for long media is feature-detected (`AudioDecoder` plus codec support),
+  so Safari 26+ gets it. Older Safari gets the timeline without a waveform.
+- **2026-10-06:** Formats: WebVTT primary, SRT next, SCC long-term.
+- **2026-10-06:** Export always fixes non-conforming or invalid input (no "keep errors as they were"
+  mode). That removes the lossless CST: the model plus source spans is enough.
 
 ## Open questions for the owner
 
-1. **Converters:** which formats beyond SRT matter, and how early? (YouTube accepts `.vtt`
-   directly, so this may be low priority.)
-2. **Non-conformant export:** should preserve mode be the default when editing an imported file
-   (minimal diffs), or should strict mode be the default (always conforming)? The spec allows either.
-   Strict is the safer default for a tool that advertises compliance.
+None at the moment.

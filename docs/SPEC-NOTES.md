@@ -27,9 +27,8 @@ own requirements:
 1. **Authoring tool.** It "must generate conforming WebVTT files". When editing a
    non-conforming file it _may_ round-trip errors in sections that were not edited, but it
    "must not claim that the output is conformant if errors have been so preserved".
-   → The export path needs a strict mode (always conforming) and a preserve mode
-   (byte-exact for untouched blocks, with the output flagged as non-conformant when
-   errors remain). This requirement is why the document model is lossless (see PLAN.md).
+   → MicroVTT does not use the round-trip allowance: **every export conforms.** Non-conforming
+   input is fixed on export and the fixes are listed (see "Repair" below).
    Converters from other formats (SRT, etc.) also count as authoring tools.
 2. **Conformance checker.** It "must verify that a WebVTT file conforms to the applicable
    conformance criteria". → The validator checks the _syntax_ rules (§4), which are stricter
@@ -51,9 +50,9 @@ on cue text, IDs, or selectors.
   `TextDecoder('utf-8')` / `TextDecoderStream` with `fatal: false` and the default
   `ignoreBOM: false`.
 - Before parsing, replace NUL → U+FFFD, then CRLF → LF, then any remaining CR → LF. The
-  lossless layer must remember the original line terminators and the BOM so it can reproduce them.
+  source map records offsets in the original text, so diagnostics point at the right place.
 - The spec's parser is incremental. Our parser should be too, so it can run on a stream.
-- _Converter imports (SRT and others) may need encoding detection_ (Windows-1252 and so on). That
+- _Converter imports (SRT, later SCC) may need encoding detection_ (Windows-1252 and so on). That
   is outside the WebVTT spec and must never apply to `.vtt` input.
 
 ### File parser (`core/parse`), spec §6.1 "WebVTT file parsing"
@@ -117,9 +116,30 @@ Not specified by the spec beyond "must generate conforming files". Our rules:
   start time, with LF terminators by default and settings in canonical order. Escape `&`, `<`, `>` in
   text spans and annotations. Never emit `-->` inside payloads (escape the `>` as `&gt;`).
   Optional hours in timestamps.
-- Preserve mode: blocks the user did not touch are emitted byte-for-byte from the source.
-- Round-trip property tests: `parse(serialize(doc))` is equivalent to `doc` for any doc, and
-  `serialize(parse(f)) === f` for any conforming `f` in preserve mode.
+- Property tests: `parse(serialize(doc))` is equivalent to `doc` for any doc.
+
+### Repair (`core/repair`): export-time fixes
+
+Most conformance comes free from serializing the model, because the parser only stores valid
+values: invalid or duplicate settings are already gone, the cue-text tree builder has already fixed
+misnesting and closed open spans, and timestamps are re-formatted. These rules need an active fix,
+and each applied fix goes into the export report:
+
+| Rule (§4)                                                                              | Fix                                                                                         |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Text after the signature line before the first blank line (e.g. `Kind:`/`Language:`)   | Move into a `NOTE` block                                                                    |
+| Cue start times not non-decreasing                                                     | Stable sort by start time                                                                   |
+| Cue end ≤ start                                                                        | Needs judgment. The default is decided in Phase 2, and the editor flags it before export    |
+| Duplicate cue IDs                                                                      | Add a numeric suffix (`id-2`, …), keeping the IDs unique                                    |
+| `-->` in payload or NOTE text                                                          | Escape as `--&gt;` (payload) or break the sequence (NOTE)                                   |
+| Cue timestamp not strictly increasing, or outside (start, end)                         | Drop that timestamp tag and keep the text                                                   |
+| Cue region reference to an undefined region, region with no `id`, duplicate region ids | Drop the reference, drop the region, keep the last region with that id (as the parser does) |
+| `<lang>` with an invalid BCP 47 tag                                                    | Unwrap the span and keep its content                                                        |
+| STYLE block CSS that doesn't parse, or uses properties outside §8                      | Drop the offending rules or declarations                                                    |
+| File-type rules (§4.6), e.g. overlapping chapter cues                                  | Only when the user picks a strict file type. Otherwise the file is treated as captions      |
+
+Anything the parser discards on import (junk lines, invalid settings, STYLE/REGION blocks that
+appear after the first cue) is reported at import time, because by export it no longer exists.
 
 ### Renderer (`web/render`), spec §7 "Rendering" and §8 "CSS extensions"
 
@@ -161,8 +181,7 @@ of a single U+0020 space are common (a blank top or bottom line).
 - **Header lines** `Kind: captions` / `Language: en` come directly after `WEBVTT`. The parser
   accepts and discards them (the block after the signature is collected with the _in header_ flag,
   §6.1). They are **not conforming syntax**: §4.1 requires two or more line terminators after
-  the signature line. In strict export, those lines move into a `NOTE` block. Preserve mode keeps
-  them, and the output is not claimed as conformant.
+  the signature line. Export moves those lines into a `NOTE` block.
 - **Cue settings** `align:start position:0%` are valid (§4.4).
 - **Word timing** `<hh:mm:ss.mmm><c> word</c>` uses cue timestamps and class spans with no class
   names, which is valid. The first word of each line has no timestamp (it starts at the cue start).
@@ -210,5 +229,5 @@ side-by-side "what browser X will show" mode.
 - `tests/wpt/file-parsing/*.vtt`: files with invalid signatures, all of which must be rejected.
 - `tests/wpt/cue-text-parsing/*.dat`: 78 cue-text tree tests in html5lib `#data` / `#document-fragment` format.
 - `tests/wpt/api/`: VTTCue/VTTRegion setter semantics, for the model.
-- Our own fixtures and property-based tests (fast-check) cover validator diagnostics, round-trip,
+- Our own fixtures and property-based tests (fast-check) cover validator diagnostics, repair (any input exports with zero errors),
   and large-file performance.
