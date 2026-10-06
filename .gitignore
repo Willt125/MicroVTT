@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.vite/
+*.log
+.DS_Store
+test-results/
+playwright-report/
+# Local spec checkout used by scripts/sync-spec.sh
+.spec/
+# Real-world samples (third-party content) used for local benchmarks; never committed.
+tests/private-fixtures/*
+!tests/private-fixtures/README.md

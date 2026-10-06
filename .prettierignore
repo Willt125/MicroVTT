@@ -1,0 +1,5 @@
+pnpm-lock.yaml
+dist/
+coverage/
+tests/wpt/
+packages/core/test/fixtures/

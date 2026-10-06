@@ -1,0 +1,5 @@
+* text=auto eol=lf
+# WebVTT fixtures exercise CR / CRLF / NUL / BOM handling; keep them byte-exact.
+*.vtt -text
+*.test -text
+*.dat -text
