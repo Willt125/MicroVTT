@@ -34,32 +34,54 @@ const DEVIATIONS: Deviation[] = [
   },
   {
     // "size:6.%", "position:5.%", "line:1.", "line:-.5" are accepted.
-    browsers: ['chromium'],
+    browsers: ['chromium', 'firefox'],
     trigger: /\b(?:line|position|size):-?(?:\d+\.(?!\d)|\.\d)/,
     difference: /^cue \d+ (?:line|position|size): /,
-    reason: 'Chromium accepts numbers with a bare "." ("6.", ".5") that the spec rejects',
+    reason: 'accepts numbers with a bare "." ("6.", ".5") that the spec rejects',
   },
   {
     // "... --> 00:01.000 ::\fposition:69%" → position "auto".
-    browsers: ['chromium'],
+    browsers: ['chromium', 'webkit'],
     trigger: new RegExp(`-->${LINE}*\\f`),
     difference: /^cue \d+ (?:line|position|size|align|vertical|region): /,
-    reason: 'Chromium does not treat a form feed as whitespace between cue settings',
+    reason: 'does not treat a form feed as whitespace between cue settings',
   },
   {
     // "WEBVTT\n \n00:00.000 --> 00:01.000" → cue id " " (WPT header-space, header-tab).
-    browsers: ['chromium'],
+    browsers: ['chromium', 'webkit'],
     trigger: new RegExp(`${LINE}+${NL}${LINE}+${NL}${LINE}*-->`),
     difference: /^cue \d+ id: ".*", expected ""$/,
     reason:
-      'Chromium takes the line before a timing line as the cue id even where the spec ends the block (in the header, or after two lines of a block)',
+      'takes the line before a timing line as the cue id even where the spec ends the block (in the header, or after two lines of a block)',
   },
   {
     // "WEBVTT\n\nSTYLE \n00:00.000 --> 00:01.000" → cue id "". Affects exported files.
-    browsers: ['chromium'],
+    browsers: ['chromium', 'webkit'],
     trigger: new RegExp(`(?:^|${NL})STYLE${LINE}*${NL}${LINE}*-->`),
     difference: /^cue \d+ id: "", expected "STYLE/,
-    reason: 'Chromium drops a cue id that starts with "STYLE" before the first cue',
+    reason: 'drops a cue id that starts with "STYLE" before the first cue',
+  },
+  {
+    // "WEBVTT\n\nREGION\n00:00.000 --> 00:01.000" → cue id "". Affects exported files.
+    browsers: ['webkit'],
+    trigger: new RegExp(`(?:^|${NL})REGION${LINE}*${NL}${LINE}*-->`),
+    difference: /^cue \d+ id: "", expected "REGION/,
+    reason: 'drops a cue id that starts with "REGION" before the first cue',
+  },
+  {
+    // "WEBVTT\n\nNOTE\n00:00.000 --> 00:01.000" → cue id "". Affects exported files.
+    browsers: ['firefox'],
+    trigger: new RegExp(`(?:^|${NL})(?:NOTE|STYLE|REGION)${LINE}*${NL}${LINE}*-->`),
+    difference: /^cue \d+ id: "", expected "(?:NOTE|STYLE|REGION)/,
+    reason: 'drops a cue id that starts with "NOTE", "STYLE" or "REGION"',
+  },
+  {
+    // "WEBVTT\n\n00:00.000 --> 00:01.000\none\n \ntwo" → text "one". Affects exported files,
+    // and YouTube auto-captions, which put a " " line in most cues.
+    browsers: ['firefox'],
+    trigger: new RegExp(`${NL}[ \\t]+(?:${NL}|$)`),
+    difference: /^cue \d+ text: /,
+    reason: 'ends a cue at a line of only spaces or tabs, as if it were blank',
   },
   {
     // "WEBVTT\n\nNOTE\nSTYLE\n\n00:00.000 --> 00:01.000" → cue id "NOTE". Affects exported files

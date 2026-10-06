@@ -191,6 +191,44 @@ function differences(
   return out;
 }
 
+/**
+ * Shrinks an input to a small one that still shows an unexplained difference: whole blocks
+ * first, then single lines. The result is a reproduction to read, not necessarily the same
+ * construct (removing a blank line can turn a block into header lines, for example).
+ */
+async function minimize(
+  page: Page,
+  browser: string,
+  text: string,
+  skip: readonly string[],
+): Promise<{ text: string; diffs: string[] }> {
+  const encoder = new TextEncoder();
+  const check = async (candidate: string): Promise<string[] | null> => {
+    const bytes = encoder.encode(candidate);
+    const [native] = await nativeParse(page, [{ name: '', bytes }]);
+    const result = parseBytes(bytes);
+    const diffs = differences(native as NativeResult, cueList(result), result.ok, skip);
+    return diffs.length > 0 && !knownDeviation(browser, candidate, diffs) ? diffs : null;
+  };
+  let best = { text, diffs: (await check(text)) ?? [] };
+  for (const pieces of [/(?<=\r\n\r\n|\n\n|\r\r)/, /(?<=\r\n|\n|\r)/]) {
+    let parts = best.text.split(pieces);
+    for (let i = 1; i < parts.length; i++) {
+      const trial = [...parts.slice(0, i), ...parts.slice(i + 1)];
+      const diffs = await check(trial.join(''));
+      if (diffs) {
+        parts = trial;
+        best = { text: trial.join(''), diffs };
+        i--;
+      }
+    }
+  }
+  return best;
+}
+
+/** At most this many unexplained inputs are minimized (each takes a few hundred page calls). */
+const MINIMIZE_LIMIT = 20;
+
 function browserFailsWpt(input: Input, native: NativeResult): string | null {
   if (input.js === undefined) return null;
   try {
@@ -217,16 +255,25 @@ async function compare(page: Page, browser: string, inputs: Input[]): Promise<vo
     (deviations[reason] ??= []).push(name);
   };
   const decoder = new TextDecoder();
-  inputs.forEach((input, i) => {
+  let minimized = 0;
+  for (const [i, input] of inputs.entries()) {
     const result = parseBytes(input.bytes);
     const diffs = differences(natives[i] as NativeResult, cueList(result), result.ok, skip);
-    if (diffs.length === 0) return;
+    if (diffs.length === 0) continue;
+    const text = decoder.decode(input.bytes);
     const wpt = browserFailsWpt(input, natives[i] as NativeResult);
-    const known = knownDeviation(browser, decoder.decode(input.bytes), diffs);
+    const known = knownDeviation(browser, text, diffs);
     if (wpt) note(`fails the WPT test: ${wpt}`, input.name);
     else if (known) note(known, input.name);
-    else failures.push(`${input.name}:\n    ${diffs.slice(0, 8).join('\n    ')}`);
-  });
+    else {
+      let report = `${input.name}:\n    ${diffs.slice(0, 8).join('\n    ')}`;
+      if (minimized++ < MINIMIZE_LIMIT) {
+        const min = await minimize(page, browser, text, skip);
+        report += `\n  minimal: ${JSON.stringify(min.text)}\n    ${min.diffs.slice(0, 4).join('\n    ')}`;
+      }
+      failures.push(report);
+    }
+  }
   for (const [reason, names] of Object.entries(deviations))
     test.info().annotations.push({
       type: 'browser deviation',
@@ -236,6 +283,9 @@ async function compare(page: Page, browser: string, inputs: Input[]): Promise<vo
 }
 
 test.describe('native parser agrees with ours', () => {
+  // Minimizing unexplained differences can take a while; passing runs take seconds.
+  test.setTimeout(300_000);
+
   test('WPT file-parsing inputs', async ({ page, browserName }) => {
     await compare(page, browserName, wptInputs());
   });

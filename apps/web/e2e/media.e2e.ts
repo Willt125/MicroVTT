@@ -18,7 +18,12 @@ async function openWithMedia(page: Page): Promise<void> {
     mimeType: 'audio/wav',
     buffer: wav(20),
   });
-  await expect(page.locator('video')).toHaveJSProperty('readyState', 4, { timeout: 10_000 });
+  // Metadata is all the editor needs (WebKit stays below HAVE_ENOUGH_DATA with preload=metadata).
+  await expect
+    .poll(() => page.locator('video').evaluate((v: HTMLVideoElement) => v.readyState), {
+      timeout: 10_000,
+    })
+    .toBeGreaterThanOrEqual(1);
 }
 
 test.beforeEach(async ({ page }) => openWithMedia(page));
