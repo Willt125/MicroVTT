@@ -93,25 +93,30 @@ tune later. **We don't have a reliable source for that percentile, and it turns 
 for the caption side.** Caption files are small compared with the media, so we can afford to size
 for YouTube's maximum upload length of **12 hours** and cover every video.
 
-**Measured** from three real auto-caption files (`yt-dlp`, `en-orig`):
+**Measured** from ten real auto-caption files (`yt-dlp`): seven English speech-recognition
+tracks (`en-orig`) from 5m48s to 4h18m29s, and three Finnish machine translations (`fi`).
 
-| Sample   | Cues          | Timed words    | Size           | Per hour                  |
-| -------- | ------------- | -------------- | -------------- | ------------------------- |
-| 5m48s    | 289           | about 900      | 48 KB          | 2,969 cues, 497 KB        |
-| 48m33s   | 2,427         | about 6.3k     | 358 KB         | 2,997 cues, 442 KB        |
-| 4h18m29s | 12,263        | about 38k      | 2.0 MB         | 2,846 cues, 470 KB        |
-| **12 h** | **about 36k** | **about 110k** | **about 6 MB** | extrapolated, YouTube max |
+| Sample   | Cues           | Size              | Per hour                  |
+| -------- | -------------- | ----------------- | ------------------------- |
+| 5m48s    | 289            | 48 KB             | 2,969 cues, 497 KB        |
+| 9m21s    | 545            | 89 KB             | 3,499 cues, 573 KB        |
+| 11m09s   | 619            | 101 KB            | 3,332 cues, 541 KB        |
+| 13m39s   | 825            | 130 KB            | 3,628 cues, 574 KB        |
+| 15m06s   | 887            | 143 KB            | 3,526 cues, 570 KB        |
+| 48m33s   | 2,427          | 358 KB            | 2,997 cues, 442 KB        |
+| 4h18m29s | 12,263         | 2.0 MB            | 2,846 cues, 470 KB        |
+| **12 h** | **34k to 44k** | **5.3 to 6.9 MB** | extrapolated, YouTube max |
 
-About half of the cues are 10 ms hand-off cues, so after the de-roll cleanup a 12 h document
-holds roughly 18k caption lines. The earlier model (0.5–1 MB/h) was at the high end. Real files
-come in at under 0.5 MB/h.
+Fast talkers (political commentary) reach about 3.6k cues and 574 KB per hour. Translated tracks
+are 5–15% smaller. About half of the cues are 10 ms hand-off cues, so after the de-roll cleanup a
+12 h document holds roughly 22k caption lines at most.
 
 What this means for implementation:
 
 - **The `.vtt` side is modest.** 60k cues is well within what plain JS objects, a Worker parser and
   a virtualized table handle. We drop the struct-of-arrays storage and OPFS text spill-over from
   the earlier plan: complexity with no payoff at this size.
-- **Design targets:** smooth editing at **≤ 100k cues** (almost 3× the measured 12 h worst case).
+- **Design targets:** smooth editing at **≤ 100k cues** (more than 2× the measured 12 h worst case).
   Import, validation and export keep working, just slower, up to **≤ 50 MB**. Above that we warn
   but still try.
 - **The real scaling problem is the media.** A 12 h video is gigabytes, and decoding its audio into
@@ -141,6 +146,16 @@ What this means for implementation:
      word boundaries.
    - Re-segment by the user's rules (max characters per line, max 2 lines, min and max duration,
      sentence boundaries).
+   - _Translated tracks_ (`Language:` other than the original, e.g. YouTube's `.fi`
+     auto-translation): their word timestamps are **interpolated**, evenly spaced across each line,
+     not taken from the audio. MicroVTT detects this and treats them as approximate: no word-snap,
+     and re-segmentation uses cue boundaries only.
+   - _Review markers_: YouTube's censored-word marker `[ __ ]` (written as `[&nbsp;__&nbsp;]` in
+     English tracks) and sound tags like `[music]` are flagged as items to review, since a censored
+     word is something the user will usually want to restore or confirm.
+   - _Whitespace cleanup_ (offered, not forced): collapse double spaces and remove the doubled
+     U+200B zero-width spaces seen in translated tracks. U+200B is legitimate word-separating text
+     in some scripts (Thai, Khmer…), so it is never stripped without the user choosing to.
 3. **Edit.** Correct text while the media plays: loop the current cue, slow playback, step word by
    word, and find/replace for names and terms the recognizer consistently gets wrong (with a saved
    glossary). Timing tools include drag on the waveform and snapping to word timings.
@@ -252,6 +267,9 @@ Each phase ends green in CI with its acceptance criteria met.
   the repo will eventually be public. A synthetic fixture with the same structure is committed.
 - **2026-10-06:** Waveform for long media is feature-detected (`AudioDecoder` plus codec support),
   so Safari 26+ gets it. Older Safari gets the timeline without a waveform.
+- **2026-10-06:** Seven more samples (four `en-orig`, three `fi` auto-translations). They raised the
+  12 h estimate to about 44k cues / 7 MB, and showed that translated tracks have interpolated word
+  timings (see Primary workflow).
 - **2026-10-06:** Formats: WebVTT primary, SRT next, SCC long-term.
 - **2026-10-06:** Export always fixes non-conforming or invalid input (no "keep errors as they were"
   mode). That removes the lossless CST: the model plus source spans is enough.

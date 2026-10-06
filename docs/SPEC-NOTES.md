@@ -155,9 +155,11 @@ The file extension is `.vtt`, the MIME type is `text/vtt`, and the charset is al
 
 ## Auto-caption input (YouTube), as it meets the spec
 
-Measured from three real `yt-dlp` `.auto.en-orig.vtt` downloads (5m48s, 48m33s, 4h18m29s). They
-are kept locally in `tests/private-fixtures/` and are not committed. A synthetic fixture with the
-same structure is at `packages/core/test/fixtures/autocaption-sample.vtt`.
+Measured from ten real `yt-dlp` downloads: seven `.auto.en-orig.vtt` (5m48s to 4h18m29s) and
+three `.auto.fi.vtt` machine translations. They are kept locally in `tests/private-fixtures/`
+(see the README there) and not committed. Synthetic fixtures with invented text reproduce the
+structure: `packages/core/test/fixtures/autocaption-sample.vtt` (`en-orig` style) and
+`autocaption-translated-sample.vtt` (`fi` style).
 
 **Layout.** UTF-8 with no BOM, LF line endings, no cue IDs, and every cue has the settings
 `align:start position:0%`. Each caption line goes through two cues:
@@ -196,9 +198,25 @@ of a single U+0020 space are common (a blank top or bottom line).
 - **Timing.** Start times are non-decreasing and every end is after its start. Hours are always
   written.
 
+**Variations between samples:**
+
+|                      | `en-orig` (speech recognition)                           | `fi` (machine translation)                                                                                                                                       |
+| -------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Word span spacing    | Leading: `<c> word</c>`                                  | Trailing: `<c>word </c>`                                                                                                                                         |
+| Word timestamps      | From the audio. Only 7–15% of consecutive gaps are equal | **Interpolated**: 100% of consecutive gaps within a line are equal                                                                                               |
+| Censored word        | `[&nbsp;__&nbsp;]` (an HTML character reference, valid)  | `[ __ ]`                                                                                                                                                         |
+| Sound tags           | `[music]`, `[laughter]`, or `[Music]` in older videos    | Translated: `[musiikki]`, `[naurua]`                                                                                                                             |
+| Odd whitespace       | none                                                     | Double spaces after sentences. Pairs of U+200B ZERO WIDTH SPACE. Occasionally 3 line feeds after a cue (an empty second payload line, which simply ends the cue) |
+| Timestamp violations | 2 in about 38k words (4h18m sample)                      | none seen                                                                                                                                                        |
+
+None of these variations is a conformance problem by itself. Extra blank lines between blocks are
+allowed (§4.1), and U+200B is just text. The spec forbids Unicode normalization (§2.2), so any
+whitespace cleanup is an editorial choice the user makes, never a parse-time or repair-time change.
+
 The cleanup ("de-roll") step should take the timed line from each growing cue (it gives word
 timings) and ignore the repeated line and the hand-off cues. About 1–6% of growing cues have no
-word timings (sound tags, short lines). Those lines get their timing from the cue itself.
+word timings (sound tags, short lines). Those lines get their timing from the cue itself. For
+translated tracks, the word timings are only an estimate and must not be presented as accurate.
 
 ## Browser support relevant to us (MDN BCD 8.1.4)
 
