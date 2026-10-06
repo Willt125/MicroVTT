@@ -133,6 +133,25 @@ Not specified by the spec beyond "must generate conforming files". Our rules:
 
 The file extension is `.vtt`, the MIME type is `text/vtt`, and the charset is always UTF-8. Exports must use these.
 
+## Auto-caption input (YouTube), as it meets the spec
+
+Based on the format `yt-dlp` downloads. It has to be confirmed against real sample fixtures
+(see PLAN.md).
+
+- **Header lines.** The file begins `WEBVTT` + LF + `Kind: captions` + LF + `Language: en` + LF + LF.
+  The parser accepts it: the block straight after the signature line is collected with the
+  _in header_ flag and discarded (§6.1). The syntax (§4.1) requires two or more line terminators
+  after the signature line, so the validator reports an error. In strict export, those lines move
+  into a `NOTE` block. In preserve mode they are kept, and the output is not claimed as conformant.
+- **Cue settings** `align:start position:0%` are valid (§4.4).
+- **Word timing.** `<00:00:01.234><c> word</c>` uses cue timestamps and class spans with no class
+  names. This is valid syntax as long as the timestamps are strictly increasing and fall inside the
+  cue's interval (§4.2). Recognizer output can break that, so it is a likely validator hit, and the
+  cleanup step must clamp or drop those timestamps.
+- **Rolling captions.** Overlapping cues and very short (about 10 ms) hand-off cues are both valid.
+  Start times are non-decreasing, as required. De-rolling is an editorial transformation,
+  not a conformance fix.
+
 ## Browser support relevant to us (MDN BCD 8.1.4)
 
 | Feature                                                  | Chrome   | Firefox  | Safari   | Consequence                                                                                 |
@@ -143,8 +162,9 @@ The file extension is `.vtt`, the MIME type is `text/vtt`, and the charset is al
 | `::cue`                                                  | 26       | 55       | 7        |                                                                                             |
 | `:past` / `:future`                                      | 23       | **no**   | 7        | Karaoke-style timestamps are not styled in Firefox.                                         |
 | `TextDecoderStream`, `Blob.stream()`                     | 71 / 76  | 105 / 69 | 14.1     | Streaming import works everywhere.                                                          |
-| OPFS (`StorageManager.getDirectory`, sync access handle) | 86 / 102 | 111      | 15.2     | Autosave and large-document spill-over work everywhere.                                     |
+| OPFS (`StorageManager.getDirectory`, sync access handle) | 86 / 102 | 111      | 15.2     | Autosave and the waveform-peak cache work everywhere.                                       |
 | `showOpenFilePicker` / `showSaveFilePicker`              | 86       | **no**   | **no**   | In-place "Save" in Chromium only. Elsewhere, fall back to `<input type=file>` and download. |
+| WebCodecs `AudioDecoder`                                 | 94       | 130      | **26**   | Streamed waveform peaks for long media. Safari before 26 gets no long-media waveform.       |
 | `requestVideoFrameCallback`                              | 83       | 132      | 15.4     | Frame-accurate playhead sync.                                                               |
 | `launchQueue` (PWA file handling)                        | 102      | no       | no       | "Open with MicroVTT" for the installed PWA works in Chromium only.                          |
 
