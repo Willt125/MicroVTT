@@ -47,12 +47,18 @@ export interface Autosave {
   document: VttDocument;
 }
 
+/** An autosave request; without a document, the one last sent for validation is saved. */
+export interface AutosaveRequest {
+  meta: AutosaveMeta;
+  document?: VttDocument;
+}
+
 export type WorkerRequest =
   | { id: number; type: 'import'; bytes: ArrayBuffer }
   | { id: number; type: 'validate'; document: VttDocument; fileType: FileType }
   | { id: number; type: 'export'; document: VttDocument; options: ExportOptions }
   | { id: number; type: 'preview'; document: VttDocument }
-  | { id: number; type: 'autosave'; save: Autosave }
+  | { id: number; type: 'autosave'; save: AutosaveRequest }
   | { id: number; type: 'load-autosave' }
   | { id: number; type: 'clear-autosave' };
 

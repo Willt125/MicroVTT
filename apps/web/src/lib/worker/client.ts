@@ -2,6 +2,7 @@
 import type { ExportOptions, FileType, VttDocument } from '@microvtt/core';
 import type {
   Autosave,
+  AutosaveRequest,
   ExportedFile,
   ImportedFile,
   ItemDiagnostic,
@@ -58,7 +59,7 @@ export class VttWorker {
   }
 
   /** Resolves false where autosave storage (OPFS) is unavailable. */
-  autosave(save: Autosave): Promise<boolean> {
+  autosave(save: AutosaveRequest): Promise<boolean> {
     return this.request({ type: 'autosave', save });
   }
 

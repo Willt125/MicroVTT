@@ -10,14 +10,15 @@ import {
 import { Editor } from './editor.svelte.ts';
 import { locateInSerialized, locateInSource, serializeWithSpans } from './worker/locate.ts';
 import type { VttWorker } from './worker/client.ts';
-import type { Autosave } from './worker/protocol.ts';
+import type { Autosave, AutosaveRequest } from './worker/protocol.ts';
 
 /** Runs the worker's logic in-process; autosave goes to `store.save`. */
 function fakeWorker(store: { save: Autosave | null } = { save: null }): VttWorker {
+  let validated: VttDocument | null = null;
   return {
     preview: async (doc: VttDocument) => exportDocument(doc).text,
-    autosave: async (save: Autosave) => {
-      store.save = structuredClone(save);
+    autosave: async (save: AutosaveRequest) => {
+      store.save = structuredClone({ meta: save.meta, document: save.document ?? validated! });
       return true;
     },
     loadAutosave: async () => store.save,
@@ -29,6 +30,7 @@ function fakeWorker(store: { save: Autosave | null } = { save: null }): VttWorke
       return { ok: imported.ok, document: imported.document, diagnostics: [] };
     },
     validate: async (doc: VttDocument) => {
+      validated = doc;
       const { text, spans } = serializeWithSpans(doc);
       return locateInSerialized(validate(text).diagnostics, spans);
     },
@@ -115,7 +117,7 @@ describe('Editor', () => {
   it('splits and merges the selected cue', async () => {
     const editor = new Editor(fakeWorker());
     await editor.open(file('WEBVTT\n\n00:00.000 --> 00:02.000\n<i>one two</i>\n'));
-    editor.splitSelected(1000, 7);
+    editor.splitSelected(1000.0000000000002, 7); // Playhead times are floats.
     expect(editor.cueRows).toHaveLength(2);
     expect(editor.selectedCue).toMatchObject({ startMs: 1000, text: '<i>two</i>' });
     editor.moveSelection(-1);

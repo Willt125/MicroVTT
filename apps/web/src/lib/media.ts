@@ -33,9 +33,36 @@ export function splitTime(cue: Cue, playheadMs: number | null, textOffset: numbe
   return Math.min(cue.endMs - 1, Math.max(cue.startMs + 1, ms));
 }
 
+/** The document with only the cues showing between `fromMs` and `toMs` (head kept). */
+export function sliceDocument(doc: VttDocument, fromMs: number, toMs: number): VttDocument {
+  return {
+    ...doc,
+    body: doc.body.filter((i) => i.type === 'cue' && i.endMs > fromMs && i.startMs < toMs),
+  };
+}
+
 export function isMediaFile(file: File): boolean {
   return (
     /^(audio|video)\//.test(file.type) ||
     /\.(mp4|m4v|m4a|mov|webm|mkv|ogg|ogv|oga|opus|mp3|wav|flac|aac)$/i.test(file.name)
   );
+}
+
+/**
+ * A text offset to split raw cue text at, near `ratio` of its length: the closest whitespace
+ * outside tags, else the ratio point itself (core moves it out of any tag).
+ */
+export function splitOffset(text: string, ratio: number): number {
+  const target = Math.round(text.length * Math.min(1, Math.max(0, ratio)));
+  let best = -1;
+  let inTag = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '<') inTag = true;
+    else if (ch === '>') inTag = false;
+    else if (!inTag && (ch === ' ' || ch === '\n') && i > 0 && i < text.length - 1) {
+      if (best === -1 || Math.abs(i - target) < Math.abs(best - target)) best = i;
+    }
+  }
+  return best === -1 ? target : best;
 }

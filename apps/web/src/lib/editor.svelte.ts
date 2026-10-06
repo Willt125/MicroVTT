@@ -6,6 +6,7 @@
 import type { Cue, ExportOptions, FileType, VttDocument } from '@microvtt/core';
 import { createCue, createDocument, mergeCues, splitCue, updateCue } from '@microvtt/core';
 import type { AutosaveMeta, ExportedFile, ItemDiagnostic } from './worker/protocol.ts';
+import { sliceDocument } from './media.ts';
 import type { VttWorker } from './worker/client.ts';
 
 const HISTORY_LIMIT = 500;
@@ -78,6 +79,8 @@ export class Editor {
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
   /** True once this session has written an autosave (so it may also clear it). */
   private autosaved = false;
+  /** The document the worker last received (for validation); autosave need not resend it. */
+  private workerDoc: VttDocument | null = null;
   private readonly worker: VttWorker;
 
   constructor(worker: VttWorker) {
@@ -229,9 +232,11 @@ export class Editor {
     }
   }
 
-  /** The document as exported, for the player's caption preview. */
-  preview(): Promise<string> {
-    return this.worker.preview(this.doc);
+  /** The document as exported, for the player's caption preview; optionally only some cues. */
+  preview(window?: { fromMs: number; toMs: number }): Promise<string> {
+    return this.worker.preview(
+      window ? sliceDocument(this.doc, window.fromMs, window.toMs) : this.doc,
+    );
   }
 
   /** Records a save; `handle` and `name` are where it went, when saved through a picker. */
@@ -296,7 +301,7 @@ export class Editor {
   splitSelected(atMs: number, textOffset: number): void {
     if (!this.selectedCue) return;
     try {
-      const next = splitCue(this.doc, this.selected, atMs, textOffset);
+      const next = splitCue(this.doc, this.selected, Math.round(atMs), textOffset);
       this.apply(next, 'Split cue', { select: this.selected + 1 });
     } catch (error) {
       this.error = `Cannot split: ${(error as Error).message}.`;
@@ -366,7 +371,10 @@ export class Editor {
       cues: this.cueRows.length,
     };
     try {
-      const ok = await this.worker.autosave({ meta, document: this.doc });
+      // The worker handles requests in order, so it still holds `workerDoc` when this arrives.
+      const ok = await this.worker.autosave(
+        this.doc === this.workerDoc ? { meta } : { meta, document: this.doc },
+      );
       this.autosaveStatus = ok ? 'saved' : 'unsupported';
       if (ok) this.autosaved = true;
     } catch {
@@ -403,6 +411,7 @@ export class Editor {
     const version = ++this.validateVersion;
     this.validating = true;
     const doc = this.doc;
+    this.workerDoc = doc;
     try {
       const diagnostics = await this.worker.validate(doc, this.fileType);
       // Ignore results for documents that have since changed.

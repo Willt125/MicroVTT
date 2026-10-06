@@ -7,6 +7,7 @@
   import { DIAGNOSTICS } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import type { ExportedFile } from '../worker/protocol.ts';
+  import { canSaveInPlace, download, pickSaveFile, writeFile } from '../files.ts';
 
   interface Props {
     editor: Editor;
@@ -22,6 +23,9 @@
   let omitZeroHours = $state(false);
   let result = $state.raw<ExportedFile | null>(null);
   let failure = $state<string | null>(null);
+  let saving = $state(false);
+  let saveError = $state<string | null>(null);
+  const pickers = canSaveInPlace();
 
   const FILE_TYPES: { value: FileType; label: string }[] = [
     { value: 'captions', label: 'Captions / subtitles' },
@@ -60,17 +64,33 @@
 
   const exportName = $derived(editor.fileName.replace(/\.[^.]*$/, '') + '.vtt');
 
-  function save(): void {
+  /** Saves through the browser's downloads. */
+  function saveDownload(): void {
     if (!result) return;
-    const blob = new Blob([result.text], { type: 'text/vtt;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = exportName;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    download(result.text, exportName);
     editor.markSaved();
     open = false;
+  }
+
+  /** Writes to `handle`, or to a file chosen in the save picker. */
+  async function saveTo(handle: FileSystemFileHandle | null): Promise<void> {
+    if (!result) return;
+    saving = true;
+    saveError = null;
+    try {
+      const target = handle ?? (await pickSaveFile(exportName));
+      if (!target) return; // Cancelled.
+      if (!(await writeFile(target, result.text))) {
+        saveError = `Permission to write ${target.name} was not given.`;
+        return;
+      }
+      editor.markSaved(target);
+      open = false;
+    } catch (error) {
+      saveError = `Could not save: ${(error as Error).message}`;
+    } finally {
+      saving = false;
+    }
   }
 </script>
 
@@ -132,9 +152,31 @@
     {/if}
   </section>
 
+  {#if saveError}
+    <p class="error-text" role="alert">{saveError}</p>
+  {/if}
   <div class="actions">
     <button onclick={() => (open = false)}>Cancel</button>
-    <button class="primary" disabled={!result} onclick={save}>Save {exportName}</button>
+    {#if pickers}
+      <button disabled={!result || saving} onclick={saveDownload} title="Save a copy to Downloads"
+        >Download</button
+      >
+      {#if editor.fileHandle}
+        <button disabled={!result || saving} onclick={() => saveTo(null)}>Save as…</button>
+        <button
+          class="primary"
+          disabled={!result || saving}
+          onclick={() => saveTo(editor.fileHandle)}
+          title="Overwrite the file you opened">Save to {editor.fileHandle.name}</button
+        >
+      {:else}
+        <button class="primary" disabled={!result || saving} onclick={() => saveTo(null)}
+          >Save as…</button
+        >
+      {/if}
+    {:else}
+      <button class="primary" disabled={!result} onclick={saveDownload}>Save {exportName}</button>
+    {/if}
   </div>
 </dialog>
 

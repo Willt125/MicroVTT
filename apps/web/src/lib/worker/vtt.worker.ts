@@ -5,6 +5,7 @@
 import { exportDocument, importDocument, validate, validateImport } from '@microvtt/core';
 import { clearAutosave, readAutosave, writeAutosave } from './autosave.ts';
 import { locateInSerialized, locateInSource, serializeWithSpans } from './locate.ts';
+import type { VttDocument } from '@microvtt/core';
 import type { ExportedFile, ImportedFile, WorkerRequest, WorkerResponse } from './protocol.ts';
 
 // The app's TypeScript config uses the DOM library; describe just the worker scope we use.
@@ -12,6 +13,9 @@ const scope = self as unknown as {
   onmessage: ((event: MessageEvent<WorkerRequest>) => void) | null;
   postMessage(message: WorkerResponse): void;
 };
+
+/** The document last sent for validation: autosave reuses it rather than copying it again. */
+let current: VttDocument | null = null;
 
 async function handle(request: WorkerRequest): Promise<unknown> {
   switch (request.type) {
@@ -23,6 +27,7 @@ async function handle(request: WorkerRequest): Promise<unknown> {
       return { ok: imported.ok, document: imported.document, diagnostics } satisfies ImportedFile;
     }
     case 'validate': {
+      current = request.document;
       const { text, spans } = serializeWithSpans(request.document);
       const result = validate(text, { fileType: request.fileType });
       return locateInSerialized(result.diagnostics, spans);
@@ -38,8 +43,11 @@ async function handle(request: WorkerRequest): Promise<unknown> {
     }
     case 'preview':
       return exportDocument(request.document).text;
-    case 'autosave':
-      return writeAutosave(request.save);
+    case 'autosave': {
+      const document = request.save.document ?? current;
+      if (!document) throw new Error('Nothing to autosave');
+      return writeAutosave({ meta: request.save.meta, document });
+    }
     case 'load-autosave':
       return readAutosave();
     case 'clear-autosave':

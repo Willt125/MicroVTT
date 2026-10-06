@@ -88,10 +88,24 @@ Key decisions:
 
 ## Sizing
 
-The requirement is to handle roughly the 85th percentile of YouTube video lengths, a number to
-tune later. **We don't have a reliable source for that percentile, and it turns out not to matter
-for the caption side.** Caption files are small compared with the media, so we can afford to size
-for YouTube's maximum upload length of **12 hours** and cover every video.
+The requirement started as roughly the 85th percentile of YouTube video lengths. Caption files
+are small compared with the media, so we size for YouTube's maximum upload length of **12 hours**
+and cover every video; the percentiles matter only for the media side.
+
+**Video lengths** (tubestats.io's duration table, read off its cumulative column; percentiles
+inside a power-of-two bucket are interpolated, so treat them as rough):
+
+| Percentile | Length          | Auto-caption cues at 3.6k/h |
+| ---------- | --------------- | --------------------------- |
+| 50th       | about 4 min     | about 250                   |
+| 85th       | about 30 min    | about 1.8k                  |
+| 99th       | about 2.3–4.5 h | about 8k–16k                |
+| Maximum    | 12 h (upload)   | about 44k                   |
+
+That table counts all videos, not the ones people caption. Long videos (podcasts, lectures,
+streams) are probably over-represented among caption fixes, so the long tail still drives the
+design. About 0.3% of videos are listed at 9–18 h, past the upload limit (likely live-stream
+archives or data quirks); they get the same treatment as 12 h.
 
 **Measured** from ten real auto-caption files (`yt-dlp`): seven English speech-recognition
 tracks (`en-orig`) from 5m48s to 4h18m29s, and three Finnish machine translations (`fi`).
@@ -127,7 +141,10 @@ What this means for implementation:
   - Where streamed decoding isn't available, long media gets no waveform, only the timeline and
     playback. This is detected by feature (`AudioDecoder` exists and `isConfigSupported()` accepts
     the file's audio codec), never by browser version. Short media can still use `decodeAudioData`
-    under a duration cap (to be set by measurement in Phase 5).
+    under a duration cap (to be set by measurement in Phase 5). Since 85% of videos are under
+    about 30 minutes, that fallback may cover most real use, but `decodeAudioData` holds the
+    whole decoded file in memory (30 min of 48 kHz stereo is about 700 MB as float samples), so
+    the cap has to be measured, not assumed.
 - Import: `File.stream()` → `TextDecoderStream` → incremental parser in a Worker, with progress
   and cancellation.
 - Export: chunked serialization to a `Blob` (or `FileSystemWritableFileStream` in Chromium).
@@ -243,13 +260,33 @@ Split into three PRs, each usable on its own.
   first validation in about 0.5 s, a scroll jump redraws within one frame, typing reaches the
   screen in the next frame, export preview in about 1.3 s.
 
-**3b: media and productivity**
+**3b: media and productivity (done)**
 
-- Load a local audio or video file; play with native `<track>` preview. Loop the current cue and
-  change the playback rate.
-- Keyboard-first timing: set start/end at the playhead, nudge, step through cues.
-- Split and merge in the UI, find/replace, paste to import, autosave and restore (OPFS), in-place
-  save in Chromium.
+- [x] Load a local audio or video file (button or drop); play it with the document as captions
+      through the browser's own renderer (`<track>` fed the exported file). Audio files get a
+      caption area too. Loop the selected cue; playback speed 0.25–2×.
+- [x] "Sync list": playback selects the cue being played, and selecting a cue seeks to it (not
+      while you are typing in the cue editor).
+- [x] Keyboard-first timing: set start/end at the playhead (`[` `]`), skip (J/L, Shift for 5 s),
+      play/pause (Space/K), new cue at the playhead (N), nudge times with ↑/↓ in a time field,
+      previous/next cue with Alt+↑/↓. Every single-key shortcut also works with Alt while typing.
+      `?` lists them all.
+- [x] Split (S: at the text cursor, and at the playhead if it is inside the cue) and merge with
+      the next cue (M). Splitting never cuts a tag or character reference and closes/reopens
+      elements open at the split (core `splitCue`).
+- [x] Find and replace (Ctrl/Cmd+F): match case, whole word (Unicode-aware), regular
+      expressions with `$1`/`$<name>`; the current match is shown in context; replace all is one
+      undo step. It searches the raw text, so a phrase split by word-timing tags doesn't match
+      (Phase 4's cleanup removes most of those).
+- [x] Paste WebVTT text anywhere outside a text field to open it.
+- [x] Autosave to OPFS 1.5 s after an edit (from the worker, with synchronous access handles,
+      which all three engines support); offered for restore on the start screen; cleared when the
+      file is saved.
+- [x] Save in place where the File System Access API exists (Chromium): files opened through the
+      picker or dropped can be saved back; "Save as…" otherwise. Elsewhere saving downloads.
+- **Measured in headless Chromium** (12 h worst case, 43.6k cues, with a video open): no long
+  tasks when media loads, typing stays in step, autosave lands within about 2 s of the last
+  keystroke, restore takes about 0.7 s, and find over all cues takes 50–100 ms.
 
 **3c: cross-browser tests**
 
@@ -332,6 +369,22 @@ Split into three PRs, each usable on its own.
 - **2026-10-06:** Formats: WebVTT primary, SRT next, SCC long-term.
 - **2026-10-06:** Export always fixes non-conforming or invalid input (no "keep errors as they were"
   mode). That removes the lossless CST: the model plus source spans is enough.
+
+- **2026-10-06:** Video-length percentiles from tubestats.io (see Sizing): median about 4 min,
+  85th percentile about 30 min, 99th about 2.3–4.5 h. The 12 h design target stands; the data
+  matters for the waveform fallback's duration cap in Phase 5.
+- **2026-10-06 (Phase 3b):** Shortcuts are single keys outside text fields (media-player
+  conventions: Space/K, J/L) and the same physical keys with Alt anywhere; Alt shortcuts use
+  `event.code` because Option changes the typed character on macOS.
+- **2026-10-06 (Phase 3b):** The caption preview uses the browser's renderer until Phase 6.
+  Browsers parse a track on the main thread (about 0.3 s for 12 h), so above 2,000 cues the
+  preview holds only the cues from 1 minute before to 5 minutes after the playhead and follows it.
+- **2026-10-06 (Phase 3b):** Autosave is one slot per browser profile (two files written in
+  turn, so a crash mid-write keeps the previous save). Two tabs editing at once overwrite each
+  other's autosave; the files themselves are unaffected. It stores the document model as JSON,
+  not WebVTT text, so a restore is exact even for content export would repair.
+- **2026-10-06 (Phase 3b):** Times from the media element are rounded to whole milliseconds
+  before they reach the document (`currentTime × 1000` is rarely an integer).
 
 ## Open questions for the owner
 

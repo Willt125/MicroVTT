@@ -10,7 +10,7 @@ import {
   replaceOne,
   type FindOptions,
 } from './find.ts';
-import { cueAt, loopTarget, splitTime } from './media.ts';
+import { cueAt, loopTarget, sliceDocument, splitOffset, splitTime } from './media.ts';
 
 const opts = (query: string, extra: Partial<FindOptions> = {}): FindOptions => ({
   query,
@@ -98,6 +98,15 @@ describe('media helpers', () => {
     expect(cueAt(d, [0, 1, 2], 7000)).toBe(-1);
   });
 
+  it('slices the cues showing in a time window', () => {
+    const d: VttDocument = {
+      ...createDocument(),
+      body: [createCue(0, 1000, 'a'), { type: 'note', text: 'n' }, createCue(1000, 2000, 'b')],
+    };
+    expect(sliceDocument(d, 999, 1000).body.map((c) => c.text)).toEqual(['a']);
+    expect(sliceDocument(d, 500, 1500).body.map((c) => c.text)).toEqual(['a', 'b']);
+  });
+
   it('loops at the end of the cue', () => {
     const cue = createCue(1000, 2000, '');
     expect(loopTarget(cue, 1500)).toBeNull();
@@ -112,5 +121,11 @@ describe('media helpers', () => {
     expect(splitTime(cue, 5000, 2)).toBe(2000);
     expect(splitTime(cue, null, 0)).toBe(1001);
     expect(splitTime(createCue(0, 1, 'x'), null, 0)).toBeNull();
+  });
+
+  it('splits text at the nearest space outside tags', () => {
+    expect(splitOffset('one two three', 0.5)).toBe(7);
+    expect(splitOffset('a<c.x y>bc</c>', 0.5)).toBe(7); // No usable space: the ratio point.
+    expect(splitOffset('one<00:00:01.000><c> two</c>', 0.9)).toBe(20); // The space inside <c>.
   });
 });
