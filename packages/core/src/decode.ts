@@ -34,3 +34,8 @@ export class WebVTTDecoder {
     return this.normalizer.push(this.decoder.decode());
   }
 }
+
+/** Applies the parser's input transformations to a complete string. */
+export function normalizeInput(text: string): string {
+  return new LineEndingNormalizer().push(text);
+}

@@ -3,3 +3,4 @@ dist/
 coverage/
 tests/wpt/
 packages/core/test/fixtures/
+docs/DIAGNOSTICS.md
