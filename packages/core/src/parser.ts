@@ -73,6 +73,42 @@ export interface ParseResult {
   stylesheets: ParsedStylesheet[];
 }
 
+/**
+ * How a block was classified. Blocks the spec's parser discards are reported too, so the
+ * validator and the document model can see comments, headers and errors.
+ */
+export type BlockKind =
+  /** The "WEBVTT" line. */
+  | 'signature'
+  /** Lines directly after the signature line, before the first blank line (ignored). */
+  | 'header'
+  | 'cue'
+  /** An arrow line on line 1 or 2 whose timings failed to parse: the block is dropped. */
+  | 'invalid-cue'
+  | 'style'
+  | 'region'
+  /** A NOTE comment block (ignored by the parser). */
+  | 'note'
+  /** Anything else the parser drops, e.g. STYLE/REGION after the first cue, or stray text. */
+  | 'discarded';
+
+export interface BlockInfo {
+  kind: BlockKind;
+  range: SourceRange;
+  /** What ended the block: a blank line, an arrow line (no blank line before it), or the input. */
+  endedBy: 'blank' | 'arrow' | 'eof';
+  /** True if a cue had been parsed before this block started. */
+  afterCue: boolean;
+  cue?: ParsedCue;
+  stylesheet?: ParsedStylesheet;
+  region?: ParsedRegion;
+}
+
+export interface ParserOptions {
+  /** Called for every block, in file order, once it is complete. */
+  onBlock?: (block: BlockInfo) => void;
+}
+
 const ARROW = '-->';
 
 const isAsciiWhitespace = (c: number): boolean =>
@@ -321,21 +357,31 @@ function isBlockKeyword(buffer: string, keyword: string): boolean {
   return true;
 }
 
+/** True if `line` begins a WebVTT comment block: "NOTE" followed by a space, a tab, or nothing. */
+export function isCommentStart(line: string): boolean {
+  if (!line.startsWith('NOTE')) return false;
+  const c = line.charCodeAt(4);
+  return line.length === 4 || c === 0x20 || c === 0x09;
+}
+
 /** State of one invocation of "collect a WebVTT block". */
 class Block {
   lineCount = 0;
   buffer = '';
+  firstLine = '';
   seenArrow = false;
   cue: ParsedCue | null = null;
   stylesheet = false;
   region: ParsedRegion | null = null;
   readonly inHeader: boolean;
   readonly start: number;
+  readonly afterCue: boolean;
   end: number;
 
-  constructor(inHeader: boolean, start: number) {
+  constructor(inHeader: boolean, start: number, afterCue: boolean) {
     this.inHeader = inHeader;
     this.start = start;
+    this.afterCue = afterCue;
     this.end = start;
   }
 }
@@ -366,6 +412,11 @@ export class WebVTTParser {
   private readonly normalizer = new LineEndingNormalizer();
   private readonly result: ParseResult = { ok: false, cues: [], regions: [], stylesheets: [] };
   private ended = false;
+  private readonly onBlock: ((block: BlockInfo) => void) | undefined;
+
+  constructor(options: ParserOptions = {}) {
+    this.onBlock = options.onBlock;
+  }
 
   /** Pushes a chunk of decoded text. NUL and CR handling is applied here. */
   push(text: string): void {
@@ -394,7 +445,7 @@ export class WebVTTParser {
       if (this.carry !== '') this.line(this.carry, this.offset);
       this.carry = '';
       if (this.phase === Phase.Signature) this.phase = Phase.Failed; // Empty input.
-      if (this.block) this.finishBlock(this.block);
+      if (this.block) this.finishBlock(this.block, 'eof');
       this.block = null;
     }
     if (this.phase === Phase.Failed) {
@@ -415,6 +466,14 @@ export class WebVTTParser {
     switch (this.phase) {
       case Phase.Signature:
         this.phase = this.signatureOk(line) ? Phase.AfterSignature : Phase.Failed;
+        if (this.phase === Phase.AfterSignature && this.onBlock) {
+          this.onBlock({
+            kind: 'signature',
+            range: { start, end: start + line.length },
+            endedBy: 'blank',
+            afterCue: false,
+          });
+        }
         return;
       case Phase.AfterSignature:
         this.phase = Phase.Blocks;
@@ -432,10 +491,11 @@ export class WebVTTParser {
   private blockLine(line: string, start: number, inHeader: boolean): void {
     if (!this.block) {
       if (line === '') return; // Blank lines between blocks.
-      this.block = new Block(inHeader, start);
+      this.block = new Block(inHeader, start, this.seenCue);
     }
     const block = this.block;
     block.lineCount++;
+    if (block.lineCount === 1) block.firstLine = line;
 
     if (line.includes(ARROW)) {
       if (
@@ -455,14 +515,14 @@ export class WebVTTParser {
         return;
       }
       // The arrow line ends this block and is processed again as the start of the next one.
-      this.finishBlock(block);
+      this.finishBlock(block, 'arrow');
       this.block = null;
       this.blockLine(line, start, false);
       return;
     }
 
     if (line === '') {
-      this.finishBlock(block);
+      this.finishBlock(block, 'blank');
       this.block = null;
       return;
     }
@@ -481,26 +541,45 @@ export class WebVTTParser {
     block.end = start + line.length;
   }
 
-  private finishBlock(block: Block): void {
+  private finishBlock(block: Block, endedBy: BlockInfo['endedBy']): void {
     const range = { start: block.start, end: block.end };
+    const info: BlockInfo = { kind: 'discarded', range, endedBy, afterCue: block.afterCue };
     if (block.cue) {
       block.cue.text = block.buffer;
       block.cue.range = range;
       this.result.cues.push(block.cue);
+      info.kind = 'cue';
+      info.cue = block.cue;
     } else if (block.stylesheet) {
-      this.result.stylesheets.push({ css: block.buffer, range });
+      const stylesheet = { css: block.buffer, range };
+      this.result.stylesheets.push(stylesheet);
+      info.kind = 'style';
+      info.stylesheet = stylesheet;
     } else if (block.region) {
       parseRegionSettings(block.buffer, block.region);
       block.region.range = range;
       this.result.regions.push(block.region);
+      info.kind = 'region';
+      info.region = block.region;
+    } else if (block.inHeader) {
+      info.kind = 'header';
+    } else if (block.seenArrow) {
+      info.kind = 'invalid-cue';
+    } else if (isCommentStart(block.firstLine)) {
+      info.kind = 'note';
     }
+    this.onBlock?.(info);
   }
 }
 
 /** Incremental parser over UTF-8 bytes. */
 export class WebVTTByteParser {
   private readonly decoder = new WebVTTDecoder();
-  private readonly parser = new WebVTTParser();
+  private readonly parser: WebVTTParser;
+
+  constructor(options?: ParserOptions) {
+    this.parser = new WebVTTParser(options);
+  }
 
   push(bytes: Uint8Array): void {
     this.parser.push(this.decoder.push(bytes));
@@ -513,15 +592,15 @@ export class WebVTTByteParser {
 }
 
 /** Parses a complete WebVTT document given as decoded text. */
-export function parse(text: string): ParseResult {
-  const parser = new WebVTTParser();
+export function parse(text: string, options?: ParserOptions): ParseResult {
+  const parser = new WebVTTParser(options);
   parser.push(text);
   return parser.end();
 }
 
 /** Parses a complete WebVTT document given as bytes. */
-export function parseBytes(bytes: Uint8Array): ParseResult {
-  const parser = new WebVTTByteParser();
+export function parseBytes(bytes: Uint8Array, options?: ParserOptions): ParseResult {
+  const parser = new WebVTTByteParser(options);
   parser.push(bytes);
   return parser.end();
 }

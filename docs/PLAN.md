@@ -199,14 +199,29 @@ Each phase ends green in CI with its acceptance criteria met.
   - [x] Parse benchmarks are recorded (`docs/BENCHMARKS.md`). A 12 h worst-case auto-caption file
         parses in about 0.1 s.
 
-### Phase 2: Model, validator, serializer
+### Phase 2: Model, validator, serializer (done)
 
-- Source-mapped document model with VTTCue-compatible setter semantics (WPT `api/` tests).
-- Validator covering every §4 rule, with stable diagnostic codes and spec links.
-- Repair pass, canonical serializer, export report. Edit operations.
-- **Accept:** property tests: `parse(serialize(doc))` equals `doc`, and validating
-  `serialize(repair(parse(f)))` gives zero errors for **any** input `f`, including fuzzed garbage. Every syntax rule in §4 has a positive and a
-  negative fixture. Exporting any parsed file in strict mode yields zero diagnostics.
+- [x] Document model (`document.ts`): title, head (regions, style sheets, comments) and body
+      (cues and comments) with source ranges. Text the parser discards is kept as comments.
+- [x] Validator (`validate.ts`, `cuetext-check.ts`, `css.ts`, `bcp47.ts`): 47 stable codes, each
+      with a severity, a spec link and its export fix (`docs/DIAGNOSTICS.md`, generated).
+      File types: captions (default), chapters, metadata, any.
+- [x] Repair (`repair.ts`), canonical serializer (`serialize.ts`), export with report
+      (`export.ts`). Edit operations (`edit.ts`): shift, scale, split, merge, sort, renumber, and
+      `updateCue` with VTTCue attribute semantics.
+- **Accept:**
+  - [x] Every diagnostic code has a failing and a passing fixture; the passing one has no
+        diagnostics at all.
+  - [x] Property tests: zero export errors for generated documents, random garbage and
+        API-built documents with hostile values; export is idempotent; `parse(serialize(doc))`
+        equals `doc` after repair; cue text repair keeps the readable text. 2k cases each in CI,
+        3 × 20k locally.
+  - [x] All ten real auto-caption samples export with zero diagnostics.
+  - The plan said "VTTCue-compatible setter semantics (WPT `api/` tests)". Those WPT tests
+    exercise the browser's text-track machinery (`<video>`, `<track>`, `addCue`, async loading),
+    not a value model, so they cannot run against `@microvtt/core`. The model follows the IDL's
+    value domains instead (unit-tested); mirroring it into native `VTTCue` objects is checked in
+    real browsers in Phase 3.
 
 ### Phase 3: Editor UI MVP
 
@@ -278,6 +293,15 @@ Each phase ends green in CI with its acceptance criteria met.
   timings (see Primary workflow).
 - **2026-10-06:** The core library uses only erasable TypeScript syntax (`erasableSyntaxOnly`), so
   it runs directly in Node with no build step (benchmarks, a future CLI).
+- **2026-10-06 (Phase 2):** Export decisions. A cue whose end is not after its start gets
+  end = start + 1 ms. Text the parser ignores (header lines, stray blocks, STYLE/REGION after the
+  first cue, cues with broken timings) is kept as a NOTE comment rather than dropped or moved.
+  Values that cannot be written are converted to the setting that renders the same where one
+  exists (`line` auto or out of range with `snapToLines` false → `line:100%`), otherwise
+  dropped and reported. Overlapping chapters are trimmed to end where the next one starts.
+- **2026-10-06 (Phase 2):** Validation scope. BCP 47 tags are checked for well-formedness, not
+  against the IANA registry. STYLE blocks are checked at the CSS-syntax level plus §8's
+  selector and property rules; property values are not validated.
 - **2026-10-06:** Formats: WebVTT primary, SRT next, SCC long-term.
 - **2026-10-06:** Export always fixes non-conforming or invalid input (no "keep errors as they were"
   mode). That removes the lossless CST: the model plus source spans is enough.

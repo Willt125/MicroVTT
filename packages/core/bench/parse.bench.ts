@@ -6,7 +6,13 @@
  * ~574 KB per hour). Real samples in tests/private-fixtures are included when present.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { WebVTTByteParser, parseCueText } from '../src/index.ts';
+import {
+  WebVTTByteParser,
+  exportDocument,
+  importDocument,
+  parseCueText,
+  validate,
+} from '../src/index.ts';
 
 const WORDS = [
   'so',
@@ -131,5 +137,38 @@ for (const r of rows) {
   console.log(
     `| ${r.name} | ${r.mb.toFixed(2)} MB | ${r.cues.toLocaleString('en-US')} | ${r.parseMs.toFixed(1)} ms | ` +
       `${(r.mb / (r.parseMs / 1000)).toFixed(0)} MB/s | ${r.cueTextMs.toFixed(1)} ms | ${r.heapMb.toFixed(1)} MB |`,
+  );
+}
+
+// Validation and export (import → repair → serialize → re-validate) on the larger inputs.
+const best = (fn: () => void, runs = 3): number => {
+  let t = Infinity;
+  for (let r = 0; r < runs; r++) {
+    const t0 = performance.now();
+    fn();
+    t = Math.min(t, performance.now() - t0);
+  }
+  return t;
+};
+const decoder = new TextDecoder();
+const bigInputs: [string, string][] = [
+  ['synthetic 1 h', synthetic(1818)],
+  ['synthetic 12 h', synthetic(21_816)],
+  ['synthetic 100k cues', synthetic(50_000)],
+];
+if (existsSync(privateDir)) {
+  const real = new URL('autocaption-4h18m29s.vtt', privateDir);
+  if (existsSync(real))
+    bigInputs.push(['real autocaption-4h18m29s.vtt', decoder.decode(readFileSync(real))]);
+}
+console.log('\n| Input | Cues | Validate | Export (repair + serialize + re-validate) |');
+console.log('| --- | ---: | ---: | ---: |');
+for (const [name, text] of bigInputs) {
+  const { document } = importDocument(text);
+  const cues = document.body.filter((i) => i.type === 'cue').length;
+  const v = best(() => validate(text));
+  const e = best(() => exportDocument(document));
+  console.log(
+    `| ${name} | ${cues.toLocaleString('en-US')} | ${v.toFixed(0)} ms | ${e.toFixed(0)} ms |`,
   );
 }
