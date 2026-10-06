@@ -44,8 +44,17 @@
     input.value = formatTime(ms);
   }
 
+  /** Enter commits; ↑/↓ nudge by 0.1 s (1 s with Shift). Alt+↑/↓ are left to cue navigation. */
   function timeKeydown(field: 'startMs' | 'endMs', event: KeyboardEvent): void {
     if (event.key === 'Enter') commitTime(field, event.currentTarget as HTMLInputElement);
+    else if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.altKey) {
+      event.preventDefault();
+      const step = event.shiftKey ? 1000 : 100;
+      editor.nudge(field, event.key === 'ArrowUp' ? step : -step);
+      const input = event.currentTarget as HTMLInputElement;
+      input.removeAttribute('aria-invalid');
+      if (editor.selectedCue) input.value = formatTime(editor.selectedCue[field]);
+    }
   }
 
   /** "auto", a number (line number) or a percentage. */
@@ -87,6 +96,7 @@
           <input
             class="time"
             value={formatTime(cue.startMs)}
+            title="↑/↓ nudge by 0.1 s, with Shift by 1 s"
             onblur={(e) => commitTime('startMs', e.currentTarget)}
             onkeydown={(e) => timeKeydown('startMs', e)}
           />
@@ -96,6 +106,7 @@
           <input
             class="time"
             value={formatTime(cue.endMs)}
+            title="↑/↓ nudge by 0.1 s, with Shift by 1 s"
             onblur={(e) => commitTime('endMs', e.currentTarget)}
             onkeydown={(e) => timeKeydown('endMs', e)}
           />

@@ -5,20 +5,51 @@
   interface Props {
     editor: Editor;
     theme: string;
+    mod: string;
     onopen: () => void;
+    onmedia: () => void;
     onexport: () => void;
+    onsplit: () => void;
+    onfind: () => void;
+    onhelp: () => void;
   }
 
-  let { editor, theme = $bindable(), onopen, onexport }: Props = $props();
+  let {
+    editor,
+    theme = $bindable(),
+    mod,
+    onopen,
+    onmedia,
+    onexport,
+    onsplit,
+    onfind,
+    onhelp,
+  }: Props = $props();
 
-  const mod =
-    typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
+  const AUTOSAVE_TEXT = {
+    idle: '',
+    saved: 'autosaved',
+    unsupported: 'autosave unavailable',
+    failed: 'autosave failed',
+  } as const;
+  const AUTOSAVE_TITLE = {
+    idle: '',
+    saved: 'Your edits are kept in this browser until you save, in case the tab closes.',
+    unsupported:
+      'This browser does not offer storage for autosave here (for example in a private window).',
+    failed: 'The last autosave could not be written; your edits are still open here.',
+  } as const;
 </script>
 
 <header class="toolbar">
   <div class="group">
     <button onclick={() => editor.newDocument()} title="Start an empty file">New</button>
     <button onclick={onopen} title="Open a .vtt file ({mod}O)">Open…</button>
+    <button
+      onclick={onmedia}
+      disabled={!editor.hasDocument}
+      title="Open an audio or video file to time cues against">Media…</button
+    >
     <button
       class="primary"
       onclick={onexport}
@@ -43,15 +74,37 @@
       disabled={!editor.selectedCue}
       title="Delete the selected cue (Delete)">Delete</button
     >
+    <button onclick={onsplit} disabled={!editor.selectedCue} title="Split the selected cue (S)"
+      >Split</button
+    >
+    <button
+      onclick={() => editor.mergeWithNext()}
+      disabled={!editor.canMerge}
+      title="Merge the selected cue with the next one (M)">Merge</button
+    >
+    <button onclick={onfind} disabled={!editor.hasDocument} title="Find and replace ({mod}F)"
+      >Find</button
+    >
   </div>
   <p class="status" aria-live="polite">
     {#if editor.busy}
       {editor.busy}
     {:else if editor.hasDocument}
       <strong>{editor.fileName}</strong>{editor.dirty ? ' • edited' : ''}
-      <span class="muted">· {editor.cueRows.length.toLocaleString()} cues</span>
+      <span class="muted"
+        >· {editor.cueRows.length.toLocaleString()}
+        {editor.cueRows.length === 1 ? 'cue' : 'cues'}</span
+      >
+      {#if editor.dirty && editor.autosaveStatus !== 'idle'}
+        <span
+          class={editor.autosaveStatus === 'saved' ? 'muted' : 'warning-text'}
+          title={AUTOSAVE_TITLE[editor.autosaveStatus]}
+          >· {AUTOSAVE_TEXT[editor.autosaveStatus]}</span
+        >
+      {/if}
     {/if}
   </p>
+  <button onclick={onhelp} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
   <label class="theme">
     Theme
     <select bind:value={theme}>

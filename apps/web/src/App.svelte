@@ -1,18 +1,32 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import CueEditor from './lib/components/CueEditor.svelte';
   import CueTable from './lib/components/CueTable.svelte';
   import DiagnosticsPanel from './lib/components/DiagnosticsPanel.svelte';
   import ExportDialog from './lib/components/ExportDialog.svelte';
+  import FindBar from './lib/components/FindBar.svelte';
+  import HelpDialog from './lib/components/HelpDialog.svelte';
+  import MediaPanel from './lib/components/MediaPanel.svelte';
   import Toolbar from './lib/components/Toolbar.svelte';
   import { Editor } from './lib/editor.svelte.ts';
+  import { canSaveInPlace, droppedHandle, pickVttFile } from './lib/files.ts';
+  import { isMediaFile, splitOffset, splitTime } from './lib/media.ts';
+  import { Player } from './lib/player.svelte.ts';
+  import { actionFor, type Action } from './lib/shortcuts.ts';
   import { loadThemeChoice, resolveTheme, saveThemeChoice } from './lib/themes.ts';
   import { VttWorker } from './lib/worker/client.ts';
 
   const editor = new Editor(new VttWorker());
+  const player = new Player();
+  const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
+  void editor.checkAutosave();
 
   let theme = $state(loadThemeChoice());
   let prefersDark = $state(window.matchMedia('(prefers-color-scheme: dark)').matches);
   let exportOpen = $state(false);
+  let helpOpen = $state(false);
+  let findOpen = $state(false);
+  let mediaInput: HTMLInputElement | undefined = $state();
   let dragging = $state(false);
   let fileInput: HTMLInputElement | undefined = $state();
   let textarea: HTMLTextAreaElement | undefined = $state();
@@ -46,19 +60,116 @@
     return () => window.removeEventListener('beforeunload', listener);
   });
 
-  function openPicker(): void {
-    fileInput?.click();
+  async function openPicker(): Promise<void> {
+    if (!canSaveInPlace()) return fileInput?.click();
+    try {
+      const picked = await pickVttFile();
+      if (picked) await openFile(picked.file, picked.handle);
+    } catch (error) {
+      editor.error = `Could not open the file: ${(error as Error).message}`;
+    }
+  }
+
+  function openMedia(file: File): void {
+    if (!editor.hasDocument) editor.newDocument();
+    player.load(file);
   }
 
   function openExport(): void {
     if (editor.hasDocument) exportOpen = true;
   }
 
-  async function openFile(file: File | undefined): Promise<void> {
+  async function openFile(
+    file: File | undefined,
+    handle: FileSystemFileHandle | Promise<FileSystemFileHandle | null> | null = null,
+  ): Promise<void> {
     if (!file) return;
     if (editor.dirty && !confirm('Discard your unsaved edits and open another file?')) return;
-    await editor.open(file);
+    await editor.open(file, await handle);
   }
+
+  function onpaste(event: ClipboardEvent): void {
+    if (isTyping(event.target) || exportOpen || helpOpen) return;
+    const text = event.clipboardData?.getData('text/plain') ?? '';
+    if (!/^\uFEFF?WEBVTT(?:[ \t\r\n]|$)/.test(text)) {
+      if (!editor.hasDocument && text.trim() !== '')
+        editor.error = 'The pasted text is not WebVTT: it does not start with "WEBVTT".';
+      return;
+    }
+    event.preventDefault();
+    if (editor.dirty && !confirm('Discard your unsaved edits and open the pasted text?')) return;
+    void editor.openText(text);
+  }
+
+  const isEditingCue = (): boolean =>
+    document.activeElement?.closest('[aria-label="Selected cue"]') != null;
+
+  /** Runs `change`, keeping focus in the cue text if it was there (the editor is rebuilt). */
+  async function keepTextFocus(change: () => void): Promise<void> {
+    const refocus = document.activeElement === textarea;
+    change();
+    if (!refocus) return;
+    await tick();
+    textarea?.focus();
+    textarea?.setSelectionRange(0, 0);
+  }
+
+  function split(): void {
+    const cue = editor.selectedCue;
+    if (!cue) return;
+    const caret = document.activeElement === textarea ? (textarea?.selectionStart ?? null) : null;
+    const playhead = player.hasMedia ? player.currentMs : null;
+    const ratio = (ms: number): number => (ms - cue.startMs) / (cue.endMs - cue.startMs);
+    const at = splitTime(cue, playhead, caret ?? cue.text.length / 2);
+    if (at === null) {
+      editor.error = 'Cannot split: the cue is too short.';
+      return;
+    }
+    void keepTextFocus(() => editor.splitSelected(at, caret ?? splitOffset(cue.text, ratio(at))));
+  }
+
+  function run(action: Action): void {
+    const media = player.hasMedia;
+    switch (action) {
+      case 'play':
+        return player.toggle();
+      case 'back':
+      case 'forward':
+      case 'back-long':
+      case 'forward-long':
+        if (media)
+          player.skip(
+            { back: -1000, forward: 1000, 'back-long': -5000, 'forward-long': 5000 }[action],
+          );
+        return;
+      case 'set-start':
+        if (media) editor.setTime('startMs', player.currentMs);
+        return;
+      case 'set-end':
+        if (media) editor.setTime('endMs', player.currentMs);
+        return;
+      case 'loop':
+        if (media) player.loop = !player.loop;
+        return;
+      case 'add':
+        return editor.addCue(media ? player.currentMs : undefined);
+      case 'split':
+        return split();
+      case 'merge':
+        return void keepTextFocus(() => editor.mergeWithNext());
+      case 'previous':
+        return void keepTextFocus(() => editor.moveSelection(-1));
+      case 'next':
+        return void keepTextFocus(() => editor.moveSelection(1));
+      case 'help':
+        helpOpen = true;
+        return;
+    }
+  }
+
+  /** Elements where Space has its own meaning. */
+  const ownsSpace = (target: EventTarget | null): boolean =>
+    target instanceof Element && target.closest('button, a, summary, video, audio') !== null;
 
   function focusText(): void {
     textarea?.focus();
@@ -76,11 +187,23 @@
 
   function onkeydown(event: KeyboardEvent): void {
     const mod = event.ctrlKey || event.metaKey;
-    if (!mod) return;
+    if (!mod) {
+      if (event.defaultPrevented || !editor.hasDocument || exportOpen || helpOpen) return;
+      if (event.key === ' ' && ownsSpace(event.target)) return;
+      const action = actionFor(event, isTyping(event.target));
+      if (action) {
+        event.preventDefault();
+        run(action);
+      }
+      return;
+    }
     const key = event.key.toLowerCase();
     if (key === 'o') {
       event.preventDefault();
-      openPicker();
+      void openPicker();
+    } else if (key === 'f' && editor.hasDocument) {
+      event.preventDefault();
+      findOpen = true;
     } else if (key === 's') {
       event.preventDefault();
       openExport();
@@ -95,6 +218,7 @@
 
 <svelte:window
   {onkeydown}
+  {onpaste}
   ondragover={(e) => {
     e.preventDefault();
     dragging = true;
@@ -105,7 +229,10 @@
   ondrop={(e) => {
     e.preventDefault();
     dragging = false;
-    void openFile(e.dataTransfer?.files[0]);
+    const file = e.dataTransfer?.files[0];
+    if (file && isMediaFile(file)) return openMedia(file);
+    // The handle must be requested before the drop event ends.
+    void openFile(file, droppedHandle(e.dataTransfer?.items[0]));
   }}
 />
 
@@ -121,9 +248,32 @@
   tabindex="-1"
   aria-hidden="true"
 />
+<input
+  class="visually-hidden"
+  type="file"
+  accept="audio/*,video/*"
+  bind:this={mediaInput}
+  onchange={(e) => {
+    const file = e.currentTarget.files?.[0];
+    if (file) openMedia(file);
+    e.currentTarget.value = '';
+  }}
+  tabindex="-1"
+  aria-hidden="true"
+/>
 
 <div class="app">
-  <Toolbar {editor} bind:theme onopen={openPicker} onexport={openExport} />
+  <Toolbar
+    {editor}
+    bind:theme
+    {mod}
+    onopen={openPicker}
+    onmedia={() => mediaInput?.click()}
+    onexport={openExport}
+    onsplit={split}
+    onfind={() => (findOpen = true)}
+    onhelp={() => (helpOpen = true)}
+  />
 
   {#if editor.error}
     <p class="banner error-text" role="alert">
@@ -133,17 +283,40 @@
   {/if}
 
   {#if editor.hasDocument}
-    <main class="workspace">
+    <main class="workspace" class:with-media={player.hasMedia}>
       <section class="cues" aria-label="Cue list and editor">
+        <FindBar {editor} bind:open={findOpen} />
         <CueTable {editor} onedit={focusText} />
         <CueEditor {editor} bind:textarea />
       </section>
-      <DiagnosticsPanel {editor} onjump={jumpTo} />
+      <div class="side">
+        {#if player.hasMedia}
+          <MediaPanel {editor} {player} isEditing={isEditingCue} />
+        {/if}
+        <DiagnosticsPanel {editor} onjump={jumpTo} />
+      </div>
     </main>
   {:else}
     <main class="start">
       <h1>MicroVTT</h1>
-      <p>Open a WebVTT (.vtt) file, drop one anywhere on this page, or start a new one.</p>
+      {#if editor.restorable}
+        <div class="restore" role="region" aria-label="Unsaved work">
+          <p>
+            <strong>Unsaved work found:</strong>
+            {editor.restorable.fileName}, {editor.restorable.cues.toLocaleString()}
+            {editor.restorable.cues === 1 ? 'cue' : 'cues'}, last edited
+            {new Date(editor.restorable.savedAt).toLocaleString()}.
+          </p>
+          <p class="actions">
+            <button class="primary" onclick={() => void editor.restoreAutosave()}>Restore</button>
+            <button onclick={() => editor.discardAutosave()}>Discard</button>
+          </p>
+        </div>
+      {/if}
+      <p>
+        Open a WebVTT (.vtt) file, drop one anywhere on this page, paste WebVTT text, or start a new
+        one.
+      </p>
       <p class="actions">
         <button class="primary" onclick={openPicker}>Open a file…</button>
         <button onclick={() => editor.newDocument()}>New file</button>
@@ -153,10 +326,11 @@
   {/if}
 
   {#if dragging}
-    <div class="drop" aria-hidden="true">Drop a .vtt file to open it</div>
+    <div class="drop" aria-hidden="true">Drop a .vtt file to open it, or media to play</div>
   {/if}
 
   <ExportDialog {editor} bind:open={exportOpen} />
+  <HelpDialog bind:open={helpOpen} {mod} />
 </div>
 
 <style>
@@ -175,6 +349,18 @@
     gap: 0.75rem;
     padding: 0.75rem;
   }
+  .workspace.with-media {
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 32rem);
+  }
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-height: 0;
+  }
+  .side > :global(.panel) {
+    flex: 1;
+  }
   .cues {
     display: flex;
     flex-direction: column;
@@ -182,7 +368,8 @@
     min-height: 0;
   }
   @media (max-width: 52rem) {
-    .workspace {
+    .workspace,
+    .workspace.with-media {
       grid-template-columns: 1fr;
       grid-template-rows: minmax(0, 1fr) auto;
     }
@@ -192,6 +379,13 @@
     max-width: 32rem;
     padding: 2rem 1rem;
     text-align: center;
+  }
+  .restore {
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 0.5rem 1rem;
+    margin-bottom: 1.5rem;
   }
   .start .actions {
     display: flex;

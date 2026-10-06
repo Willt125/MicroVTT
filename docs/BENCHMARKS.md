@@ -52,3 +52,21 @@ Takeaways:
 - **Memory is modest:** retained memory is about 2× the file size (14 MB for 12 h).
 - **Browsers will differ:** these are V8 numbers. Firefox and Safari need measuring in Phase 3,
   once the import path runs in a Worker in real browsers.
+
+## Editor (headless Chromium, Phase 3b)
+
+The worst-case 12 h synthetic file (43,632 cues) with a 1-minute WebM open in the player, measured
+with Playwright and a `longtask` observer:
+
+| Step                                  | Result                                                  |
+| ------------------------------------- | ------------------------------------------------------- |
+| Open media, build the caption preview | no long tasks (the preview holds about 300 cues)        |
+| Type 18 characters, 40 ms apart       | 0.9 s (the typing itself is 0.72 s)                     |
+| Autosave after the last keystroke     | about 2.2 s (1.5 s delay), one long task of about 0.2 s |
+| Restore after a reload                | offer in about 0.3 s, document back in about 0.7 s      |
+| Find "the" over every cue             | 50–100 ms, 77,351 matches                               |
+
+The remaining 0.2 s task is most likely the validation round trip (copying the document to the
+worker and taking the results back), which predates 3b; it is not profiled yet. Before the
+preview was limited to a window around the playhead, every preview refresh cost about 0.3 s on
+the main thread while Chromium parsed the full track.
