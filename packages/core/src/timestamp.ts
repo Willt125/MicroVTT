@@ -73,18 +73,26 @@ export function parseTimestamp(input: string, position = 0): TimestampParseResul
 /**
  * Serializes milliseconds as a conforming WebVTT timestamp. Hours are always emitted
  * (as at least two digits) unless `omitZeroHours` is set and the hours are zero.
+ *
+ * The syntax puts no upper bound on hours, so absurdly large (but integral) values are accepted
+ * and formatted exactly via BigInt rather than rejected.
  */
 export function formatTimestamp(ms: number, omitZeroHours = false): string {
-  if (!Number.isSafeInteger(ms) || ms < 0) {
+  if (!Number.isInteger(ms) || ms < 0) {
     throw new RangeError(`Invalid timestamp: ${ms}`);
   }
-  const frac = ms % 1000;
-  const totalSeconds = (ms - frac) / 1000;
-  const seconds = totalSeconds % 60;
-  const minutes = Math.floor(totalSeconds / 60) % 60;
-  const hours = Math.floor(totalSeconds / 3600);
-  const mmss = `${pad(minutes, 2)}:${pad(seconds, 2)}.${pad(frac, 3)}`;
-  return omitZeroHours && hours === 0 ? mmss : `${pad(hours, 2)}:${mmss}`;
+  let hours: string;
+  let rest: number; // Milliseconds within the hour.
+  if (Number.isSafeInteger(ms)) {
+    hours = String(Math.floor(ms / 3_600_000));
+    rest = ms % 3_600_000;
+  } else {
+    const total = BigInt(ms);
+    hours = String(total / 3_600_000n);
+    rest = Number(total % 3_600_000n);
+  }
+  const mmss = `${pad(Math.floor(rest / 60_000), 2)}:${pad(Math.floor(rest / 1000) % 60, 2)}.${pad(rest % 1000, 3)}`;
+  return omitZeroHours && hours === '0' ? mmss : `${hours.padStart(2, '0')}:${mmss}`;
 }
 
 const pad = (n: number, width: number): string => String(n).padStart(width, '0');

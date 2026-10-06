@@ -10,6 +10,13 @@ export default ts.config(
   ...svelte.configs.recommended,
   {
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
+    rules: {
+      // A leading underscore marks an intentionally unused binding (e.g. omitted by destructuring).
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { varsIgnorePattern: '^_', argsIgnorePattern: '^_', ignoreRestSiblings: true },
+      ],
+    },
   },
   {
     files: ['**/*.svelte', '**/*.svelte.ts'],

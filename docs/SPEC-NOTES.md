@@ -240,12 +240,49 @@ side-by-side "what browser X will show" mode.
 
 ## Test corpus
 
-- `tests/wpt/file-parsing/*.test`: 38 parser tests. The format is title, metadata, JS
-  assertions over `cues`, then `===`, then the VTT body (Python escapes such as `\x00` and `\r`). We will
-  run them in Vitest with a small shim that exposes our parse output through
-  VTTCue-shaped objects and evaluates `assert_equals` and similar assertions.
-- `tests/wpt/file-parsing/*.vtt`: files with invalid signatures, all of which must be rejected.
-- `tests/wpt/cue-text-parsing/*.dat`: 78 cue-text tree tests in html5lib `#data` / `#document-fragment` format.
-- `tests/wpt/api/`: VTTCue/VTTRegion setter semantics, for the model.
-- Our own fixtures and property-based tests (fast-check) cover validator diagnostics, repair (any input exports with zero errors),
-  and large-file performance.
+- `tests/wpt/file-parsing/*.test`: 38 parser tests. The format is title, metadata, JS assertions over
+  `cues`, then `===`, then the VTT body. `packages/core/test/wpt-support.ts` reproduces the build
+  script exactly: Python `unicode_escape` decoding, UTF-8 encoding, cues exposed as VTTCue-shaped
+  objects in text track cue order, and testharness.js `same_value` semantics (so `-0` ≠ `0`).
+- `tests/wpt/file-parsing/*.vtt`: 11 files with invalid signatures, all of which must be rejected.
+- `tests/wpt/cue-text-parsing/*.dat`: 78 cue-text tree tests. Each input is wrapped in a one-cue
+  file, as WPT's `common.js` does, and compared with a serialization of the §6.5 DOM mapping.
+- `tests/wpt/api/`: VTTCue/VTTRegion setter semantics, for the Phase 2 model.
+- Our own unit tests cover what WPT does not: numeric character references (C1 remapping,
+  surrogates, overflow), annotations, the language stack, chapter titles, streaming across
+  chunk boundaries, source ranges, and timestamps beyond the safe-integer range.
+
+### Reference parser deviations
+
+`reference-parser.py` describes itself as "a direct translation" of the parser algorithm, but it
+diverges from the spec. `packages/core/test/fuzz/reference_driver.py` patches each deviation at
+load time, asserting that every patch applies exactly once:
+
+| Deviation                                                                                                                   | Spec                                |
+| --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| Splits settings with a pattern that matches the empty string, so in Python 3.7+ no cue or region setting is ever recognized | §6.2/§6.3 "split on spaces"         |
+| Rejects 59 as a minutes or seconds value (`>= 59`)                                                                          | §6.3: error only if greater than 59 |
+| `\d` and `\s` accept non-ASCII digits and spaces                                                                            | ASCII digits, ASCII whitespace      |
+| Line numbers keep `-0` and accept values that overflow to infinity                                                          | HTML floating-point parsing rules   |
+| Position alignment is stored as line alignment                                                                              | §6.3 `position` setting             |
+| `vertical`, `line` and non-100 `size` do not take the cue out of its region                                                 | §6.3                                |
+
+The reference parser does not implement cue text parsing, so cue text is covered by WPT's
+`.dat` tests and our unit tests instead.
+
+### Fuzzing
+
+`packages/core/test/fuzz/` generates adversarial documents from a seed: broken timestamps, odd
+arrows, settings edge cases, regions with duplicate ids, STYLE/REGION blocks after cues, mixed
+line endings and NULs. Each document is checked twice:
+
+- **Differential:** it is parsed by our parser and by the patched reference parser, and the
+  results are compared field by field.
+- **Streaming:** its UTF-8 bytes are split into random chunks (including inside multi-byte
+  sequences and CRLF pairs) and parsed incrementally; the result must match parsing it whole.
+
+Planted bugs confirmed the fuzzer is effective. Each of these was caught: STYLE recognized after
+a cue, first-instead-of-last region lookup, an arrow on line 2 after failed timings, `size`,
+`vertical` or `line` not taking a cue out of its region, `-0` kept, and non-ASCII whitespace
+accepted after `STYLE`. CI runs 3,000 cases. `pnpm fuzz` runs 200,000 (override with
+`FUZZ_CASES`/`FUZZ_SEED`).

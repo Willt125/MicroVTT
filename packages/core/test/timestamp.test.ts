@@ -58,5 +58,17 @@ describe('formatTimestamp', () => {
   it('rejects invalid input', () => {
     expect(() => formatTimestamp(-1)).toThrow(RangeError);
     expect(() => formatTimestamp(1.5)).toThrow(RangeError);
+    expect(() => formatTimestamp(Number.NaN)).toThrow(RangeError);
+    expect(() => formatTimestamp(Number.POSITIVE_INFINITY)).toThrow(RangeError);
+  });
+
+  it('formats hours beyond the safe-integer range exactly', () => {
+    // The syntax puts no bound on hours; a garbled file must not crash formatting.
+    const parsed = parseTimestamp('99999999999999999999:00:00.000');
+    expect(parsed.ok).toBe(true);
+    const ms = (parsed as { ms: number }).ms;
+    // The double nearest to 10^20 hours is not a whole number of hours; only the shape is fixed.
+    expect(formatTimestamp(ms)).toMatch(/^[0-9]{20}:[0-5][0-9]:[0-5][0-9]\.[0-9]{3}$/);
+    expect(formatTimestamp(2 ** 60)).toBe('320255973501:54:06.976');
   });
 });

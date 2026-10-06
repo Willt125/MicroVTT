@@ -16,11 +16,17 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
+    "bench": "node --expose-gc packages/core/bench/parse.bench.ts",
+    "fuzz": "FUZZ_CASES=200000 vitest run packages/core/test/fuzz",
+    "gen:entities": "node scripts/gen-entities.mjs",
     "sync:wpt": "bash scripts/sync-wpt.sh",
     "sync:spec": "bash scripts/sync-spec.sh"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.5",
+    "character-entities": "^2.0.2",
+    "character-entities-legacy": "^3.0.0",
     "eslint": "^10.12.0",
     "eslint-plugin-svelte": "^3.23.0",
     "globals": "^17.13.0",
