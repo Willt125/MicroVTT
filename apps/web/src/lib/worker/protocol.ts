@@ -33,10 +33,28 @@ export interface ExportedFile {
   diagnostics: ItemDiagnostic[];
 }
 
+/** What an autosave records besides the document. */
+export interface AutosaveMeta {
+  fileName: string;
+  fileType: FileType;
+  /** `Date.now()` when saved. */
+  savedAt: number;
+  cues: number;
+}
+
+export interface Autosave {
+  meta: AutosaveMeta;
+  document: VttDocument;
+}
+
 export type WorkerRequest =
   | { id: number; type: 'import'; bytes: ArrayBuffer }
   | { id: number; type: 'validate'; document: VttDocument; fileType: FileType }
-  | { id: number; type: 'export'; document: VttDocument; options: ExportOptions };
+  | { id: number; type: 'export'; document: VttDocument; options: ExportOptions }
+  | { id: number; type: 'preview'; document: VttDocument }
+  | { id: number; type: 'autosave'; save: Autosave }
+  | { id: number; type: 'load-autosave' }
+  | { id: number; type: 'clear-autosave' };
 
 export type WorkerResponse =
   { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string };

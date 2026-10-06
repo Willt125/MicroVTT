@@ -1,6 +1,7 @@
 /** Promise-based client for the WebVTT worker. */
 import type { ExportOptions, FileType, VttDocument } from '@microvtt/core';
 import type {
+  Autosave,
   ExportedFile,
   ImportedFile,
   ItemDiagnostic,
@@ -49,5 +50,23 @@ export class VttWorker {
 
   export(document: VttDocument, options: ExportOptions): Promise<ExportedFile> {
     return this.request({ type: 'export', document, options });
+  }
+
+  /** The document as it would be exported, for the player's caption preview. */
+  preview(document: VttDocument): Promise<string> {
+    return this.request({ type: 'preview', document });
+  }
+
+  /** Resolves false where autosave storage (OPFS) is unavailable. */
+  autosave(save: Autosave): Promise<boolean> {
+    return this.request({ type: 'autosave', save });
+  }
+
+  loadAutosave(): Promise<Autosave | null> {
+    return this.request({ type: 'load-autosave' });
+  }
+
+  clearAutosave(): Promise<void> {
+    return this.request({ type: 'clear-autosave' });
   }
 }

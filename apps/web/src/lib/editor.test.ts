@@ -10,10 +10,20 @@ import {
 import { Editor } from './editor.svelte.ts';
 import { locateInSerialized, locateInSource, serializeWithSpans } from './worker/locate.ts';
 import type { VttWorker } from './worker/client.ts';
+import type { Autosave } from './worker/protocol.ts';
 
-/** Runs the worker's logic in-process. */
-function fakeWorker(): VttWorker {
+/** Runs the worker's logic in-process; autosave goes to `store.save`. */
+function fakeWorker(store: { save: Autosave | null } = { save: null }): VttWorker {
   return {
+    preview: async (doc: VttDocument) => exportDocument(doc).text,
+    autosave: async (save: Autosave) => {
+      store.save = structuredClone(save);
+      return true;
+    },
+    loadAutosave: async () => store.save,
+    clearAutosave: async () => {
+      store.save = null;
+    },
     import: async (bytes: ArrayBuffer) => {
       const imported = importDocument(new TextDecoder().decode(bytes));
       return { ok: imported.ok, document: imported.document, diagnostics: [] };
@@ -76,6 +86,79 @@ describe('Editor', () => {
     editor.deleteSelected();
     expect(editor.selectedCue?.text).toBe('one'); // No next cue: the previous one.
     expect(editor.cueRows).toHaveLength(1);
+  });
+
+  it('adds a cue at the playhead in time order', async () => {
+    const editor = new Editor(fakeWorker());
+    await editor.open(file(SAMPLE));
+    editor.addCue(1500);
+    expect(editor.cueRows.map((i) => (editor.doc.body[i] as { startMs: number }).startMs)).toEqual([
+      0, 1000, 1500,
+    ]);
+    expect(editor.selectedCue).toMatchObject({ startMs: 1500, endMs: 3500 });
+    editor.addCue(0);
+    expect(editor.selected).toBe(1); // After the cue that also starts at 0.
+  });
+
+  it('sets times, coalescing repeated nudges into one undo step', async () => {
+    const editor = new Editor(fakeWorker());
+    await editor.open(file(SAMPLE));
+    editor.setTime('endMs', 1234.4);
+    expect(editor.selectedCue?.endMs).toBe(1234);
+    editor.nudge('startMs', 100);
+    editor.nudge('startMs', 100);
+    expect(editor.selectedCue?.startMs).toBe(200);
+    editor.undo();
+    expect(editor.selectedCue).toMatchObject({ startMs: 0, endMs: 1234 });
+  });
+
+  it('splits and merges the selected cue', async () => {
+    const editor = new Editor(fakeWorker());
+    await editor.open(file('WEBVTT\n\n00:00.000 --> 00:02.000\n<i>one two</i>\n'));
+    editor.splitSelected(1000, 7);
+    expect(editor.cueRows).toHaveLength(2);
+    expect(editor.selectedCue).toMatchObject({ startMs: 1000, text: '<i>two</i>' });
+    editor.moveSelection(-1);
+    expect(editor.canMerge).toBe(true);
+    editor.mergeWithNext();
+    expect(editor.selectedCue).toMatchObject({
+      startMs: 0,
+      endMs: 2000,
+      text: '<i>one</i>\n<00:00:01.000><i>two</i>',
+    });
+    expect(editor.canMerge).toBe(false);
+    editor.splitSelected(5000, 0);
+    expect(editor.error).toMatch(/Cannot split/);
+  });
+
+  it('opens pasted text', async () => {
+    const editor = new Editor(fakeWorker());
+    await editor.openText('WEBVTT\n\n00:01.000 --> 00:02.000\npasted\n');
+    expect(editor.fileName).toBe('pasted.vtt');
+    expect(editor.selectedCue?.text).toBe('pasted');
+  });
+
+  it('autosaves edits, restores them, and clears the save once saved', async () => {
+    vi.useFakeTimers();
+    const store: { save: Autosave | null } = { save: null };
+    const editor = new Editor(fakeWorker(store));
+    await editor.open(file(SAMPLE));
+    editor.updateSelected((c) => ({ ...c, text: 'edited' }), 'Edit text');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(store.save?.meta).toMatchObject({ fileName: 'a.vtt', cues: 2 });
+    expect(editor.autosaveStatus).toBe('saved');
+
+    const later = new Editor(fakeWorker(store));
+    await later.checkAutosave();
+    expect(later.restorable?.fileName).toBe('a.vtt');
+    await later.restoreAutosave();
+    expect(later.selectedCue?.text).toBe('edited');
+    expect(later.dirty).toBe(true);
+
+    later.markSaved();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.save).toBeNull();
+    vi.useRealTimers();
   });
 
   it('validates in the background and attaches problems to cues', async () => {

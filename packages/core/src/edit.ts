@@ -94,9 +94,75 @@ export function scaleCues(
   );
 }
 
+/** Elements that can be open across a split point (the cue text parser's element names). */
+const ELEMENTS = new Set(['c', 'i', 'b', 'u', 'ruby', 'rt', 'v', 'lang']);
+
+interface OpenTag {
+  name: string;
+  /** The start tag as written, e.g. `<v.loud Bob>`. */
+  tag: string;
+  at: number;
+}
+
+/**
+ * Finds where raw cue text can be divided near `offset`: never inside a tag or a character
+ * reference, and never just inside an element's start or end tag. Returns the adjusted offset and
+ * the elements open there, outermost first.
+ */
+function splitPoint(text: string, offset: number): { at: number; open: OpenTag[] } {
+  let at = Math.max(0, Math.min(text.length, offset));
+  // Not inside a character reference ("&amp;" split as "&am" + "p;").
+  const amp = text.lastIndexOf('&', at - 1);
+  if (amp !== -1 && /^&[#0-9A-Za-z]*$/.test(text.slice(amp, at))) at = amp;
+  const open: OpenTag[] = [];
+  let pos = 0;
+  while (pos < at) {
+    const lt = text.indexOf('<', pos);
+    if (lt === -1 || lt >= at) break;
+    const gt = text.indexOf('>', lt + 1);
+    const end = gt === -1 ? text.length : gt + 1;
+    if (at < end) {
+      at = lt; // Inside a tag: split before it.
+      break;
+    }
+    const inner = text.slice(lt + 1, gt === -1 ? text.length : gt);
+    if (inner.startsWith('/')) {
+      const name = inner.slice(1).trim();
+      if (open.at(-1)?.name === name) open.pop();
+      else if (name === 'ruby' && open.at(-1)?.name === 'rt' && open.at(-2)?.name === 'ruby')
+        open.splice(-2);
+    } else {
+      const name = /^[^\s./>]*/.exec(inner)?.[0] ?? '';
+      if (ELEMENTS.has(name)) open.push({ name, tag: text.slice(lt, end), at: lt });
+    }
+    pos = end;
+  }
+  for (;;) {
+    const top = open.at(-1);
+    if (top && top.at + top.tag.length === at) {
+      // Right after a start tag: the element belongs wholly to the second cue.
+      at = top.at;
+      open.pop();
+      continue;
+    }
+    const close = top && new RegExp(`^</${top.name}\\s*>`).exec(text.slice(at));
+    if (top && close) {
+      // Right before an end tag: the element belongs wholly to the first cue.
+      at += close[0].length;
+      open.pop();
+      continue;
+    }
+    return { at, open };
+  }
+}
+
 /**
  * Splits the cue at `bodyIndex` into two at `atMs`, dividing its raw text at `textOffset`.
- * Word timestamps that would fall outside their new cue are removed. The second cue gets no id.
+ * The offset moves out of any tag or character reference it falls in; elements open at the
+ * split are closed in the first cue and reopened in the second, so `<i>a|b</i>` becomes
+ * `<i>a</i>` and `<i>b</i>`; whitespace at the split is dropped. Word timestamps that would
+ * fall outside their new cue are removed.
+ * The second cue gets no id.
  */
 export function splitCue(
   doc: VttDocument,
@@ -108,8 +174,13 @@ export function splitCue(
   if (cue?.type !== 'cue') throw new RangeError(`No cue at body index ${bodyIndex}`);
   if (!(atMs > cue.startMs && atMs < cue.endMs))
     throw new RangeError('Split time must be inside the cue');
-  const before = cue.text.slice(0, textOffset).replace(/\n+$/, '');
-  const after = cue.text.slice(textOffset).replace(/^\n+/, '');
+  const { at, open } = splitPoint(cue.text, textOffset);
+  const closers = open
+    .map((t) => `</${t.name}>`)
+    .reverse()
+    .join('');
+  const before = cue.text.slice(0, at).replace(/[ \t\n]+$/, '') + closers;
+  const after = open.map((t) => t.tag).join('') + cue.text.slice(at).replace(/^[ \t\n]+/, '');
   const first: Cue = {
     ...cue,
     endMs: atMs,

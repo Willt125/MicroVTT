@@ -250,6 +250,23 @@ describe('editing', () => {
     expect(b).toMatchObject({ startMs: 2000, endMs: 3000, text: '<c> goes</c>' });
   });
 
+  it('splits outside tags and references, closing and reopening open elements', () => {
+    const split = (text: string, offset: number): string[] =>
+      cuesOf(splitCue(doc(createCue(0, 2000, text)), 0, 1000, offset)).map((c) => c.text);
+    expect(split('<i>ab</i>', 4)).toEqual(['<i>a</i>', '<i>b</i>']);
+    expect(split('<v.loud Bob>one <b>two</b> three', 20)).toEqual([
+      '<v.loud Bob>one <b>t</b></v>',
+      '<v.loud Bob><b>wo</b> three',
+    ]);
+    expect(split('a<i>b</i>', 2)).toEqual(['a', '<i>b</i>']); // Inside "<i>": before it.
+    expect(split('a<i>b</i>', 4)).toEqual(['a', '<i>b</i>']); // Just after "<i>".
+    expect(split('<i>a</i>b', 4)).toEqual(['<i>a</i>', 'b']); // Just before "</i>".
+    expect(split('x&amp;y', 3)).toEqual(['x', '&amp;y']);
+    expect(split('<ruby>a<rt>b</rt></ruby>c', 12)).toEqual(['<ruby>a<rt>b</rt></ruby>', 'c']);
+    expect(split('one\ntwo', 4)).toEqual(['one', 'two']);
+    expect(split('one two', 3)).toEqual(['one', 'two']); // Whitespace at the split goes.
+  });
+
   it('merges cues, keeping the join as a word timing', () => {
     const merged = mergeCues(doc(createCue(0, 1000, 'a'), createCue(1000, 2000, 'b')), 0, 1);
     expect(cuesOf(merged)).toEqual([{ ...createCue(0, 2000, 'a\n<00:00:01.000>b') }]);
