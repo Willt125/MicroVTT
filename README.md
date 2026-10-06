@@ -26,6 +26,7 @@ Requires Node 22+ (24 recommended, see `.nvmrc`) and pnpm 11.
 pnpm install
 pnpm dev         # run the editor
 pnpm test        # unit + conformance tests
+pnpm e2e         # browser tests (Playwright; run `pnpm --filter @microvtt/web exec playwright install` once)
 pnpm typecheck
 pnpm lint
 pnpm build

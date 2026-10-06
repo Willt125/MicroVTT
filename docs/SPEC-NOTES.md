@@ -247,6 +247,29 @@ translated tracks, the word timings are only an estimate and must not be present
 needs its own renderer (§7) for the preview. Native `<track>` rendering stays available as a
 side-by-side "what browser X will show" mode.
 
+### Parser deviations measured in real browsers
+
+`apps/web/e2e/native.e2e.ts` loads the WPT file-parsing inputs, our fixtures and seeded fuzz
+documents (as generated and after export) into real `<track>` elements and compares the
+browsers' `VTTCue`/`VTTRegion` objects with ours. Every known difference is listed, with a
+minimal reproduction, in `apps/web/e2e/native-deviations.ts`; anything else fails the test.
+
+**Chromium** (no `lineAlign`, `positionAlign` or regions, so those are not compared):
+
+| Input                                                      | Chromium                  | Spec (and MicroVTT)       | Exported files? |
+| ---------------------------------------------------------- | ------------------------- | ------------------------- | --------------- |
+| `line:0,end`, `position:18%,line-left` (any suffix)        | ignores the whole setting | line 0, position 18%      | **yes**         |
+| `size:6.%`, `line:1.`, `line:-.5`                          | accepts                   | rejects the setting       | no              |
+| form feed between settings                                 | not a separator           | ASCII whitespace          | no              |
+| a timing line after two lines of a block, or in the header | previous line is the id   | block ends; cue has no id | no              |
+| cue id starting with `STYLE` before the first cue          | id dropped                | id kept                   | **yes**         |
+| `NOTE` whose first line is `STYLE`, before the first cue   | next cue's id misread     | a comment                 | **yes**         |
+
+Chromium also fails two WPT tests here (`settings-line`, `settings-position`). The rows marked
+"exported files" are valid WebVTT that MicroVTT may write; Chromium-based players show those
+cues with the default line or position, or with the wrong id. Firefox and WebKit results come
+from CI.
+
 ## Test corpus
 
 - `tests/wpt/file-parsing/*.test`: 38 parser tests. The format is title, metadata, JS assertions over

@@ -29,3 +29,27 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    name: e2e (${{ matrix.browser }})
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @microvtt/web exec playwright install --with-deps ${{ matrix.browser }}
+      - run: pnpm e2e --project=${{ matrix.browser }}
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: e2e-${{ matrix.browser }}
+          path: apps/web/test-results/
+          retention-days: 7
