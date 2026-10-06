@@ -184,14 +184,20 @@ Each phase ends green in CI with its acceptance criteria met.
 - [x] Measure real auto-caption samples (see Sizing).
 - [x] Decide the open questions (see Decisions log).
 
-### Phase 1: Core parser (spec §6)
+### Phase 1: Core parser (spec §6) (done)
 
-- Decoder, incremental file parser, region settings, cue timings and settings, cue text
-  tokenizer and tree builder, HTML entity table, chapter-title extraction.
-- WPT harness: run all `file-parsing/*.test` and `cue-text-parsing/*.dat` in Vitest.
-- **Accept:** 100% of the vendored WPT parsing tests pass. Differential fuzzing against
-  `reference-parser.py` shows no divergences. Parse benchmarks are recorded for real and synthetic
-  auto-caption files at 10 min, 1 h and 12 h (about 100k cues), confirming the sizing table.
+- [x] Decoder, incremental file parser, region settings, cue timings and settings, cue text
+      tokenizer and tree builder, HTML entity table, chapter-title extraction.
+- [x] WPT harness: all `file-parsing/*.test`, the invalid-signature `*.vtt` files and every
+      `cue-text-parsing/*.dat` case run in Vitest (127 tests).
+- **Accept:**
+  - [x] 100% of the vendored WPT parsing tests pass.
+  - [x] Differential fuzzing shows no divergences. The bar changed from "no divergences against
+        `reference-parser.py`": that parser has known deviations from the spec, so it is patched
+        at load time with spec-cited fixes (see `SPEC-NOTES.md`, "Test corpus") and compared
+        against. 200k generated documents across four seeds agree. CI runs 3k per push.
+  - [x] Parse benchmarks are recorded (`docs/BENCHMARKS.md`). A 12 h worst-case auto-caption file
+        parses in about 0.1 s.
 
 ### Phase 2: Model, validator, serializer
 
@@ -270,6 +276,8 @@ Each phase ends green in CI with its acceptance criteria met.
 - **2026-10-06:** Seven more samples (four `en-orig`, three `fi` auto-translations). They raised the
   12 h estimate to about 44k cues / 7 MB, and showed that translated tracks have interpolated word
   timings (see Primary workflow).
+- **2026-10-06:** The core library uses only erasable TypeScript syntax (`erasableSyntaxOnly`), so
+  it runs directly in Node with no build step (benchmarks, a future CLI).
 - **2026-10-06:** Formats: WebVTT primary, SRT next, SCC long-term.
 - **2026-10-06:** Export always fixes non-conforming or invalid input (no "keep errors as they were"
   mode). That removes the lossless CST: the model plus source spans is enough.

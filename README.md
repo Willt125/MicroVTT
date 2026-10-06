@@ -25,4 +25,6 @@ pnpm test        # unit + conformance tests
 pnpm typecheck
 pnpm lint
 pnpm build
+pnpm bench       # parser benchmarks (see docs/BENCHMARKS.md)
+pnpm fuzz        # long differential/streaming fuzz run (CI runs a short one)
 ```
