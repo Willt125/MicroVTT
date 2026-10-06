@@ -225,13 +225,36 @@ Each phase ends green in CI with its acceptance criteria met.
 
 ### Phase 3: Editor UI MVP
 
-- Open (picker, drag-and-drop, paste), virtualized cue table, inline time and text editing,
-  add, delete, split and merge, undo/redo, find/replace, diagnostics panel with jump-to-error,
-  export (download, plus in-place save in Chromium), autosave and restore from OPFS.
-- Media: load a local audio or video file and preview it with native `<track>`. Loop the current
-  cue and change the playback rate (essential for transcription work).
-- Keyboard-first: set start/end at the playhead, nudge, step through cues.
-- Playwright e2e on Chromium, Firefox and WebKit from here on.
+Split into three PRs, each usable on its own.
+
+**3a: editor shell (done)**
+
+- [x] Plain layout: toolbar, cue table and cue editor, problems panel on the side (stacks on
+      narrow screens).
+- [x] Theme selector: System plus six MIT-licensed themes (GitHub Light, Solarized Light,
+      Catppuccin Latte, Dracula, One Dark, Nord). A test checks WCAG AA for every theme.
+- [x] Open via picker or drag-and-drop. Parsing, live validation and export run in a Web Worker.
+- [x] Virtualized cue table (fixed-height rows; about 23 rows in the DOM at any size) with
+      keyboard navigation. Cue editor for times, id, text and settings via `updateCue`.
+- [x] Undo/redo (typing within 1 s is one step), add, delete.
+- [x] Problems panel: live diagnostics linked to cues, plus what the file had when opened.
+- [x] Export dialog: options, a preview of every change repair will make, then download.
+- **Measured in headless Chromium** (12 h worst case, 43.6k cues): opens in about 0.9–1.3 s,
+  first validation in about 0.5 s, a scroll jump redraws within one frame, typing reaches the
+  screen in the next frame, export preview in about 1.3 s.
+
+**3b: media and productivity**
+
+- Load a local audio or video file; play with native `<track>` preview. Loop the current cue and
+  change the playback rate.
+- Keyboard-first timing: set start/end at the playhead, nudge, step through cues.
+- Split and merge in the UI, find/replace, paste to import, autosave and restore (OPFS), in-place
+  save in Chromium.
+
+**3c: cross-browser tests**
+
+- Playwright e2e on Chromium, Firefox and WebKit, in CI.
+- Mirror the model into native `VTTCue`/`VTTRegion` objects and compare (deferred from Phase 2).
 
 ### Phase 4: Auto-caption cleanup (primary use case)
 
@@ -293,6 +316,10 @@ Each phase ends green in CI with its acceptance criteria met.
   timings (see Primary workflow).
 - **2026-10-06:** The core library uses only erasable TypeScript syntax (`erasableSyntaxOnly`), so
   it runs directly in Node with no build step (benchmarks, a future CLI).
+- **2026-10-06 (Phase 3a):** Themes: System, GitHub Light, Solarized Light, Catppuccin Latte,
+  Dracula, One Dark, Nord (all MIT). System uses GitHub Light or Dracula. Where an official color
+  fails WCAG AA in the role we use it for, it is shifted toward black or white by the smallest
+  step that passes, keeping its hue; each adjustment is marked in `apps/web/src/lib/themes.ts`.
 - **2026-10-06 (Phase 2):** Export decisions. A cue whose end is not after its start gets
   end = start + 1 ms. Text the parser ignores (header lines, stray blocks, STYLE/REGION after the
   first cue, cues with broken timings) is kept as a NOTE comment rather than dropped or moved.
