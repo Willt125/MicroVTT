@@ -443,9 +443,10 @@ function repairCue(cue: Cue, ctx: CueRepairContext): Cue {
               .replace(/&/g, '&amp;')
               .replace(/</g, '&lt;')
               .replace(/>/g, '&gt;');
+      const kinds = new Set(problems.map((p) => p.code)).size;
       note(
         problems[0]?.code ?? 'cue-text-tag',
-        `The cue text was rewritten to fix: ${[...new Set(problems.map((p) => p.code))].join(', ')}.`,
+        `The cue text was rewritten to fix ${problems.length} markup ${problems.length === 1 ? 'problem' : 'problems'}${kinds > 1 ? ` of ${kinds} kinds` : ''}.`,
       );
     }
   } else {

@@ -30,6 +30,8 @@ export class Editor {
   /** Problems in the file as imported (cleared by "New"). */
   importDiagnostics = $state.raw<ItemDiagnostic[]>([]);
   dirty = $state(false);
+  /** True until the current document's first background validation has finished. */
+  validating = $state(false);
   busy = $state<string | null>(null);
   error = $state<string | null>(null);
   hasDocument = $state(false);
@@ -153,6 +155,7 @@ export class Editor {
     this.fileName = name;
     this.importDiagnostics = importDiagnostics;
     this.diagnostics = [];
+    this.validating = true;
     this.selected = doc.body.findIndex((item) => item.type === 'cue');
     this.past = [];
     this.future = [];
@@ -240,6 +243,7 @@ export class Editor {
 
   private async validateNow(): Promise<void> {
     const version = ++this.validateVersion;
+    this.validating = true;
     const doc = this.doc;
     try {
       const diagnostics = await this.worker.validate(doc, this.fileType);
@@ -248,6 +252,8 @@ export class Editor {
     } catch (error) {
       if (version === this.validateVersion)
         this.error = `Validation failed: ${(error as Error).message}`;
+    } finally {
+      if (version === this.validateVersion) this.validating = false;
     }
   }
 }

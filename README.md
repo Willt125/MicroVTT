@@ -2,7 +2,8 @@
 
 An offline, fully-featured, in-browser WebVTT editor.
 
-Status: early development. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
+Status: early development. The editor opens, validates, edits and exports WebVTT files entirely
+in the browser (`pnpm dev`, then open the printed URL); media playback and timing tools come next. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
 [docs/SPEC-NOTES.md](docs/SPEC-NOTES.md) for the spec digest, and
 [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md) for every conformance check and its export fix.
 
@@ -11,7 +12,7 @@ Status: early development. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
 | Path            | Contents                                                                                                      |
 | --------------- | ------------------------------------------------------------------------------------------------------------- |
 | `packages/core` | DOM-free WebVTT parser, validator, repair, serializer, document model and edit operations (zero runtime deps) |
-| `apps/web`      | Svelte 5 + Vite editor UI                                                                                     |
+| `apps/web`      | Svelte 5 + Vite editor UI (themes, cue table, problems panel, export)                                         |
 | `tests/wpt`     | Vendored web-platform-tests WebVTT suites (3-Clause BSD)                                                      |
 | `scripts/`      | `sync-wpt.sh` (refresh tests), `sync-spec.sh` (check out spec source into `.spec/`)                           |
 
