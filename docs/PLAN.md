@@ -384,6 +384,48 @@ Split into three PRs:
       underline, `position` and `align`. Recorded in `docs/YOUTUBE-TEST.md` only.
 - [ ] Not yet checked: YouTube TV apps.
 
+### Phase 4d: Legacy and malformed input (planned)
+
+The editor should open what other tools and older drafts wrote, not only current WebVTT. Every
+recovery lives in the import's legacy mode (`importDocument`; `parse` stays spec-exact), gets
+its own diagnostic so the problems panel says what was reinterpreted, and export writes
+conforming WebVTT. Several pieces (encoding fallback, comma timestamps, `<font>`) are shared
+with SRT import (Phase 8), so this can move next to it if that comes first.
+
+Automatic on import:
+
+- [ ] Lenient timestamps: `,` as the decimal separator (SRT habit), fewer or more than 3
+      fraction digits, one-digit minute or second fields. Today the whole cue is lost (kept only
+      as a NOTE comment).
+- [ ] `<br>` becomes a line break (today it is dropped and the words on each side run
+      together).
+- [ ] Encoding fallback: bytes that are not valid UTF-8 are decoded as Windows-1252 with a
+      warning, instead of turning into U+FFFD (which cannot be undone). An encoding choice on
+      import for other code pages.
+- [ ] Old-draft `Region: id=… width=…` header lines become REGION blocks (vtt.js, Shaka,
+      Firefox and WebKit still honour them).
+- [ ] Single-letter cue settings from the 2010–11 drafts (`D:`, `L:`, `T:`, `S:`, `A:`)
+      become their current names. Check against the WHATWG drafts of that time first; the
+      archived W3C drafts here start in 2015.
+- [ ] Out-of-range percentages (`position:110%`) are clamped to 0–100% (reported as a guess,
+      since parsers drop them).
+- [ ] `<font color>`: a colour matching one of the spec's default colour classes becomes
+      that class (`<c.yellow>`); any other becomes a generated class with a STYLE rule. Other
+      `<font>` attributes are dropped and reported.
+
+Fixes to apply from the problems panel (they change what conforming players show):
+
+- [ ] Text after a blank line inside a caption (a text-only block right after a cue): join it
+      to the cue.
+- [ ] STYLE or REGION blocks after the first cue: move them to the header.
+
+Needs an owner decision:
+
+- [ ] `X-TIMESTAMP-MAP` (HLS segment timing): today it is kept as a NOTE comment, which loses
+      its meaning. HLS needs it on the header line, which is not conforming WebVTT, so keeping
+      it would be the one export that does not conform: an export option, off by default and
+      labelled as such.
+
 ### Phase 5: Timeline and productivity
 
 - Canvas timeline with a streamed waveform (WebCodecs, cached peaks), drag to retime, snapping
@@ -515,6 +557,10 @@ Split into three PRs:
   uses them and YouTube captions are what MicroVTT will edit most. Only `importDocument` does
   it (`legacyValues`); `parse` stays spec-exact for the conformance and browser tests. The
   validator reports the old names and export writes the new ones, so output still conforms.
+
+- **2026-10-07 (owner):** The editor should serve as many subtitle-editing uses as is
+  reasonable, including updating files written to older drafts or by other tools, even though
+  the owner's main use is YouTube. Recovering such input is planned as Phase 4d.
 
 ## Open questions for the owner
 
