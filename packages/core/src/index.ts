@@ -79,3 +79,27 @@ export {
   updateCue,
 } from './edit.ts';
 export type { CueUpdate } from './edit.ts';
+export {
+  DEFAULT_SEGMENT_OPTIONS,
+  cleanupAutoCaptions,
+  detectAutoCaptions,
+  extractLines,
+  findReviewMarkers,
+  gapText,
+  segment,
+  visibleLength,
+  wrapWords,
+} from './autocaption.ts';
+export type {
+  AutoCaptionInfo,
+  CaptionLine,
+  CaptionWord,
+  CleanupOptions,
+  CleanupReport,
+  CleanupResult,
+  ReviewKind,
+  ReviewMarker,
+  Segment,
+  SegmentOptions,
+  WordGroup,
+} from './autocaption.ts';

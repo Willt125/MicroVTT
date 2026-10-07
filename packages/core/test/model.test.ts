@@ -207,7 +207,7 @@ describe('serialize', () => {
       { ...doc(createCue(0, 1500, 'x')), title: 'T' },
       { lineEnding: '\r\n', byteOrderMark: true, omitZeroHours: true },
     );
-    expect(out).toBe('﻿WEBVTT T\r\n\r\n00:00.000 --> 00:01.500\r\nx\r\n');
+    expect(out).toBe('\ufeffWEBVTT T\r\n\r\n00:00.000 --> 00:01.500\r\nx\r\n');
   });
 
   it('never writes exponents', () => {

@@ -228,7 +228,7 @@ export function generateDocument(g: Gen): string {
   lines.push(
     g.chance(0.92)
       ? `WEBVTT${g.chance(0.3) ? g.pick([' ', '\t']) + g.pick(['', 'title', '-->x']) : ''}`
-      : g.pick(['WEBVTT\fx', 'webvtt', 'WEBVT', '', 'WEBVTTx', '﻿WEBVTT', 'WEBVTT\u0000']),
+      : g.pick(['WEBVTT\fx', 'webvtt', 'WEBVT', '', 'WEBVTTx', '\ufeffWEBVTT', 'WEBVTT\u0000']),
   );
   if (g.chance(0.25))
     lines.push(

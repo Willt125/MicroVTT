@@ -80,7 +80,7 @@ function garbage(g: Gen, length: number): string {
     'line:',
     'é',
     '😀',
-    '﻿',
+    '\ufeff',
   ];
   let s = '';
   for (let i = 0; i < length; i++) s += g.pick(alphabet);

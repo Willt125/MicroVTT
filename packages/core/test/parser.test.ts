@@ -24,7 +24,7 @@ describe('signature', () => {
     },
   );
 
-  it.each(['', 'WEBVT', 'WEBVTTX', 'webvtt', 'WEBVTT\fx', '﻿WEBVTT', ' WEBVTT'])(
+  it.each(['', 'WEBVT', 'WEBVTTX', 'webvtt', 'WEBVTT\fx', '\ufeffWEBVTT', ' WEBVTT'])(
     'rejects %j',
     (text) => {
       expect(parse(text).ok).toBe(false);

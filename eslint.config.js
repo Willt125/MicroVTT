@@ -11,6 +11,11 @@ export default ts.config(
   {
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     rules: {
+      // Invisible characters (e.g. U+200B) must be written as escapes, even in strings.
+      'no-irregular-whitespace': [
+        'error',
+        { skipStrings: false, skipTemplates: false, skipRegExps: false, skipComments: false },
+      ],
       // A leading underscore marks an intentionally unused binding (e.g. omitted by destructuring).
       '@typescript-eslint/no-unused-vars': [
         'error',
