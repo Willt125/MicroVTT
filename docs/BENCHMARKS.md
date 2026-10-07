@@ -83,3 +83,34 @@ the main thread while Chromium parsed the full track.
 
 Segmentation is most of it (the dynamic program re-checks line wrapping for each candidate cue).
 It runs in the worker, so the UI stays responsive.
+
+## Waveform (Phase 5a, headless Chromium)
+
+Machine: 4-core Intel Xeon at 2.10 GHz (a cloud sandbox). Media from `scripts/long-media.sh`
+(pink noise, mono Opus at 8 kbps). Memory is the resident memory of all browser processes,
+sampled every 250 ms while the peaks are computed, from before the media is opened to the peak
+(`apps/web/e2e/acceptance/waveform-memory.e2e.ts`, opt-in).
+
+| Media | File size | Memory growth (peak) | Time to compute | Speed |
+| ----- | --------: | -------------------: | --------------: | ----: |
+| 1 h   |    3.5 MB |         118–207 MB\* |            16 s |  225× |
+| 12 h  |     42 MB |               223 MB |           187 s |  230× |
+
+\* Two runs; the variation is the browser's own (the decoder, the worker, the video element).
+
+**Accepted:** memory does not grow with the media's length. Peaks are reduced from each decoded
+chunk as it arrives and the chunk is released; the fine peaks (100 per second, 8.6 MB for 12 h)
+are written to OPFS and read back a view at a time, and only a per-second overview (86 KB for
+12 h) stays in memory. Reopening the same file reads the cached peaks: no decoding.
+
+**The fallback is not streamed.** Where the browser cannot stream-decode a file (no WebCodecs
+for its codec), `decodeAudioData` decodes it whole. Even when asked for 8 kHz it decodes at the
+codec's own rate first, so its peak cost is large:
+
+| Media (Opus)            | Memory growth (peak) |  Time |
+| ----------------------- | -------------------: | ----: |
+| 1 h mono, 16 kHz source |              1.39 GB | 8.9 s |
+| 10 min stereo, 48 kHz   |               449 MB | 1.8 s |
+
+About 45 MB per minute of stereo, so the fallback is capped at 10 minutes (about 450 MB at
+worst); longer media without streamed decoding gets the timeline without a waveform.

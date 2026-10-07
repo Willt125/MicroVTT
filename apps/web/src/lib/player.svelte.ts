@@ -7,6 +7,8 @@ export const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 
 export class Player {
   url = $state<string | null>(null);
+  /** The media file itself, for the waveform (read in chunks, never whole). */
+  file = $state.raw<File | null>(null);
   name = $state('');
   element = $state.raw<HTMLVideoElement | null>(null);
   currentMs = $state(0);
@@ -30,12 +32,14 @@ export class Player {
   load(file: File): void {
     this.unload();
     this.url = URL.createObjectURL(file);
+    this.file = file;
     this.name = file.name;
   }
 
   unload(): void {
     if (this.url) URL.revokeObjectURL(this.url);
     this.url = null;
+    this.file = null;
     this.name = '';
     this.currentMs = 0;
     this.durationMs = 0;

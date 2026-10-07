@@ -4,7 +4,8 @@ An offline, fully-featured, in-browser WebVTT editor.
 
 Status: early development. The editor opens, validates, edits and exports WebVTT files entirely
 in the browser (`pnpm dev`, then open the printed URL), and times cues against a local audio or
-video file with keyboard shortcuts (press `?` in the app). YouTube auto-captions are detected
+video file with keyboard shortcuts (press `?` in the app), on a timeline with the media's waveform
+(streamed, so even 12-hour files draw without loading them into memory). YouTube auto-captions are detected
 and can be cleaned up into readable cues (de-rolled and re-segmented, keeping word timings), with
 a glossary for recurring corrections. Files written to older drafts or by other tools (SRT-style times, `<br>`, `<font>`, old
 settings, non-UTF-8 encodings) open as they were meant. Export can work around players that

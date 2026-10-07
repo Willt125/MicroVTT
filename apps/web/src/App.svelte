@@ -10,6 +10,7 @@
   import GlossaryDialog from './lib/components/GlossaryDialog.svelte';
   import HelpDialog from './lib/components/HelpDialog.svelte';
   import MediaPanel from './lib/components/MediaPanel.svelte';
+  import Timeline from './lib/components/Timeline.svelte';
   import Toolbar from './lib/components/Toolbar.svelte';
   import { Editor } from './lib/editor.svelte.ts';
   import { canSaveInPlace, droppedHandle, pickVttFile } from './lib/files.ts';
@@ -18,6 +19,7 @@
   import { actionFor, type Action } from './lib/shortcuts.ts';
   import { loadThemeChoice, resolveTheme, saveThemeChoice } from './lib/themes.ts';
   import { VttWorker } from './lib/worker/client.ts';
+  import { Waveform } from './lib/waveform/waveform.svelte.ts';
 
   const editor = new Editor(new VttWorker());
   const player = new Player();
@@ -31,6 +33,23 @@
   let findOpen = $state(false);
   let cleanupOpen = $state(false);
   let glossaryOpen = $state(false);
+  const waveform = new Waveform();
+  // The waveform follows the loaded media.
+  $effect(() => {
+    const file = player.file;
+    if (file) waveform.open(file, () => player.durationMs);
+    else waveform.close();
+  });
+
+  // The waveform worker holds its OPFS peak file open (exclusively): let it go when the page
+  // goes away, so a reload or another tab can use the cache, and pick it up again if the page
+  // comes back from the back/forward cache.
+  function onpagehide(): void {
+    waveform.close();
+  }
+  function onpageshow(event: PageTransitionEvent): void {
+    if (event.persisted && player.file) waveform.open(player.file, () => player.durationMs);
+  }
   // The "not UTF-8" notice, dismissed for the file open now (it comes back for the next one).
   let encodingNoticeDismissed = $state(false);
   $effect(() => {
@@ -236,6 +255,8 @@
 </script>
 
 <svelte:window
+  {onpagehide}
+  {onpageshow}
   {onkeydown}
   {onpaste}
   ondragover={(e) => {
@@ -343,6 +364,9 @@
         <DiagnosticsPanel {editor} onjump={jumpTo} />
       </div>
     </main>
+    {#if player.hasMedia}
+      <Timeline {editor} {player} {waveform} />
+    {/if}
   {:else}
     <main class="start">
       <h1>MicroVTT</h1>
