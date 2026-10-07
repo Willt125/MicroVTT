@@ -510,6 +510,12 @@ Split into three PRs:
   styles, the mobile app's missing bold) is left to YouTube: the export dialog lists it as
   information, but no fix targets it. A test keeps every YouTube fix tied to an upload error.
 
+- **2026-10-07 (Phase 4c, owner):** Diverge from the spec to recover old-draft setting names
+  (`middle`, and `start`/`end` as position alignments) on import, because YouTube's own WebVTT
+  uses them and YouTube captions are what MicroVTT will edit most. Only `importDocument` does
+  it (`legacyValues`); `parse` stays spec-exact for the conformance and browser tests. The
+  validator reports the old names and export writes the new ones, so output still conforms.
+
 ## Open questions for the owner
 
 None at the moment.

@@ -169,6 +169,12 @@ export const DIAGNOSTICS = {
     rule: 'Each cue setting has a fixed set of valid values.',
     fix: 'Invalid values are dropped (parsers ignore them); valid-but-noncanonical values are rewritten.',
   },
+  'cue-setting-legacy': {
+    severity: 'error',
+    spec: 'webvtt-cue-settings-list',
+    rule: 'A cue setting uses a name from an older draft of the spec ("middle", or "start"/"end" as a position alignment). Parsers ignore the whole setting; YouTube still writes them.',
+    fix: 'MicroVTT reads it as it was meant, and export writes the current name ("center", "line-left", "line-right").',
+  },
   'cue-line-not-integer': {
     severity: 'error',
     spec: 'webvtt-line-cue-setting',

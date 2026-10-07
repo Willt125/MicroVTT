@@ -38,6 +38,15 @@ own requirements:
    requirements apply, and the CSS applied to cues has to be limited to the properties the
    spec allows (§7.4 and the `::cue` property list).
 
+**One deliberate divergence, on import only:** cue setting values written with an older draft's
+names (`align:middle`, `line:…,middle`, `position:…,start|middle|end`) are read as they were
+meant, where the spec's parser ignores the whole setting. YouTube still writes
+`position:X%,middle` in its own WebVTT, and editing YouTube captions is MicroVTT's main use, so
+dropping those positions would lose what the file says. The validator reports each one
+(`cue-setting-legacy`), and export writes the current name, so output still conforms. The parser
+itself stays exactly the spec's algorithm unless asked (`parse(text, { legacyValues: true })`;
+`importDocument` asks), so the WPT and browser comparisons are unaffected.
+
 Also: **implementations must not normalize Unicode** (§2.2). Never call `String.prototype.normalize`
 on cue text, IDs, or selectors.
 
@@ -357,7 +366,7 @@ position/line alignment suffixes and the text left over after a space-only line.
 
 YouTube's own WebVTT (as yt-dlp downloads it) does not conform: it writes `<c.>`, `<rt>` outside
 `<ruby>`, and position alignments as an old draft's `middle`, which parsers reject with the
-whole setting (`docs/YOUTUBE-TEST.md`, "What YouTube stored"; fixture
+whole setting (MicroVTT reads it as `center`; see the divergence above) (`docs/YOUTUBE-TEST.md`, "What YouTube stored"; fixture
 `youtube-reexport.vtt`).
 
 `YOUTUBE` in `features.ts` holds these results. The export dialog lists the features a file

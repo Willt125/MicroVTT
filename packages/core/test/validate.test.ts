@@ -53,6 +53,10 @@ const CASES: Record<Exclude<DiagnosticCode, 'cue-id-invalid' | 'region-id-invali
     bad: `${H}00:02.000 --> 00:03.000\na\n\n${CUE}b\n`,
     good: `${H}${CUE}b\n\n00:02.000 --> 00:03.000\na\n`,
   },
+  'cue-setting-legacy': {
+    bad: `${H}00:00.000 --> 00:01.000 position:10%,middle align:middle\nx\n`,
+    good: `${H}00:00.000 --> 00:01.000 position:10%,center align:center\nx\n`,
+  },
   'cue-id-keyword': { bad: `${H}NOTES\n${CUE}x\n`, good: `${H}notes\n${CUE}x\n` },
   'cue-end-not-after-start': {
     bad: `${H}00:01.000 --> 00:01.000\nx\n`,

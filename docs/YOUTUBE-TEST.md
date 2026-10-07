@@ -94,17 +94,18 @@ Two downloads of the uploaded captions show what YouTube kept:
   and keeps ids, `<i>`, `<b>`, `<u>`, classes and word timings. It drops REGION and STYLE
   blocks, comments, voice and language spans and `vertical`, and rewrites the rest:
 
-| Uploaded                                  | YouTube's WebVTT                        | Notes                                                     |
-| ----------------------------------------- | --------------------------------------- | --------------------------------------------------------- |
-| `line:0`                                  | `line:0%`                               | line numbers become percentages                           |
-| `position:10% align:start`                | `align:start position:10%,middle`       | `middle` is an old draft's name: parsers drop the setting |
-| `line:0 position:90%,line-right size:40%` | `size:40% position:90%,middle line:0%`  | the `line-right` alignment becomes `middle`               |
-| `align:end`                               | `align:end position:100%`               |                                                           |
-| `<c.yellow>yellow</c> (…)`                | `<c.yellow>yellow</c><c.> (…)</c>`      | `<c.>` is invalid (an empty class)                        |
-| `<ruby>漢字<rt>kanji</rt></ruby>`         | `<ruby>漢字</ruby>(()<rt>kanji</rt>())` | invalid: `<rt>` outside `<ruby>`                          |
+| Uploaded                                  | YouTube's WebVTT                        | Notes                                                                                    |
+| ----------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `line:0`                                  | `line:0%`                               | line numbers become percentages                                                          |
+| `position:10% align:start`                | `align:start position:10%,middle`       | `middle` is an old draft's name: parsers drop the setting; MicroVTT reads it as `center` |
+| `line:0 position:90%,line-right size:40%` | `size:40% position:90%,middle line:0%`  | the `line-right` alignment becomes `middle`                                              |
+| `align:end`                               | `align:end position:100%`               |                                                                                          |
+| `<c.yellow>yellow</c> (…)`                | `<c.yellow>yellow</c><c.> (…)</c>`      | `<c.>` is invalid (an empty class)                                                       |
+| `<ruby>漢字<rt>kanji</rt></ruby>`         | `<ruby>漢字</ruby>(()<rt>kanji</rt>())` | invalid: `<rt>` outside `<ruby>`                                                         |
 
 So YouTube's own WebVTT does not conform. MicroVTT imports it and its export repairs it as
 parsers read it: `<c.>` becomes `<c>`, the ruby becomes the text `漢字(()kanji())`, and the
-`,middle` positions are dropped (the cues keep `align:start` or `line:0%`). A test pins this.
+`,middle` positions, which the spec says to ignore, are read as `center` (a deliberate divergence
+for YouTube files: `cue-setting-legacy`) and written as `position:10%,center`. A test pins this.
 
 Not yet checked: TV apps.

@@ -24,7 +24,7 @@ export type {
   CueTimestampNode,
 } from './cuetext.ts';
 export { consumeCharacterReference } from './charref.ts';
-export { isCommentStart } from './parser.ts';
+export { isCommentStart, modernizeSetting } from './parser.ts';
 export type { BlockInfo, BlockKind, ParserOptions } from './parser.ts';
 export { normalizeInput } from './decode.ts';
 export {

@@ -177,7 +177,12 @@ function regionFromParsed(region: ParsedRegion): Region {
 export function importDocument(text: string): ImportResult {
   const normalized = normalizeInput(text);
   const blocks: BlockInfo[] = [];
-  const parsed = parse(normalized, { onBlock: (block) => blocks.push(block) });
+  // Old-draft setting names (YouTube still writes `position:…,middle`) are read as meant;
+  // the validator reports them, and export writes the current names.
+  const parsed = parse(normalized, {
+    onBlock: (block) => blocks.push(block),
+    legacyValues: true,
+  });
   const document = createDocument();
   if (!parsed.ok) return { ok: false, document, parsed, blocks, normalized };
 

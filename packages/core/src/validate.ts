@@ -13,6 +13,7 @@ import { diagnostic } from './diagnostics.ts';
 import type { ImportResult } from './document.ts';
 import { importDocument } from './document.ts';
 import type { BlockInfo, ParsedCue, SourceRange } from './parser.ts';
+import { modernizeSetting } from './parser.ts';
 
 /**
  * Which payloads to require (§4.6). The base syntax allows any payload to be metadata text, so
@@ -240,11 +241,22 @@ function checkSettingsList(settings: string, offset: number, ctx: CueContext): v
       out.add('cue-setting-duplicate', `"${name}" appears more than once.`, token.start, end);
     }
     seen.set(name, token.start);
-    const problem = checkCueSettingValue(name, value);
+    const modern = modernizeSetting(name, value);
+    const problem =
+      modern !== null && checkCueSettingValue(name, modern) === null
+        ? 'cue-setting-legacy'
+        : checkCueSettingValue(name, value);
     if (problem === 'cue-line-not-integer') {
       out.add(
         problem,
         `Line number "${value}" must be an integer (or use a percentage).`,
+        token.start,
+        end,
+      );
+    } else if (problem === 'cue-setting-legacy') {
+      out.add(
+        problem,
+        `"${value}" uses an old name; it means "${modern ?? ''}", which export writes.`,
         token.start,
         end,
       );
@@ -256,7 +268,7 @@ function checkSettingsList(settings: string, offset: number, ctx: CueContext): v
       regionStart = token.start;
       regionEnd = end;
     } else if (
-      !problem &&
+      (!problem || problem === 'cue-setting-legacy') &&
       (name === 'vertical' ||
         name === 'line' ||
         (name === 'size' && Number(value.slice(0, -1)) !== 100))

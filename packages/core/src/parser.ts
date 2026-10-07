@@ -107,6 +107,12 @@ export interface BlockInfo {
 export interface ParserOptions {
   /** Called for every block, in file order, once it is complete. */
   onBlock?: (block: BlockInfo) => void;
+  /**
+   * Read cue setting values from older drafts of the spec (as YouTube still writes them, e.g.
+   * `position:10%,middle`) as they were meant, instead of ignoring the setting as the spec
+   * requires. Off by default, so `parse` stays exactly the spec's algorithm.
+   */
+  legacyValues?: boolean;
 }
 
 const ARROW = '-->';
@@ -235,9 +241,37 @@ function parseLinePosition(linepos: string): number | null {
   return parseFloatingPoint(linepos);
 }
 
+const LEGACY_POSITION_ALIGN: Record<string, string> = {
+  start: 'line-left',
+  middle: 'center',
+  end: 'line-right',
+};
+
+/**
+ * The current form of a cue setting value written with an older draft's names, or null when
+ * it uses none: `align:middle`, `line:…,middle`, and `position:…,start|middle|end` (now
+ * `line-left`, `center`, `line-right`). Only the names change; the value may still be invalid.
+ */
+export function modernizeSetting(name: string, value: string): string | null {
+  if (name === 'align') return value === 'middle' ? 'center' : null;
+  if (name !== 'line' && name !== 'position') return null;
+  const comma = value.indexOf(',');
+  if (comma === -1) return null;
+  const align = value.slice(comma + 1);
+  const modern =
+    name === 'line' ? (align === 'middle' ? 'center' : undefined) : LEGACY_POSITION_ALIGN[align];
+  return modern === undefined ? null : `${value.slice(0, comma)},${modern}`;
+}
+
 /** Parse the WebVTT cue settings (§6.3). */
-function parseCueSettings(input: string, regions: ParsedRegion[], cue: ParsedCue): void {
-  for (const [name, value] of settingsOf(input)) {
+function parseCueSettings(
+  input: string,
+  regions: ParsedRegion[],
+  cue: ParsedCue,
+  legacy: boolean,
+): void {
+  for (const [name, written] of settingsOf(input)) {
+    const value = (legacy && modernizeSetting(name, written)) || written;
     switch (name) {
       case 'region': {
         let found: ParsedRegion | null = null;
@@ -307,6 +341,7 @@ function parseCueTimingsAndSettings(
   line: string,
   regions: ParsedRegion[],
   cue: ParsedCue,
+  legacy: boolean,
 ): boolean {
   let pos = 0;
   const skipWhitespace = (): void => {
@@ -324,7 +359,7 @@ function parseCueTimingsAndSettings(
   if (!end.ok) return false;
   cue.startMs = start.ms;
   cue.endMs = end.ms;
-  parseCueSettings(line.slice(end.end), regions, cue);
+  parseCueSettings(line.slice(end.end), regions, cue, legacy);
   return true;
 }
 
@@ -413,9 +448,11 @@ export class WebVTTParser {
   private readonly result: ParseResult = { ok: false, cues: [], regions: [], stylesheets: [] };
   private ended = false;
   private readonly onBlock: ((block: BlockInfo) => void) | undefined;
+  private readonly legacy: boolean;
 
   constructor(options: ParserOptions = {}) {
     this.onBlock = options.onBlock;
+    this.legacy = options.legacyValues === true;
   }
 
   /** Pushes a chunk of decoded text. NUL and CR handling is applied here. */
@@ -504,7 +541,7 @@ export class WebVTTParser {
       ) {
         block.seenArrow = true;
         const cue = newCue(block.buffer, { start: block.start, end: start + line.length });
-        if (parseCueTimingsAndSettings(line, this.result.regions, cue)) {
+        if (parseCueTimingsAndSettings(line, this.result.regions, cue, this.legacy)) {
           block.cue = cue;
           block.buffer = '';
           this.seenCue = true;

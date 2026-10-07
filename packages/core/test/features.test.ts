@@ -98,7 +98,7 @@ describe("YouTube's own WebVTT (yt-dlp download of the uploaded test file)", () 
   it('is not conforming, in the ways docs/YOUTUBE-TEST.md describes', () => {
     const codes = new Set(validate(text).diagnostics.map((d) => d.code));
     expect([...codes].sort()).toEqual([
-      'cue-setting-value', // position:10%,middle (an old draft's name for center)
+      'cue-setting-legacy', // position:10%,middle (an old draft's name for center)
       'cue-text-class', // <c.>
       'cue-text-nesting', // </rt> outside <ruby>
       'cue-text-ruby', // <ruby> without <rt>
@@ -110,6 +110,9 @@ describe("YouTube's own WebVTT (yt-dlp download of the uploaded test file)", () 
     const exported = exportDocument(importDocument(text).document);
     expect(exported.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
     expect(exported.text).toContain('Small text should sit above: 漢字(()kanji()).');
+    // Old-draft "middle" is read as meant (not dropped as the spec says) and written as "center".
+    expect(exported.text).toContain('00:01:16.000 position:10%,center align:start\n');
+    expect(exported.text).toContain('line:0% position:90%,center size:40%\n');
     // The space-only line cut caption 21 on upload; only its first line survives.
     expect(exported.text).toMatch(/00:02:10\.000\nAbove an empty-looking line…\n$/);
   });
