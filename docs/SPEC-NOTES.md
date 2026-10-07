@@ -250,25 +250,38 @@ side-by-side "what browser X will show" mode.
 ### Parser deviations measured in real browsers
 
 `apps/web/e2e/native.e2e.ts` loads the WPT file-parsing inputs, our fixtures and seeded fuzz
-documents (as generated and after export) into real `<track>` elements and compares the
-browsers' `VTTCue`/`VTTRegion` objects with ours. Every known difference is listed, with a
-minimal reproduction, in `apps/web/e2e/native-deviations.ts`; anything else fails the test.
+documents (as generated and after export) into real `<track>` elements in Chromium, Firefox and
+WebKit, and compares each browser's `VTTCue`/`VTTRegion` objects with ours. Each known
+difference is listed in `apps/web/e2e/native-deviations.ts` with what triggers it and a minimal
+example; the examples are tested, so an entry that is wrong or that a browser fixes fails. Any
+other difference fails too, and arrives with a minimized reproduction. On every minimal case
+our result matches the WPT reference parser.
 
-**Chromium** (no `lineAlign`, `positionAlign` or regions, so those are not compared):
+Chromium has no `lineAlign`, `positionAlign` or regions, so those are not compared there.
 
-| Input                                                      | Chromium                  | Spec (and MicroVTT)       | Exported files? |
-| ---------------------------------------------------------- | ------------------------- | ------------------------- | --------------- |
-| `line:0,end`, `position:18%,line-left` (any suffix)        | ignores the whole setting | line 0, position 18%      | **yes**         |
-| `size:6.%`, `line:1.`, `line:-.5`                          | accepts                   | rejects the setting       | no              |
-| form feed between settings                                 | not a separator           | ASCII whitespace          | no              |
-| a timing line after two lines of a block, or in the header | previous line is the id   | block ends; cue has no id | no              |
-| cue id starting with `STYLE` before the first cue          | id dropped                | id kept                   | **yes**         |
-| `NOTE` whose first line is `STYLE`, before the first cue   | next cue's id misread     | a comment                 | **yes**         |
+| Input (minimal example)                                     | Spec (and MicroVTT) |      Chromium       |   Firefox   |      WebKit      | Exported files? |
+| ----------------------------------------------------------- | ------------------- | :-----------------: | :---------: | :--------------: | :-------------: |
+| `line:0,end`: any line or position with an alignment suffix | line 0, aligned end |       ignored       |             |                  |     **yes**     |
+| a line of only spaces in cue text (YouTube auto-captions)   | part of the text    |                     |  ends cue   |                  |     **yes**     |
+| cue id starting with `STYLE` before the first cue           | id kept             |       dropped       |   dropped   |     dropped      |     **yes**     |
+| cue id starting with `NOTE` or `REGION`                     | id kept             |                     |   dropped   | `REGION` dropped |     **yes**     |
+| `NOTE` whose first line is `STYLE`, before the first cue    | a comment           |    next id wrong    |             |                  |     **yes**     |
+| a `REGION` block after header text or a comment             | region defined      |                     |   ignored   |                  |     **yes**     |
+| `REGION` lines in the header (an older draft)               | ignored             |                     |   defined   |     defined      |       no        |
+| a `REGION` block ended by a timing line, no blank line      | region defined      |                     |             |     ignored      |       no        |
+| `region:r line:1` (line, size or vertical with a region)    | no region           |                     |   keeps r   |     keeps r      |       no        |
+| `region:r region:zz` (unknown id later)                     | no region           |                     |   keeps r   |                  |       no        |
+| `line:19,` (invalid alignment)                              | setting rejected    |                     |   line 19   |                  |       no        |
+| `line:-83%,end` (invalid position, valid alignment)         | setting rejected    |                     | aligned end |                  |       no        |
+| `size:6.%`, `line:1.`, `line:-.5`                           | setting rejected    |      accepted       |  accepted   |                  |       no        |
+| form feed between settings                                  | a separator         |       not one       |             |     not one      |       no        |
+| timing line after two lines of a block, or in the header    | block ends; no id   | previous line is id |    same     |       same       |       no        |
 
-Chromium also fails two WPT tests here (`settings-line`, `settings-position`). The rows marked
-"exported files" are valid WebVTT that MicroVTT may write; Chromium-based players show those
-cues with the default line or position, or with the wrong id. Firefox and WebKit results come
-from CI.
+Browsers that fail a WPT file-parsing test (Chromium: `settings-line`, `settings-position`) are
+reported as annotations on the test run. "Exported files" marks valid output MicroVTT may write: Chromium-based players lose
+non-default line and position alignments, Firefox truncates cues at whitespace-only lines and
+loses regions after the leading comment that holds preserved header text, and ids starting
+with a block keyword are dropped. Export keeps writing the spec form (see the decisions log).
 
 ## Test corpus
 
