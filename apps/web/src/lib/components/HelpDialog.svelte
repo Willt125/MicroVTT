@@ -27,7 +27,11 @@
   ]);
 </script>
 
-<dialog bind:this={dialog} onclose={() => (open = false)} aria-labelledby="help-heading">
+<dialog
+  bind:this={dialog}
+  onclose={() => (open = dialog?.open ?? false)}
+  aria-labelledby="help-heading"
+>
   <h2 id="help-heading">Keyboard shortcuts</h2>
   <p class="muted">
     Single keys work when you are not typing. Add Alt (⌥ on a Mac) to use them anywhere, including

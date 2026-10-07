@@ -139,7 +139,11 @@
   }
 </script>
 
-<dialog bind:this={dialog} onclose={() => (open = false)} aria-labelledby="export-heading">
+<dialog
+  bind:this={dialog}
+  onclose={() => (open = dialog?.open ?? false)}
+  aria-labelledby="export-heading"
+>
   <h2 id="export-heading">Export {exportName}</h2>
 
   <fieldset>
