@@ -37,19 +37,36 @@ test('draws the waveform of the loaded media', async ({ page }) => {
   await expect.poll(() => inkedFraction(page)).toBeGreaterThan(0.4);
 });
 
-test('reuses the peaks when the same file is opened again', async ({ page }, testInfo) => {
-  // A file on disk keeps its modification time (an in-memory upload gets a new one each time),
-  // which, with its name and size, identifies it in the cache.
-  const path = testInfo.outputPath('same.wav');
-  writeFileSync(path, wav(20));
-  await mediaInput(page).setInputFiles(path);
-  await expect(timeline(page)).toHaveAttribute('data-method', 'stream');
-  await expect(timeline(page)).toHaveAttribute('data-waveform', 'ready', { timeout: 15_000 });
-  await page.reload();
-  await openSample(page);
-  await mediaInput(page).setInputFiles(path);
-  await expect(timeline(page)).toHaveAttribute('data-waveform', 'ready', { timeout: 15_000 });
-  await expect(timeline(page)).toHaveAttribute('data-method', 'cache');
+// A persistent profile: Playwright's default (ephemeral) context has no origin-private file
+// system in WebKit (like a private window), so the peaks would only be kept in memory there.
+test('reuses the peaks when the same file is opened again', async ({
+  playwright,
+  browserName,
+  baseURL,
+}, testInfo) => {
+  const context = await playwright[browserName].launchPersistentContext(
+    testInfo.outputPath('profile'),
+    { ...testInfo.project.use.launchOptions, ...(baseURL ? { baseURL } : {}) },
+  );
+  try {
+    const page = context.pages()[0] ?? (await context.newPage());
+    // A file on disk keeps its modification time (an in-memory upload gets a new one each
+    // time), which, with its name and size, identifies it in the cache.
+    const path = testInfo.outputPath('same.wav');
+    writeFileSync(path, wav(20));
+    await openSample(page);
+    await mediaInput(page).setInputFiles(path);
+    await expect(timeline(page)).toHaveAttribute('data-waveform', 'ready', { timeout: 15_000 });
+    await expect(timeline(page)).toHaveAttribute('data-method', 'stream');
+    await expect(timeline(page)).toHaveAttribute('data-where', 'opfs');
+    await page.reload();
+    await openSample(page);
+    await mediaInput(page).setInputFiles(path);
+    await expect(timeline(page)).toHaveAttribute('data-waveform', 'ready', { timeout: 15_000 });
+    await expect(timeline(page)).toHaveAttribute('data-method', 'cache');
+  } finally {
+    await context.close();
+  }
 });
 
 /** The page x of a time on the timeline, from the view it reports. */

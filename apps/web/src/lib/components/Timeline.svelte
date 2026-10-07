@@ -322,6 +322,7 @@
   aria-label="Timeline"
   data-waveform={waveform.state}
   data-method={waveform.method}
+  data-where={waveform.where}
   data-start-ms={Math.round(view.startMs)}
   data-ms-per-px={view.msPerPx}
 >
