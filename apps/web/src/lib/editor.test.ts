@@ -48,7 +48,12 @@ function fakeWorker(store: { save: Autosave | null } = { save: null }): VttWorke
     },
     detect: async (doc: VttDocument) => detectAutoCaptions(doc),
     cleanup: async (doc: VttDocument, options: object) => cleanupAutoCaptions(doc, options),
-    export: async (doc: VttDocument) => ({ ...exportDocument(doc), diagnostics: [] }),
+    export: async (doc: VttDocument) => ({
+      ...exportDocument(doc),
+      diagnostics: [],
+      compatibility: [],
+      youtube: [],
+    }),
   } as unknown as VttWorker;
 }
 

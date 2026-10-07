@@ -132,6 +132,12 @@ export const DIAGNOSTICS = {
     rule: 'A cue identifier is one line and must not contain "-->". (Only possible through editing; files cannot express it.)',
     fix: 'Line breaks become spaces and arrows are broken up ("-- >").',
   },
+  'cue-id-keyword': {
+    severity: 'warning',
+    spec: 'webvtt-cue-identifier',
+    rule: 'A cue id that starts with "NOTE", "STYLE" or "REGION" is valid, but browsers may drop the id, and ffmpeg, video.js and Shaka Player may drop the whole cue.',
+    fix: 'Kept. The export option "Remove cue ids that start with NOTE, STYLE or REGION" removes them.',
+  },
   // Cue settings (§4.4)
   'cue-settings-whitespace': {
     severity: 'error',

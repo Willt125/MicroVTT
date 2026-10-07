@@ -11,6 +11,8 @@
  * the one off the spec. Entries marked `exportedFiles` can affect valid files MicroVTT writes.
  */
 
+import type { CompatibilityId } from '@microvtt/core';
+
 export type BrowserName = 'chromium' | 'firefox' | 'webkit';
 
 export interface Deviation {
@@ -23,6 +25,8 @@ export interface Deviation {
   /** A minimal input that shows it. */
   example: string;
   exportedFiles?: boolean;
+  /** The export compatibility fix that avoids it, if any. */
+  fixedBy?: CompatibilityId;
 }
 
 const NL = String.raw`(?:\r\n|\r|\n)`;
@@ -67,6 +71,7 @@ export const DEVIATIONS: Deviation[] = [
     difference: /^cue \d+ id: "", expected "STYLE/,
     reason: 'drops a cue id that starts with "STYLE" before the first cue',
     example: `WEBVTT\n\nSTYLE\n${CUE}\nx\n`,
+    fixedBy: 'keyword-ids',
     exportedFiles: true,
   },
   {
@@ -75,6 +80,7 @@ export const DEVIATIONS: Deviation[] = [
     difference: /^cue \d+ id: "", expected "REGION/,
     reason: 'drops a cue id that starts with "REGION" before the first cue',
     example: `WEBVTT\n\nREGION\n${CUE}\nx\n`,
+    fixedBy: 'keyword-ids',
     exportedFiles: true,
   },
   {
@@ -83,6 +89,7 @@ export const DEVIATIONS: Deviation[] = [
     difference: /^cue \d+ id: "", expected "(?:NOTE|STYLE|REGION)/,
     reason: 'drops a cue id that starts with "NOTE", "STYLE" or "REGION"',
     example: `WEBVTT\n\nNOTE\n${CUE}\nx\n`,
+    fixedBy: 'keyword-ids',
     exportedFiles: true,
   },
   {
@@ -100,6 +107,7 @@ export const DEVIATIONS: Deviation[] = [
     difference: /^cue \d+ text: /,
     reason: 'ends a cue at a line of only spaces or tabs, as if it were blank',
     example: `WEBVTT\n\n${CUE}\none\n \ntwo\n`,
+    fixedBy: 'trim-whitespace',
     exportedFiles: true,
   },
   {
@@ -141,6 +149,7 @@ export const DEVIATIONS: Deviation[] = [
     reason:
       'ignores REGION blocks unless they come first after the signature (header text or a comment before them hides them)',
     example: `WEBVTT\nLanguage: en\n\nREGION\nid:r\n\n${CUE} region:r\nx\n`,
+    fixedBy: 'regions-first',
     exportedFiles: true,
   },
   {

@@ -5,6 +5,7 @@
  * with ranges into the normalized input. It runs on top of the parser's block structure, so
  * block boundaries always agree with what a user agent sees.
  */
+import { KEYWORD_ID } from './compat.ts';
 import { checkCueText, checkChapterTitle } from './cuetext-check.ts';
 import { checkStylesheet } from './css.ts';
 import type { Diagnostic, DiagnosticCode } from './diagnostics.ts';
@@ -541,6 +542,13 @@ export function validateImport(imp: ImportResult, options: ValidateOptions = {})
               firstEnd,
             );
           else cueIds.set(cue.id, first.start);
+          if (KEYWORD_ID.test(cue.id))
+            out.add(
+              'cue-id-keyword',
+              `Cue id "${cue.id}" starts like a ${/^\w+/.exec(cue.id)?.[0] ?? ''} block: many players misread this cue.`,
+              first.start,
+              firstEnd,
+            );
         }
         checkTimingLine(timing, ctx);
         const timingEnd = timing.start + timing.text.length;

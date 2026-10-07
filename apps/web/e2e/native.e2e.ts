@@ -13,16 +13,16 @@
  */
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { exportDocument, importDocument, parseBytes } from '@microvtt/core';
+import { exportDocument, importDocument, parse, parseBytes } from '@microvtt/core';
 import {
   cueList,
   listFiles,
   readFileParsingTest,
   readWptBytes,
   runAssertions,
-  type CueView,
 } from '../../../packages/core/test/wpt-support.ts';
 import { Gen, generateDocument, rng } from '../../../packages/core/test/fuzz/generate.ts';
+import { differences, type NativeResult } from './compare.ts';
 import { DEVIATIONS, knownDeviation, type BrowserName } from './native-deviations.ts';
 
 interface Input {
@@ -30,12 +30,6 @@ interface Input {
   bytes: Uint8Array;
   /** WPT assertions, for telling browser bugs from ours. */
   js?: string;
-}
-
-interface NativeResult {
-  /** True when the track loaded (false when the browser rejected the file). */
-  loaded: boolean;
-  cues: CueView[];
 }
 
 /** `VTTCue` attributes this browser doesn't implement: not compared, but reported. */
@@ -144,51 +138,6 @@ async function nativeParse(page: Page, inputs: Input[]): Promise<NativeResult[]>
     },
     inputs.map((i) => [...i.bytes]),
   ) as Promise<NativeResult[]>;
-}
-
-/** Numbers parsed from text may differ in the last bit depending on evaluation order. */
-const close = (a: unknown, b: unknown): boolean =>
-  typeof a === 'number' && typeof b === 'number'
-    ? a === b || Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a))
-    : a === b;
-
-/** Human-readable differences between the browser's cues and ours. */
-function differences(
-  native: NativeResult,
-  ours: CueView[],
-  expectLoaded: boolean,
-  skip: readonly string[],
-): string[] {
-  const out: string[] = [];
-  if (native.loaded !== expectLoaded)
-    out.push(`track ${native.loaded ? 'loaded' : 'failed to load'}, expected the opposite`);
-  if (native.cues.length !== ours.length) {
-    out.push(`${native.cues.length} cues, expected ${ours.length}`);
-    return out;
-  }
-  native.cues.forEach((n, i) => {
-    const o = ours[i] as CueView;
-    for (const key of Object.keys(o) as (keyof CueView)[]) {
-      if (skip.includes(key)) continue;
-      if (key === 'region') {
-        const nr = n.region;
-        const or = o.region;
-        if (!nr || !or) {
-          if (nr !== or)
-            out.push(`cue ${i} region: ${nr?.id ?? 'null'}, expected ${or?.id ?? 'null'}`);
-          continue;
-        }
-        for (const rk of Object.keys(or) as (keyof typeof or)[])
-          if (!close(nr[rk], or[rk]))
-            out.push(
-              `cue ${i} region.${rk}: ${JSON.stringify(nr[rk])}, expected ${JSON.stringify(or[rk])}`,
-            );
-      } else if (!close(n[key], o[key])) {
-        out.push(`cue ${i} ${key}: ${JSON.stringify(n[key])}, expected ${JSON.stringify(o[key])}`);
-      }
-    }
-  });
-  return out;
 }
 
 /**
@@ -324,6 +273,34 @@ test.describe('native parser agrees with ours', () => {
         );
       else if (!knownDeviation(browserName, d.example, diffs))
         problems.push(`${d.reason}: the example shows other differences too: ${diffs.join('; ')}`);
+    });
+    expect(problems).toEqual([]);
+  });
+
+  test('export compatibility fixes avoid the deviations they target', async ({
+    page,
+    browserName,
+  }) => {
+    const entries = DEVIATIONS.filter(
+      (d) => d.fixedBy && d.browsers.includes(browserName as BrowserName),
+    );
+    test.skip(entries.length === 0, `no fixable deviations for ${browserName}`);
+    await page.goto('/');
+    const skip = await unsupportedAttributes(page);
+    const encoder = new TextEncoder();
+    const texts = entries.map((d) => {
+      const imported = importDocument(d.example);
+      if (!imported.ok) throw new Error('example is not WebVTT');
+      return exportDocument(imported.document, { compatibility: [d.fixedBy!] }).text;
+    });
+    const natives = await nativeParse(
+      page,
+      texts.map((text, i) => ({ name: `fixed example ${i}`, bytes: encoder.encode(text) })),
+    );
+    const problems = entries.flatMap((d, i) => {
+      const text = texts[i] as string;
+      const diffs = differences(natives[i] as NativeResult, cueList(parse(text)), true, skip);
+      return diffs.length === 0 ? [] : [`${d.reason} (${d.fixedBy}): ${diffs.join('; ')}`];
     });
     expect(problems).toEqual([]);
   });

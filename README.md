@@ -6,18 +6,20 @@ Status: early development. The editor opens, validates, edits and exports WebVTT
 in the browser (`pnpm dev`, then open the printed URL), and times cues against a local audio or
 video file with keyboard shortcuts (press `?` in the app). YouTube auto-captions are detected
 and can be cleaned up into readable cues (de-rolled and re-segmented, keeping word timings), with
-a glossary for recurring corrections. Autosave keeps unsaved work in the browser. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
+a glossary for recurring corrections. Export can work around players that misread valid files
+(browsers, ffmpeg, video.js, Shaka Player) and lists what YouTube may not keep. Autosave keeps
+unsaved work in the browser. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
 [docs/SPEC-NOTES.md](docs/SPEC-NOTES.md) for the spec digest, and
 [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md) for every conformance check and its export fix.
 
 ## Layout
 
-| Path            | Contents                                                                                                      |
-| --------------- | ------------------------------------------------------------------------------------------------------------- |
-| `packages/core` | DOM-free WebVTT parser, validator, repair, serializer, document model and edit operations (zero runtime deps) |
-| `apps/web`      | Svelte 5 + Vite editor UI (cue table, media player, find/replace, problems panel, autosave, export, themes)   |
-| `tests/wpt`     | Vendored web-platform-tests WebVTT suites (3-Clause BSD)                                                      |
-| `scripts/`      | `sync-wpt.sh` (refresh tests), `sync-spec.sh` (check out spec source into `.spec/`)                           |
+| Path            | Contents                                                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `packages/core` | DOM-free WebVTT parser, validator, repair, serializer, document model and edit operations (zero runtime deps)     |
+| `apps/web`      | Svelte 5 + Vite editor UI (cue table, media player, find/replace, problems panel, autosave, export, themes)       |
+| `tests/wpt`     | Vendored web-platform-tests WebVTT suites (3-Clause BSD)                                                          |
+| `scripts/`      | `sync-wpt.sh` (refresh tests), `sync-spec.sh` (check out spec source into `.spec/`), doc and test-file generators |
 
 ## Development
 

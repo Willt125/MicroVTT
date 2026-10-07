@@ -3,7 +3,9 @@ import type {
   AutoCaptionInfo,
   CleanupOptions,
   CleanupResult,
+  CompatibilityId,
   DiagnosticCode,
+  FeatureId,
   ReviewMarker,
   ExportOptions,
   FileType,
@@ -46,6 +48,10 @@ export interface ExportedFile {
   report: RepairEntry[];
   /** Validation of the exported text: no errors by construction. */
   diagnostics: ItemDiagnostic[];
+  /** Player-compatibility fixes that would change the document, and how much. */
+  compatibility: { id: CompatibilityId; count: number }[];
+  /** Features YouTube is not known to keep, and how many cues or blocks use them. */
+  youtube: { id: FeatureId; count: number }[];
 }
 
 /** What an autosave records besides the document. */

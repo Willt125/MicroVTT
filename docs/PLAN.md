@@ -356,9 +356,28 @@ Split into three PRs:
       still apply after cleanup keeps word timings. The find bar has the same option
       ("Across timings", on by default).
 
-**4c: export for YouTube and other players**: the warnings-only "YouTube upload" check, a test
-file to upload, and ffmpeg (libavformat) and JS player parsers (vtt.js, hls.js) added to the
-parser comparison; their findings decide what a compatibility export option should do.
+**4c: export for YouTube and other players (done, YouTube results pending)**
+
+- [x] Feature catalogue (`packages/core/src/features.ts`): 21 WebVTT features, each with a
+      counter and a minimal example whose caption says what a viewer should see.
+- [x] Parser comparison beyond browsers, on fixtures, the catalogue's examples and exported fuzz
+      documents: ffmpeg/libavformat (unit test; CI installs ffmpeg), video.js's `videojs-vtt.js`
+      and Shaka Player's `VttTextParser` (Chromium e2e). hls.js has no public parser API, so it
+      is not covered. Deviations are documented with tested minimal examples
+      (`SPEC-NOTES.md`, "Other players").
+- [x] Player-compatibility export options (`packages/core/src/compat.ts`), shown in the export
+      dialog only when they would change the file, each tested against the players it targets:
+      remove cue ids starting with NOTE/STYLE/REGION, write REGION blocks first, write
+      characters for named references (on by default; viewers see the same), and trim
+      whitespace lines, remove `<lang>` spans, remove STYLE/REGION blocks (off; lossy). With
+      every option on, ffmpeg and Shaka read exported fuzz documents exactly as we do (bar
+      ffmpeg's removal of duplicate cues).
+- [x] New warning `cue-id-keyword` for valid cue ids that every player tested misreads.
+- [x] YouTube upload check: the export dialog lists the features a file uses that YouTube is
+      not known to keep. Test files and instructions in `docs/YOUTUBE-TEST.md`.
+- [ ] Owner: upload the test files and record the results; then set `YOUTUBE` in
+      `features.ts` (and, if YouTube drops something an export option could avoid, add a
+      YouTube preset).
 
 ### Phase 5: Timeline and productivity
 
@@ -468,6 +487,16 @@ parser comparison; their findings decide what a compatibility export option shou
   group's start and ends at its last group's end (a group lasts until the next word, so YouTube's
   continuous roll-up timing carries over). Cues are never stretched into silence, so the
   acceptance criterion holds literally; holding short cues longer is left to the user.
+
+- **2026-10-07 (Phase 4c):** Compatibility fixes run after repair, so they can rely on valid
+  cue text and see the comment repair keeps for header text. Only fixes that leave what a
+  conforming player shows unchanged are on by default; the rest change layout, language
+  information or styling and stay opt-in, labelled as such. Duplicate cues (which ffmpeg drops)
+  get no option: removing them would change what conforming players show.
+- **2026-10-07 (Phase 4c):** YouTube's support table starts as "untested" for every feature
+  rather than from memory or third-party reports, so the upload check is honest until the
+  test files have been uploaded; until then it lists every feature a file uses beyond plain
+  text.
 
 ## Open questions for the owner
 

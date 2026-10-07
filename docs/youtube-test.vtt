@@ -1,0 +1,126 @@
+WEBVTT
+
+REGION
+id:test width:50% lines:3 regionanchor:0%,100% viewportanchor:5%,95% scroll:up
+
+STYLE
+::cue(.styled) { color: lime; }
+
+00:00:00.000 --> 00:00:05.000
+MicroVTT feature test: each caption says what you should see.
+
+NOTE 1. Italic, bold and underline (<i>, <b>, <u>)
+
+00:00:06.000 --> 00:00:10.000
+This is <i>italic</i>, <b>bold</b> and <u>underlined</u>.
+
+NOTE 2. Class spans (<c.yellow>), styled by CSS
+
+00:00:12.000 --> 00:00:16.000
+These words are <c.yellow>yellow</c> (a class, coloured only by a player style).
+
+NOTE 3. Voice spans (<v Name>)
+
+00:00:18.000 --> 00:00:22.000
+<v Alice>Alice speaks this line (a voice span named Alice).
+
+NOTE 4. Language spans (<lang fi>)
+
+00:00:24.000 --> 00:00:28.000
+In Finnish, <lang fi>kiitos</lang> means thank you.
+
+NOTE 5. Ruby annotations (<ruby>, <rt>)
+
+00:00:30.000 --> 00:00:34.000
+Small text should sit above: <ruby>漢字<rt>kanji</rt></ruby>.
+
+NOTE 6. Word timings (karaoke timestamps)
+
+00:00:36.000 --> 00:00:40.000
+Words <00:00:37.000>appear <00:00:38.000>one <00:00:39.000>by one.
+
+NOTE 7. Character references other than &amp; &lt; &gt;
+
+00:00:42.000 --> 00:00:46.000
+Fish &amp; chips, 5 &lt; 6, caf&eacute;, &copy; 2026, and a&nbsp;non-breaking space.
+
+NOTE 8. More than two lines in a cue
+
+00:00:48.000 --> 00:00:52.000
+This cue
+has exactly
+three lines.
+
+NOTE 9. Cue identifiers
+
+intro
+00:00:54.000 --> 00:00:58.000
+This cue has the id "intro" (ids are never shown).
+
+NOTE 10. Line position by line number (line:0)
+
+00:01:00.000 --> 00:01:04.000 line:0
+I should be at the TOP of the video (line:0).
+
+NOTE 11. Line position by percentage (line:50%)
+
+00:01:06.000 --> 00:01:10.000 line:50%
+I should be in the MIDDLE, top to bottom (line:50%).
+
+NOTE 12. Horizontal position (position:10%)
+
+00:01:12.000 --> 00:01:16.000 position:10% align:start
+I should start near the LEFT edge (position:10%).
+
+NOTE 13. Cue box width (size:40%)
+
+00:01:18.000 --> 00:01:22.000 size:40%
+I should wrap within a narrow box, 40% of the video wide (size:40%).
+
+NOTE 14. Text alignment other than centre (align:start, end, left, right)
+
+00:01:24.000 --> 00:01:28.000 align:end
+My lines should be
+RIGHT-aligned (align:end).
+
+NOTE 15. Line or position alignment (line:0,end; position:90%,line-right)
+
+00:01:30.000 --> 00:01:34.000 line:0 position:90%,line-right size:40%
+My box should END at 90% across, at the top (position:90%,line-right).
+
+NOTE 16. Vertical text (vertical:rl)
+
+00:01:36.000 --> 00:01:40.000 vertical:rl
+縦書き (vertical text, right side)
+
+NOTE 17. Regions (REGION blocks, region:)
+
+00:01:42.000 --> 00:01:46.000 region:test
+I should be in a box at the LOWER LEFT (a region).
+
+NOTE 18. Style sheets (STYLE blocks)
+
+00:01:48.000 --> 00:01:52.000
+These words are <c.styled>green</c> (a STYLE block in the file).
+
+NOTE 19. Comments (NOTE blocks)
+
+NOTE This comment must never be shown.
+
+00:01:54.000 --> 00:01:58.000
+A comment came just before me.
+
+NOTE 20. Overlapping cues (shown at the same time)
+
+00:02:00.000 --> 00:02:04.000 line:0
+I am on screen together with the cue below…
+
+00:02:01.000 --> 00:02:04.000
+…and I appear one second later.
+
+NOTE 21. Lines of only spaces in cue text
+
+00:02:06.000 --> 00:02:10.000
+Above an empty-looking line…
+ 
+…and below it, in the same cue.

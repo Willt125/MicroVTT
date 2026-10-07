@@ -295,7 +295,61 @@ Browsers that fail a WPT file-parsing test (Chromium: `settings-line`, `settings
 reported as annotations on the test run. "Exported files" marks valid output MicroVTT may write: Chromium-based players lose
 non-default line and position alignments, Firefox truncates cues at whitespace-only lines and
 loses regions after the leading comment that holds preserved header text, and ids starting
-with a block keyword are dropped. Export keeps writing the spec form (see the decisions log).
+with a block keyword are dropped. Export writes the spec form; its player-compatibility options
+(below) avoid the deviations marked there, and tests check each option against the browsers.
+
+### Other players
+
+The same comparison runs against parsers outside browsers, on our fixtures, the feature
+catalogue's examples (`packages/core/src/features.ts`) and exported fuzz documents:
+
+- **ffmpeg** (libavformat 6.1, which mpv and many media servers and converters read subtitles with):
+  `packages/core/test/players/ffmpeg.test.ts` passes each input through `ffmpeg -c copy -f
+webvtt` and parses the result. CI installs ffmpeg.
+- **video.js** (its parser, `videojs-vtt.js` 0.15) and **Shaka Player** (5.2, `VttTextParser`):
+  `apps/web/e2e/players.e2e.ts`, in Chromium. hls.js keeps its parser internal, so it is not
+  covered. Shaka's cues have their own shape, so only what they share with `VTTCue` is compared
+  (text as plain text).
+
+Every difference must match a documented deviation, each with a tested minimal example, as for
+browsers.
+
+| Input (minimal example)                                  | Spec (and MicroVTT) |        ffmpeg        |  video.js   |            Shaka Player            | Export option             |
+| -------------------------------------------------------- | ------------------- | :------------------: | :---------: | :--------------------------------: | ------------------------- |
+| a STYLE or REGION block                                  | read                | **no cues after it** |             |                                    | remove (lossy)            |
+| a REGION block                                           | region defined      |                      |   ignored   |              ignored               |                           |
+| cue id starting with `NOTE` (`NOTE 1`, `NOTES`)          | id kept             |     cue dropped      | cue dropped |  `NOTE` or `NOTE …`: cue dropped   | remove keyword ids        |
+| cue id `STYLE` or `REGION`                               | id kept             |                      |             |            cue dropped             | remove keyword ids        |
+| two cues with the same times and text                    | both shown          |     one dropped      |             |                                    |                           |
+| `position:90%,line-right` (or `line-left`)               | aligned line-right  |                      |   ignored   |                                    |                           |
+| a line of only spaces, or spaces at the ends of the text | part of the text    |                      |             |              trimmed               | trim (lossy)              |
+| `<lang fi>…</lang>`                                      | a language span     |                      |             | **whole cue's tags shown as text** | remove lang spans (lossy) |
+| `&eacute;` (named references but a few)                  | é                   |                      |             |          shown as written          | write characters          |
+
+### Player-compatibility export options
+
+`packages/core/src/compat.ts`, offered in the export dialog only when they would change the
+file. Each keeps the output conforming; tests check that each removes the deviations it
+targets in the player concerned, and that the lossless ones keep every cue, setting and cue
+text tree.
+
+| Option                                         | Default | Changes for conforming players                  |
+| ---------------------------------------------- | :-----: | ----------------------------------------------- |
+| Remove cue ids starting with NOTE/STYLE/REGION |   on    | the ids (and `::cue(#id)` styles that use them) |
+| Write REGION blocks first in the header        |   on    | nothing                                         |
+| Write characters for named references          |   on    | nothing (only how the text is written)          |
+| Trim whitespace lines and cue-text ends        |   off   | layout: a blank-looking line takes a row        |
+| Remove `<lang>` spans                          |   off   | language-dependent rendering                    |
+| Remove STYLE and REGION blocks                 |   off   | styles and regions                              |
+
+The validator also warns (`cue-id-keyword`) about cue ids that start with a block keyword: they
+are valid, but every player tested misreads them.
+
+### YouTube
+
+YouTube's caption processing cannot be run locally, so `docs/YOUTUBE-TEST.md` describes a manual
+check with generated test files, and the export dialog lists the features a file uses that
+YouTube is not known to keep (warnings only; `YOUTUBE` in `features.ts` records the results).
 
 ## Test corpus
 

@@ -103,3 +103,25 @@ export type {
   SegmentOptions,
   WordGroup,
 } from './autocaption.ts';
+export {
+  FEATURES,
+  YOUTUBE,
+  featureDocument,
+  featureTestFile,
+  usedFeatures,
+  youtubeCheck,
+} from './features.ts';
+export type {
+  Feature,
+  FeatureExample,
+  FeatureId,
+  PlatformStatus,
+  PlatformSupport,
+} from './features.ts';
+export {
+  COMPATIBILITY_FIXES,
+  KEYWORD_ID,
+  applyCompatibility,
+  compatibilityIssues,
+} from './compat.ts';
+export type { CompatibilityFix, CompatibilityId } from './compat.ts';
