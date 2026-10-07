@@ -38,6 +38,15 @@ own requirements:
    requirements apply, and the CSS applied to cues has to be limited to the properties the
    spec allows (§7.4 and the `::cue` property list).
 
+**One deliberate divergence, on import only:** cue setting values written with an older draft's
+names (`align:middle`, `line:…,middle`, `position:…,start|middle|end`) are read as they were
+meant, where the spec's parser ignores the whole setting. YouTube still writes
+`position:X%,middle` in its own WebVTT, and editing YouTube captions is MicroVTT's main use, so
+dropping those positions would lose what the file says. The validator reports each one
+(`cue-setting-legacy`), and export writes the current name, so output still conforms. The parser
+itself stays exactly the spec's algorithm unless asked (`parse(text, { legacyValues: true })`;
+`importDocument` asks), so the WPT and browser comparisons are unaffected.
+
 Also: **implementations must not normalize Unicode** (§2.2). Never call `String.prototype.normalize`
 on cue text, IDs, or selectors.
 
@@ -295,55 +304,72 @@ Browsers that fail a WPT file-parsing test (Chromium: `settings-line`, `settings
 reported as annotations on the test run. "Exported files" marks valid output MicroVTT may write: Chromium-based players lose
 non-default line and position alignments, Firefox truncates cues at whitespace-only lines and
 loses regions after the leading comment that holds preserved header text, and ids starting
-with a block keyword are dropped. Export keeps writing the spec form (see the decisions log).
+with a block keyword are dropped. Export writes the spec form; its player-compatibility options
+(below) avoid the deviations marked there, and tests check each option against the browsers.
 
-## Test corpus
+### Other players
 
-- `tests/wpt/file-parsing/*.test`: 38 parser tests. The format is title, metadata, JS assertions over
-  `cues`, then `===`, then the VTT body. `packages/core/test/wpt-support.ts` reproduces the build
-  script exactly: Python `unicode_escape` decoding, UTF-8 encoding, cues exposed as VTTCue-shaped
-  objects in text track cue order, and testharness.js `same_value` semantics (so `-0` ≠ `0`).
-- `tests/wpt/file-parsing/*.vtt`: 11 files with invalid signatures, all of which must be rejected.
-- `tests/wpt/cue-text-parsing/*.dat`: 78 cue-text tree tests. Each input is wrapped in a one-cue
-  file, as WPT's `common.js` does, and compared with a serialization of the §6.5 DOM mapping.
-- `tests/wpt/api/`: VTTCue/VTTRegion behaviour in the browser. These need a real `<video>` and
-  `<track>`, so they do not run against the core; Phase 3's Playwright tests check our model
-  against native `VTTCue` objects instead.
-- Our own unit tests cover what WPT does not: numeric character references (C1 remapping,
-  surrogates, overflow), annotations, the language stack, chapter titles, streaming across
-  chunk boundaries, source ranges, and timestamps beyond the safe-integer range.
+The same comparison runs against parsers outside browsers, on our fixtures, the feature
+catalogue's examples (`packages/core/src/features.ts`) and exported fuzz documents:
 
-### Reference parser deviations
+- **ffmpeg** (libavformat 6.1, which mpv and many media servers and converters read subtitles with):
+  `packages/core/test/players/ffmpeg.test.ts` passes each input through `ffmpeg -c copy -f
+webvtt` and parses the result. CI installs ffmpeg.
+- **video.js** (its parser, `videojs-vtt.js` 0.15) and **Shaka Player** (5.2, `VttTextParser`):
+  `apps/web/e2e/players.e2e.ts`, in Chromium. hls.js keeps its parser internal, so it is not
+  covered. Shaka's cues have their own shape, so only what they share with `VTTCue` is compared
+  (text as plain text).
 
-`reference-parser.py` describes itself as "a direct translation" of the parser algorithm, but it
-diverges from the spec. `packages/core/test/fuzz/reference_driver.py` patches each deviation at
-load time, asserting that every patch applies exactly once:
+Every difference must match a documented deviation, each with a tested minimal example, as for
+browsers.
 
-| Deviation                                                                                                                   | Spec                                |
-| --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| Splits settings with a pattern that matches the empty string, so in Python 3.7+ no cue or region setting is ever recognized | §6.2/§6.3 "split on spaces"         |
-| Rejects 59 as a minutes or seconds value (`>= 59`)                                                                          | §6.3: error only if greater than 59 |
-| `\d` and `\s` accept non-ASCII digits and spaces                                                                            | ASCII digits, ASCII whitespace      |
-| Line numbers keep `-0` and accept values that overflow to infinity                                                          | HTML floating-point parsing rules   |
-| Position alignment is stored as line alignment                                                                              | §6.3 `position` setting             |
-| `vertical`, `line` and non-100 `size` do not take the cue out of its region                                                 | §6.3                                |
+| Input (minimal example)                                  | Spec (and MicroVTT) |        ffmpeg        |  video.js   |            Shaka Player            | Export option             |
+| -------------------------------------------------------- | ------------------- | :------------------: | :---------: | :--------------------------------: | ------------------------- |
+| a STYLE or REGION block                                  | read                | **no cues after it** |             |                                    | remove (lossy)            |
+| a REGION block                                           | region defined      |                      |   ignored   |              ignored               |                           |
+| cue id starting with `NOTE` (`NOTE 1`, `NOTES`)          | id kept             |     cue dropped      | cue dropped |  `NOTE` or `NOTE …`: cue dropped   | remove keyword ids        |
+| cue id `STYLE` or `REGION`                               | id kept             |                      |             |            cue dropped             | remove keyword ids        |
+| two cues with the same times and text                    | both shown          |     one dropped      |             |                                    |                           |
+| `position:90%,line-right` (or `line-left`)               | aligned line-right  |                      |   ignored   |                                    |                           |
+| a line of only spaces, or spaces at the ends of the text | part of the text    |                      |             |              trimmed               | trim (lossy)              |
+| `<lang fi>…</lang>`                                      | a language span     |                      |             | **whole cue's tags shown as text** | remove lang spans (lossy) |
+| `&eacute;` (named references but a few)                  | é                   |                      |             |          shown as written          | write characters          |
 
-The reference parser does not implement cue text parsing, so cue text is covered by WPT's
-`.dat` tests and our unit tests instead.
+### Player-compatibility export options
 
-### Fuzzing
+`packages/core/src/compat.ts`, offered in the export dialog only when they would change the
+file. Each keeps the output conforming; tests check that each removes the deviations it
+targets in the player concerned, and that the lossless ones keep every cue, setting and cue
+text tree.
 
-`packages/core/test/fuzz/` generates adversarial documents from a seed: broken timestamps, odd
-arrows, settings edge cases, regions with duplicate ids, STYLE/REGION blocks after cues, mixed
-line endings and NULs. Each document is checked twice:
+| Option                                         | Default | Changes for conforming players                  |
+| ---------------------------------------------- | :-----: | ----------------------------------------------- |
+| Remove cue ids starting with NOTE/STYLE/REGION |   on    | the ids (and `::cue(#id)` styles that use them) |
+| Write REGION blocks first in the header        |   on    | nothing                                         |
+| Write characters for named references          |   on    | nothing (only how the text is written)          |
+| Trim whitespace lines and cue-text ends        |   off   | layout: a blank-looking line takes a row        |
+| Remove `<lang>` spans                          |   off   | language-dependent rendering                    |
+| Remove STYLE and REGION blocks                 |   off   | styles and regions                              |
 
-- **Differential:** it is parsed by our parser and by the patched reference parser, and the
-  results are compared field by field.
-- **Streaming:** its UTF-8 bytes are split into random chunks (including inside multi-byte
-  sequences and CRLF pairs) and parsed incrementally; the result must match parsing it whole.
+The validator also warns (`cue-id-keyword`) about cue ids that start with a block keyword: they
+are valid, but every player tested misreads them.
 
-Planted bugs confirmed the fuzzer is effective. Each of these was caught: STYLE recognized after
-a cue, first-instead-of-last region lookup, an arrow on line 2 after failed timings, `size`,
-`vertical` or `line` not taking a cue out of its region, `-0` kept, and non-ASCII whitespace
-accepted after `STYLE`. CI runs 3,000 cases. `pnpm fuzz` runs 200,000 (override with
-`FUZZ_CASES`/`FUZZ_SEED`).
+### YouTube
+
+YouTube's caption processing cannot be run locally, so `docs/YOUTUBE-TEST.md` describes a manual
+check with generated test files and records the results (2026-10-07, web player). YouTube
+keeps text markup, word timings, character references, line, position and alignment, and
+overlapping cues. It ignores `size`, `vertical`, STYLE blocks and regions, shows ruby as
+`base(annotation)`, and, like Firefox, ends a cue at a line of only spaces, losing the rest of
+its text. YouTube Studio reports upload errors for REGION blocks, `region:` settings,
+position/line alignment suffixes and the text left over after a space-only line.
+
+YouTube's own WebVTT (as yt-dlp downloads it) does not conform: it writes `<c.>`, `<rt>` outside
+`<ruby>`, and position alignments as an old draft's `middle`, which parsers reject with the
+whole setting (MicroVTT reads it as `center`; see the divergence above) (`docs/YOUTUBE-TEST.md`, "What YouTube stored"; fixture
+`youtube-reexport.vtt`).
+
+`YOUTUBE` in `features.ts` holds these results. The export dialog lists the features a file
+uses that YouTube does not keep or reports on upload (warnings only), and a button ticks the
+export fixes that avoid them (`YOUTUBE_FIXES`: the default fixes plus "trim whitespace" and
+"remove STYLE and REGION blocks").

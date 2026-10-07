@@ -4,12 +4,14 @@
  */
 import {
   cleanupAutoCaptions,
+  compatibilityIssues,
   detectAutoCaptions,
   exportDocument,
   findReviewMarkers,
   importDocument,
   validate,
   validateImport,
+  youtubeCheck,
 } from '@microvtt/core';
 import { clearAutosave, readAutosave, writeAutosave } from './autosave.ts';
 import { locateInSerialized, locateInSource, serializeWithSpans } from './locate.ts';
@@ -65,6 +67,12 @@ async function handle(request: WorkerRequest): Promise<unknown> {
         text: exported.text,
         report: exported.report,
         diagnostics: locateInSerialized(exported.diagnostics, spans),
+        // Of the document as edited, so the list does not change as fixes are ticked.
+        compatibility: compatibilityIssues(request.document).map((x) => ({
+          id: x.fix.id,
+          count: x.count,
+        })),
+        youtube: youtubeCheck(request.document).map((x) => ({ id: x.feature.id, count: x.count })),
       } satisfies ExportedFile;
     }
     case 'preview':

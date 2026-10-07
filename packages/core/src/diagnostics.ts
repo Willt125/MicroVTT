@@ -132,6 +132,12 @@ export const DIAGNOSTICS = {
     rule: 'A cue identifier is one line and must not contain "-->". (Only possible through editing; files cannot express it.)',
     fix: 'Line breaks become spaces and arrows are broken up ("-- >").',
   },
+  'cue-id-keyword': {
+    severity: 'warning',
+    spec: 'webvtt-cue-identifier',
+    rule: 'A cue id that starts with "NOTE", "STYLE" or "REGION" is valid, but browsers may drop the id, and ffmpeg, video.js and Shaka Player may drop the whole cue.',
+    fix: 'Kept. The export option "Remove cue ids that start with NOTE, STYLE or REGION" removes them.',
+  },
   // Cue settings (§4.4)
   'cue-settings-whitespace': {
     severity: 'error',
@@ -162,6 +168,12 @@ export const DIAGNOSTICS = {
     spec: 'webvtt-cue-settings-list',
     rule: 'Each cue setting has a fixed set of valid values.',
     fix: 'Invalid values are dropped (parsers ignore them); valid-but-noncanonical values are rewritten.',
+  },
+  'cue-setting-legacy': {
+    severity: 'error',
+    spec: 'webvtt-cue-settings-list',
+    rule: 'A cue setting uses a name from an older draft of the spec ("middle", or "start"/"end" as a position alignment). Parsers ignore the whole setting; YouTube still writes them.',
+    fix: 'MicroVTT reads it as it was meant, and export writes the current name ("center", "line-left", "line-right").',
   },
   'cue-line-not-integer': {
     severity: 'error',

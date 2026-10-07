@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   WebVTTByteParser,
   WebVTTParser,
+  modernizeSetting,
   parse,
   parseBytes,
   parseCueText,
@@ -116,5 +117,38 @@ describe('auto-caption fixtures', () => {
     expect(result.cues).toHaveLength(8);
     const handOff = result.cues.find((c) => c.startMs === 5405);
     expect(handOff?.text).toBe(' \n ');
+  });
+});
+
+describe('old-draft setting names (legacyValues)', () => {
+  const text =
+    'WEBVTT\n\n00:00.000 --> 00:01.000 position:10%,middle line:0,middle align:middle\nx\n\n' +
+    '00:01.000 --> 00:02.000 position:20%,start\ny\n\n00:02.000 --> 00:03.000 position:30%,end\nz\n';
+
+  it('are ignored by default, as the spec requires', () => {
+    const [a, b, c] = parse(text).cues;
+    expect([a?.position, a?.line, a?.align]).toEqual(['auto', 'auto', 'center']);
+    expect([b?.position, c?.position]).toEqual(['auto', 'auto']);
+  });
+
+  it('are read as their draft meant with legacyValues', () => {
+    const [a, b, c] = parse(text, { legacyValues: true }).cues;
+    expect([a?.position, a?.positionAlign, a?.line, a?.lineAlign, a?.align]).toEqual([
+      10,
+      'center',
+      0,
+      'center',
+      'center',
+    ]);
+    expect([b?.position, b?.positionAlign]).toEqual([20, 'line-left']);
+    expect([c?.position, c?.positionAlign]).toEqual([30, 'line-right']);
+  });
+
+  it('map only names, never other values', () => {
+    expect(modernizeSetting('position', '10%,middle')).toBe('10%,center');
+    expect(modernizeSetting('line', '0,start')).toBeNull();
+    expect(modernizeSetting('align', 'start')).toBeNull();
+    expect(modernizeSetting('size', 'middle')).toBeNull();
+    expect(modernizeSetting('position', 'x,middle')).toBe('x,center'); // still invalid after
   });
 });

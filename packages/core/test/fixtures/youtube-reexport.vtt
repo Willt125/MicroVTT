@@ -1,0 +1,77 @@
+WEBVTT
+Kind: captions
+Language: en
+
+00:00:00.000 --> 00:00:05.000
+MicroVTT feature test: each caption says what you should see.
+
+00:00:06.000 --> 00:00:10.000
+This is <i>italic</i>, <b>bold</b> and <u>underlined</u>.
+
+00:00:12.000 --> 00:00:16.000
+These words are <c.yellow>yellow</c><c.> (a class, coloured only by a player style).</c>
+
+00:00:18.000 --> 00:00:22.000
+Alice speaks this line (a voice span named Alice).
+
+00:00:24.000 --> 00:00:28.000
+In Finnish, kiitos means thank you.
+
+00:00:30.000 --> 00:00:34.000
+Small text should sit above: <ruby>漢字</ruby>(()<rt>kanji</rt>()).
+
+00:00:36.000 --> 00:00:40.000
+Words <00:00:37.000><c>appear </c><00:00:38.000><c>one </c><00:00:39.000><c>by one.</c>
+
+00:00:42.000 --> 00:00:46.000
+Fish &amp; chips, 5 &lt; 6, café, © 2026, and a&nbsp;non-breaking space.
+
+00:00:48.000 --> 00:00:52.000
+This cue
+has exactly
+three lines.
+
+intro
+00:00:54.000 --> 00:00:58.000
+This cue has the id "intro" (ids are never shown).
+
+00:01:00.000 --> 00:01:04.000 line:0%
+I should be at the TOP of the video (line:0).
+
+00:01:06.000 --> 00:01:10.000 line:50%
+I should be in the MIDDLE, top to bottom (line:50%).
+
+00:01:12.000 --> 00:01:16.000 align:start position:10%,middle
+I should start near the LEFT edge (position:10%).
+
+00:01:18.000 --> 00:01:22.000 size:40%
+I should wrap within a narrow box, 40% of the video wide (size:40%).
+
+00:01:24.000 --> 00:01:28.000 align:end position:100%
+My lines should be
+RIGHT-aligned (align:end).
+
+00:01:30.000 --> 00:01:34.000 size:40% position:90%,middle line:0%
+My box should END at 90% across, at the top (position:90%,line-right).
+
+00:01:36.000 --> 00:01:40.000
+縦書き (vertical text, right side)
+
+00:01:42.000 --> 00:01:46.000
+I should be in a box at the LOWER LEFT (a region).
+
+00:01:48.000 --> 00:01:52.000
+These words are <c.styled>green</c><c.> (a STYLE block in the file).</c>
+
+00:01:54.000 --> 00:01:58.000
+A comment came just before me.
+
+00:02:00.000 --> 00:02:04.000 line:0%
+I am on screen together with the cue below…
+
+00:02:01.000 --> 00:02:04.000
+…and I appear one second later.
+
+00:02:06.000 --> 00:02:10.000
+Above an empty-looking line…
+

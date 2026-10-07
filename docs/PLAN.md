@@ -356,9 +356,33 @@ Split into three PRs:
       still apply after cleanup keeps word timings. The find bar has the same option
       ("Across timings", on by default).
 
-**4c: export for YouTube and other players**: the warnings-only "YouTube upload" check, a test
-file to upload, and ffmpeg (libavformat) and JS player parsers (vtt.js, hls.js) added to the
-parser comparison; their findings decide what a compatibility export option should do.
+**4c: export for YouTube and other players (done)**
+
+- [x] Feature catalogue (`packages/core/src/features.ts`): 21 WebVTT features, each with a
+      counter and a minimal example whose caption says what a viewer should see.
+- [x] Parser comparison beyond browsers, on fixtures, the catalogue's examples and exported fuzz
+      documents: ffmpeg/libavformat (unit test; CI installs ffmpeg), video.js's `videojs-vtt.js`
+      and Shaka Player's `VttTextParser` (Chromium e2e). hls.js has no public parser API, so it
+      is not covered. Deviations are documented with tested minimal examples
+      (`SPEC-NOTES.md`, "Other players").
+- [x] Player-compatibility export options (`packages/core/src/compat.ts`), shown in the export
+      dialog only when they would change the file, each tested against the players it targets:
+      remove cue ids starting with NOTE/STYLE/REGION, write REGION blocks first, write
+      characters for named references (on by default; viewers see the same), and trim
+      whitespace lines, remove `<lang>` spans, remove STYLE/REGION blocks (off; lossy). With
+      every option on, ffmpeg and Shaka read exported fuzz documents exactly as we do (bar
+      ffmpeg's removal of duplicate cues).
+- [x] New warning `cue-id-keyword` for valid cue ids that every player tested misreads.
+- [x] YouTube upload check: the export dialog lists the features a file uses that YouTube
+      does not keep or reports on upload. Test files and instructions in `docs/YOUTUBE-TEST.md`.
+- [x] YouTube results (owner, 2026-10-07, web player) recorded in `YOUTUBE`: size, vertical,
+      regions and STYLE are dropped, ruby is shown as `base(annotation)`, and a space-only line
+      ends the cue (the rest of its text is lost); REGION, `region:`, alignment suffixes and
+      that leftover text are upload errors. The export dialog's YouTube list now shows only
+      those, with a button that ticks the fixes avoiding them.
+- [x] YouTube mobile app (owner, 2026-10-07): as the web player, but it also ignores bold,
+      underline, `position` and `align`. Recorded in `docs/YOUTUBE-TEST.md` only.
+- [ ] Not yet checked: YouTube TV apps.
 
 ### Phase 5: Timeline and productivity
 
@@ -468,6 +492,29 @@ parser comparison; their findings decide what a compatibility export option shou
   group's start and ends at its last group's end (a group lasts until the next word, so YouTube's
   continuous roll-up timing carries over). Cues are never stretched into silence, so the
   acceptance criterion holds literally; holding short cues longer is left to the user.
+
+- **2026-10-07 (Phase 4c):** Compatibility fixes run after repair, so they can rely on valid
+  cue text and see the comment repair keeps for header text. Only fixes that leave what a
+  conforming player shows unchanged are on by default; the rest change layout, language
+  information or styling and stay opt-in, labelled as such. Duplicate cues (which ffmpeg drops)
+  get no option: removing them would change what conforming players show.
+- **2026-10-07 (Phase 4c):** YouTube's support table comes only from uploading the test file,
+  not from memory or third-party reports. The YouTube fixes are not on by default, because
+  trimming space-only lines and removing STYLE/REGION blocks change what conforming players
+  show; the export dialog offers them in one click when a file needs them. A space-only line
+  loses text on YouTube, so YouTube's own auto-caption downloads (which have one in most cues)
+  may lose text when re-uploaded as they are; the auto-caption cleanup already removes them.
+
+- **2026-10-07 (Phase 4c, owner):** Export for YouTube only aims at what YouTube Studio rejects
+  on upload. How YouTube's players then draw what it accepted (ignored sizes, positions,
+  styles, the mobile app's missing bold) is left to YouTube: the export dialog lists it as
+  information, but no fix targets it. A test keeps every YouTube fix tied to an upload error.
+
+- **2026-10-07 (Phase 4c, owner):** Diverge from the spec to recover old-draft setting names
+  (`middle`, and `start`/`end` as position alignments) on import, because YouTube's own WebVTT
+  uses them and YouTube captions are what MicroVTT will edit most. Only `importDocument` does
+  it (`legacyValues`); `parse` stays spec-exact for the conformance and browser tests. The
+  validator reports the old names and export writes the new ones, so output still conforms.
 
 ## Open questions for the owner
 

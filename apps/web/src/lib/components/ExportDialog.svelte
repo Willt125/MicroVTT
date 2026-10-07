@@ -3,8 +3,14 @@
   real export in the worker, so what is listed is what gets written.
 -->
 <script lang="ts">
-  import type { FileType } from '@microvtt/core';
-  import { DIAGNOSTICS } from '@microvtt/core';
+  import type { CompatibilityFix, CompatibilityId, FileType } from '@microvtt/core';
+  import {
+    COMPATIBILITY_FIXES,
+    DIAGNOSTICS,
+    FEATURES,
+    YOUTUBE,
+    YOUTUBE_FIXES,
+  } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import type { ExportedFile } from '../worker/protocol.ts';
   import { canSaveInPlace, download, pickSaveFile, writeFile } from '../files.ts';
@@ -26,6 +32,36 @@
   let saving = $state(false);
   let saveError = $state<string | null>(null);
   const pickers = canSaveInPlace();
+  // Fixes that keep what viewers see start ticked; they only apply where the list shows them.
+  let compatibility = $state<CompatibilityId[]>(
+    COMPATIBILITY_FIXES.filter((f) => f.recommended).map((f) => f.id),
+  );
+  const fixById = (id: CompatibilityId): CompatibilityFix =>
+    COMPATIBILITY_FIXES.find((f) => f.id === id) as CompatibilityFix;
+  const featureName = (id: string): string => FEATURES.find((f) => f.id === id)?.name ?? id;
+  const STATUS: Record<string, string> = {
+    kept: 'shown as written',
+    untested: 'not tested on YouTube yet',
+    changed: 'shown differently',
+    dropped: 'dropped',
+  };
+
+  /** Whether a fix that avoids a YouTube problem in this file is not ticked yet. */
+  const youtubeFixable = $derived(
+    result?.youtube.some((y) => {
+      const fix = YOUTUBE[y.id].fixedBy;
+      return fix !== undefined && !compatibility.includes(fix);
+    }) ?? false,
+  );
+
+  /** Ticks every fix that helps on YouTube (the others stay as they are). */
+  function forYouTube(): void {
+    compatibility = [...new Set([...compatibility, ...YOUTUBE_FIXES])];
+  }
+
+  function toggle(id: CompatibilityId, on: boolean): void {
+    compatibility = on ? [...compatibility, id] : compatibility.filter((x) => x !== id);
+  }
 
   const FILE_TYPES: { value: FileType; label: string }[] = [
     { value: 'captions', label: 'Captions / subtitles' },
@@ -43,7 +79,12 @@
   // Re-run the preview whenever the dialog opens or an option changes.
   $effect(() => {
     if (!open) return;
-    const options = { lineEnding, omitZeroHours, fileType: editor.fileType };
+    const options = {
+      lineEnding,
+      omitZeroHours,
+      fileType: editor.fileType,
+      compatibility: [...compatibility],
+    };
     void editor.doc; // Also when the document changes underneath.
     result = null;
     failure = null;
@@ -152,6 +193,64 @@
     {/if}
   </section>
 
+  {#if result && result.compatibility.length > 0}
+    <fieldset class="compat">
+      <legend>Player compatibility</legend>
+      <p class="muted small">
+        This file is valid, but some players misread parts of it. These fixes keep it valid.
+      </p>
+      {#each result.compatibility as c (c.id)}
+        {@const fix = fixById(c.id)}
+        <label class="check option">
+          <input
+            type="checkbox"
+            checked={compatibility.includes(c.id)}
+            onchange={(e) => toggle(c.id, e.currentTarget.checked)}
+          />
+          <span>
+            {fix.label} ({c.count.toLocaleString()})
+            <span class="muted small why"
+              >{fix.why}{fix.lossy ? ' Changes what viewers see in other players.' : ''}</span
+            >
+          </span>
+        </label>
+      {/each}
+    </fieldset>
+  {/if}
+
+  {#if result && result.youtube.length > 0}
+    <details class="youtube">
+      <summary>
+        Uploading to YouTube? {result.youtube.length}
+        {result.youtube.length === 1 ? 'feature' : 'features'} to check
+      </summary>
+      <p class="muted small">
+        Found by uploading a test file (docs/YOUTUBE-TEST.md). The file is valid either way; this is
+        only a warning.
+      </p>
+      <ul>
+        {#each result.youtube as y (y.id)}
+          {@const support = YOUTUBE[y.id]}
+          <li>
+            {featureName(y.id)}: {y.count.toLocaleString()}
+            <span class="muted"
+              >({STATUS[support.status] ?? support.status}{support.note
+                ? `: ${support.note}`
+                : ''})</span
+            >
+            {#if support.fixedBy && compatibility.includes(support.fixedBy)}
+              <strong class="avoided">Avoided: "{fixById(support.fixedBy).label}" is ticked.</strong
+              >
+            {/if}
+          </li>
+        {/each}
+      </ul>
+      {#if youtubeFixable}
+        <button onclick={forYouTube}>Tick the fixes for YouTube</button>
+      {/if}
+    </details>
+  {/if}
+
   {#if saveError}
     <p class="error-text" role="alert">{saveError}</p>
   {/if}
@@ -226,5 +325,34 @@
     justify-content: flex-end;
     gap: 0.5rem;
     margin-top: 1rem;
+  }
+  .compat {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+    margin-top: 0.75rem;
+  }
+  .compat p {
+    margin: 0;
+  }
+  label.option {
+    align-items: flex-start;
+  }
+  .why {
+    display: block;
+  }
+  .small {
+    font-size: 0.85rem;
+  }
+  .youtube {
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+  }
+  .avoided {
+    display: block;
+    font-weight: 600;
+  }
+  .youtube ul {
+    padding-left: 1.2rem;
   }
 </style>

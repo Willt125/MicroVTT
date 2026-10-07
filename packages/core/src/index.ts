@@ -24,7 +24,7 @@ export type {
   CueTimestampNode,
 } from './cuetext.ts';
 export { consumeCharacterReference } from './charref.ts';
-export { isCommentStart } from './parser.ts';
+export { isCommentStart, modernizeSetting } from './parser.ts';
 export type { BlockInfo, BlockKind, ParserOptions } from './parser.ts';
 export { normalizeInput } from './decode.ts';
 export {
@@ -103,3 +103,26 @@ export type {
   SegmentOptions,
   WordGroup,
 } from './autocaption.ts';
+export {
+  FEATURES,
+  YOUTUBE,
+  YOUTUBE_FIXES,
+  featureDocument,
+  featureTestFile,
+  usedFeatures,
+  youtubeCheck,
+} from './features.ts';
+export type {
+  Feature,
+  FeatureExample,
+  FeatureId,
+  PlatformStatus,
+  PlatformSupport,
+} from './features.ts';
+export {
+  COMPATIBILITY_FIXES,
+  KEYWORD_ID,
+  applyCompatibility,
+  compatibilityIssues,
+} from './compat.ts';
+export type { CompatibilityFix, CompatibilityId } from './compat.ts';
