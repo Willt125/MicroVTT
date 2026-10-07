@@ -8,12 +8,14 @@
 import { KEYWORD_ID } from './compat.ts';
 import { checkCueText, checkChapterTitle } from './cuetext-check.ts';
 import { checkStylesheet } from './css.ts';
+import { findLegacyTags } from './legacy-text.ts';
 import type { Diagnostic, DiagnosticCode } from './diagnostics.ts';
 import { diagnostic } from './diagnostics.ts';
 import type { ImportResult } from './document.ts';
 import { importDocument } from './document.ts';
 import type { BlockInfo, ParsedCue, SourceRange } from './parser.ts';
-import { modernizeSetting } from './parser.ts';
+import { legacySetting } from './parser.ts';
+import { formatTimestamp, parseLegacyTimestamp, parseTimestamp } from './timestamp.ts';
 
 /**
  * Which payloads to require (§4.6). The base syntax allows any payload to be metadata text, so
@@ -152,10 +154,19 @@ function checkTimingLine(line: Line, ctx: CueContext): void {
     out.add('timing-whitespace', 'Nothing may come before the start time.', at(0), at(pos));
   }
   const readTimestamp = (): void => {
-    const m = /^[0-9:.]+/.exec(t.slice(pos));
+    const m = /^[0-9:.,]+/.exec(t.slice(pos));
     const ts = m?.[0] ?? '';
     const tm = TIMESTAMP.exec(ts);
-    if (!tm) {
+    if (!tm && !parseTimestamp(ts).ok && parseLegacyTimestamp(ts).end === ts.length) {
+      out.add(
+        'timestamp-legacy',
+        `"${ts}" is not a WebVTT timestamp, so parsers drop this cue; MicroVTT reads it as ${formatTimestamp(
+          (parseLegacyTimestamp(ts) as { ms: number }).ms,
+        )}.`,
+        at(pos),
+        at(pos + ts.length),
+      );
+    } else if (!tm) {
       out.add(
         'timestamp-syntax',
         `"${ts}" is not a valid WebVTT timestamp.`,
@@ -231,8 +242,17 @@ function checkSettingsList(settings: string, offset: number, ctx: CueContext): v
       );
       continue;
     }
-    const name = token.text.slice(0, colon);
+    const writtenName = token.text.slice(0, colon);
     const value = token.text.slice(colon + 1);
+    // What import reads it as (old names, out-of-range percentages), when that is valid.
+    const legacy = legacySetting(writtenName, value);
+    const recovered =
+      legacy !== null &&
+      CUE_SETTING_NAMES.has(legacy.name) &&
+      checkCueSettingValue(legacy.name, legacy.value) === null
+        ? legacy
+        : null;
+    const name = recovered?.name ?? writtenName;
     if (!CUE_SETTING_NAMES.has(name)) {
       out.add('cue-setting-unknown', `Unknown cue setting "${name}".`, token.start, end);
       continue;
@@ -241,11 +261,12 @@ function checkSettingsList(settings: string, offset: number, ctx: CueContext): v
       out.add('cue-setting-duplicate', `"${name}" appears more than once.`, token.start, end);
     }
     seen.set(name, token.start);
-    const modern = modernizeSetting(name, value);
-    const problem =
-      modern !== null && checkCueSettingValue(name, modern) === null
+    const problem: DiagnosticCode | null =
+      recovered?.reason === 'name'
         ? 'cue-setting-legacy'
-        : checkCueSettingValue(name, value);
+        : recovered?.reason === 'range'
+          ? 'cue-setting-out-of-range'
+          : checkCueSettingValue(name, value);
     if (problem === 'cue-line-not-integer') {
       out.add(
         problem,
@@ -253,10 +274,13 @@ function checkSettingsList(settings: string, offset: number, ctx: CueContext): v
         token.start,
         end,
       );
-    } else if (problem === 'cue-setting-legacy') {
+    } else if (problem === 'cue-setting-legacy' || problem === 'cue-setting-out-of-range') {
+      const now = `${recovered?.name ?? name}:${recovered?.value ?? value}`;
       out.add(
         problem,
-        `"${value}" uses an old name; it means "${modern ?? ''}", which export writes.`,
+        problem === 'cue-setting-legacy'
+          ? `"${token.text}" uses an old name; MicroVTT reads it as "${now}", which export writes.`
+          : `"${token.text}" is out of range, so parsers ignore it; MicroVTT clamps it to "${now}".`,
         token.start,
         end,
       );
@@ -268,10 +292,10 @@ function checkSettingsList(settings: string, offset: number, ctx: CueContext): v
       regionStart = token.start;
       regionEnd = end;
     } else if (
-      (!problem || problem === 'cue-setting-legacy') &&
+      (!problem || problem === 'cue-setting-legacy' || problem === 'cue-setting-out-of-range') &&
       (name === 'vertical' ||
         name === 'line' ||
-        (name === 'size' && Number(value.slice(0, -1)) !== 100))
+        (name === 'size' && Number((recovered?.value ?? value).slice(0, -1)) !== 100))
     ) {
       outOfRegion.push(name);
     }
@@ -460,14 +484,28 @@ export function validateImport(imp: ImportResult, options: ValidateOptions = {})
     }
 
     switch (block.kind) {
-      case 'header':
-        out.add(
-          'header-text',
-          'Text right after the "WEBVTT" line is ignored by parsers; separate it with a blank line or make it a NOTE.',
-          block.range.start,
-          block.range.end,
-        );
+      case 'header': {
+        const regionLines = block.legacyRegions
+          ? lines.filter((l) => l.text.startsWith('Region:'))
+          : [];
+        for (const l of regionLines) {
+          out.add(
+            'region-header-legacy',
+            'A "Region:" header line (2014–15 drafts) is ignored by parsers today; MicroVTT reads it as a REGION block, which export writes.',
+            l.start,
+            l.start + l.text.length,
+          );
+        }
+        if (regionLines.length < lines.length) {
+          out.add(
+            'header-text',
+            'Text right after the "WEBVTT" line is ignored by parsers; separate it with a blank line or make it a NOTE.',
+            block.range.start,
+            block.range.end,
+          );
+        }
         break;
+      }
 
       case 'note':
         break;
@@ -583,8 +621,28 @@ export function validateImport(imp: ImportResult, options: ValidateOptions = {})
         }
         const payloadStart = timingEnd + 1;
         if (fileType === 'captions') {
+          // `<br>` and `<font>` get their own diagnostic (import reads them), not "unknown tag".
+          const legacyTags = findLegacyTags(cue.text).map((t) => ({
+            ...t,
+            start: payloadStart + t.start,
+            end: payloadStart + t.end,
+          }));
+          const inLegacyTag = (d: Diagnostic): boolean =>
+            legacyTags.some((t) => d.range.start >= t.start && d.range.end <= t.end);
           for (const d of checkCueText(cue.text, payloadStart, cue.startMs, cue.endMs))
-            out.diagnostics.push(d);
+            if (!inLegacyTag(d)) out.diagnostics.push(d);
+          for (const t of legacyTags) {
+            out.add(
+              'cue-text-legacy-tag',
+              t.kind === 'br'
+                ? 'Parsers drop "<br>" (running the words together); MicroVTT reads it as a line break.'
+                : t.kind === 'font' && t.color !== undefined
+                  ? `Parsers drop "<font>"; MicroVTT reads color="${t.color}" as a class span.`
+                  : 'Parsers drop "<font>"; MicroVTT drops it too (only its colour is kept, as a class).',
+              t.start,
+              t.end,
+            );
+          }
         } else if (fileType === 'chapters') {
           for (const d of checkChapterTitle(cue.text, payloadStart)) out.diagnostics.push(d);
         }

@@ -29,6 +29,12 @@ export const DIAGNOSTICS = {
     rule: 'A WebVTT file must start with "WEBVTT", optionally followed by a space or tab and text.',
     fix: 'None: the file is not WebVTT and cannot be imported.',
   },
+  'file-encoding': {
+    severity: 'error',
+    spec: 'webvtt-file-body',
+    rule: 'A WebVTT file must be encoded as UTF-8. Parsers read other encodings as UTF-8, turning accented and non-Latin letters into "�" (and UTF-16 files into nothing).',
+    fix: 'MicroVTT reads it in the encoding it was saved in (Windows-1252 when it is not valid UTF-8, or the one you choose), and export writes UTF-8.',
+  },
   'signature-line-terminators': {
     severity: 'error',
     spec: 'webvtt-file-body',
@@ -46,6 +52,12 @@ export const DIAGNOSTICS = {
     spec: 'webvtt-file-body',
     rule: 'Every block, including the last, must end with a line terminator.',
     fix: 'The file ends with a line feed.',
+  },
+  'region-header-legacy': {
+    severity: 'error',
+    spec: 'webvtt-region',
+    rule: 'Regions are defined in REGION blocks. A "Region: id=… width=…" line under "WEBVTT" is the 2014–15 drafts\' form, which parsers now ignore (with every cue\'s reference to it).',
+    fix: 'MicroVTT reads it as the REGION block it meant, and export writes that block.',
   },
   'block-missing-blank-line': {
     severity: 'error',
@@ -101,6 +113,12 @@ export const DIAGNOSTICS = {
     spec: 'webvtt-timestamp',
     rule: 'Timestamps are [hh:]mm:ss.ttt with at least two hour digits when hours are present.',
     fix: 'The timestamp is rewritten in canonical form.',
+  },
+  'timestamp-legacy': {
+    severity: 'error',
+    spec: 'webvtt-timestamp',
+    rule: 'A timestamp is [hh:]mm:ss.ttt. Parsers drop a cue whose timings use another form, such as SRT\'s comma ("00:00:01,000"), one-digit fields or a different number of fraction digits.',
+    fix: 'MicroVTT reads the time as meant, and export writes it in canonical form.',
   },
   'timing-whitespace': {
     severity: 'error',
@@ -172,8 +190,14 @@ export const DIAGNOSTICS = {
   'cue-setting-legacy': {
     severity: 'error',
     spec: 'webvtt-cue-settings-list',
-    rule: 'A cue setting uses a name from an older draft of the spec ("middle", or "start"/"end" as a position alignment). Parsers ignore the whole setting; YouTube still writes them.',
-    fix: 'MicroVTT reads it as it was meant, and export writes the current name ("center", "line-left", "line-right").',
+    rule: 'A cue setting uses a name from an older draft: "middle" or position "start"/"end" (2014–15), or a single-letter setting such as "A:middle" or "T:10%" (2010–11). Parsers ignore the whole setting; YouTube still writes "middle".',
+    fix: 'MicroVTT reads it as it was meant, and export writes the current form ("align:center", "position:10%,line-left", …).',
+  },
+  'cue-setting-out-of-range': {
+    severity: 'error',
+    spec: 'webvtt-cue-settings-list',
+    rule: 'Percentages in cue settings must be between 0% and 100%; parsers ignore a setting outside that range.',
+    fix: 'MicroVTT clamps it to 0% or 100% (a guess: the file does not say what was meant), and export writes the clamped value.',
   },
   'cue-line-not-integer': {
     severity: 'error',
@@ -205,6 +229,12 @@ export const DIAGNOSTICS = {
     spec: 'webvtt-caption-or-subtitle-cue-text',
     rule: 'Tags are <c>, <i>, <b>, <u>, <ruby>, <rt>, <v>, <lang> and timestamps (write a literal < as "&lt;").',
     fix: 'The cue text is rewritten; unknown tags are dropped as parsers drop them.',
+  },
+  'cue-text-legacy-tag': {
+    severity: 'error',
+    spec: 'webvtt-cue-text',
+    rule: 'WebVTT cue text has no "<br>" or "<font>" tags (SRT and HTML habits). Parsers drop them, keeping the text: words on either side of "<br>" run together, and colours are lost.',
+    fix: 'MicroVTT reads "<br>" as a line break and "<font color>" as a class: one of the spec\'s default colour classes ("<c.yellow>"), or a generated class with a STYLE rule. Export writes those.',
   },
   'cue-text-class': {
     severity: 'error',

@@ -339,6 +339,8 @@ function repairCue(cue: Cue, ctx: CueRepairContext): Cue {
     text: asParsed(cue.text),
     region: cue.region === null ? null : asParsed(cue.region),
   };
+  // Editor state for moving a late REGION block (see quickfix.ts), not part of the file.
+  delete c.unresolvedRegion;
 
   // Identifier: one line, no arrow, unique.
   if (/\n|-->/.test(c.id)) {

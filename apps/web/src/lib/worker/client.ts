@@ -44,8 +44,11 @@ export class VttWorker {
   }
 
   /** Transfers `bytes` to the worker (the caller's buffer becomes unusable). */
-  import(bytes: ArrayBuffer): Promise<ImportedFile> {
-    return this.request({ type: 'import', bytes }, [bytes]);
+  import(bytes: ArrayBuffer, encoding?: string): Promise<ImportedFile> {
+    return this.request(
+      encoding === undefined ? { type: 'import', bytes } : { type: 'import', bytes, encoding },
+      [bytes],
+    );
   }
 
   validate(document: VttDocument, fileType: FileType): Promise<Checked> {

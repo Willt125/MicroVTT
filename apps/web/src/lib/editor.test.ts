@@ -53,6 +53,7 @@ function fakeWorker(store: { save: Autosave | null } = { save: null }): VttWorke
       diagnostics: [],
       compatibility: [],
       youtube: [],
+      headerLines: false,
     }),
   } as unknown as VttWorker;
 }

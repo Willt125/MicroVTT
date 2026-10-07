@@ -56,6 +56,22 @@
     return rowOf[index] ?? null;
   }
 
+  /** The cue before a body item: its index and table number. */
+  function cueBefore(index: number): { index: number; number: number } | null {
+    for (let i = index - 1; i >= 0; i--) {
+      const n = cueNumber(i);
+      if (n !== null) return { index: i, number: n };
+    }
+    return null;
+  }
+
+  /** The first line of a comment's text, shortened. */
+  function excerpt(index: number): string {
+    const item = editor.doc.body[index];
+    const line = item?.type === 'note' ? (item.text.replace(/^\n/, '').split('\n')[0] ?? '') : '';
+    return line.length > 40 ? `${line.slice(0, 40)}…` : line;
+  }
+
   function where(d: ItemDiagnostic): string {
     if (d.list === 'file') return 'File';
     if (d.list === 'head') return 'Header';
@@ -102,6 +118,33 @@
     <p class="muted">
       … and {sorted.length - MAX_SHOWN} more. Fix these first, or export: export fixes errors automatically.
     </p>
+  {/if}
+
+  {#if editor.quickFixes.length > 0}
+    <details class="fixes" open>
+      <summary>Can be fixed ({editor.quickFixes.length})</summary>
+      <p class="muted">
+        Text that players ignore, kept as a comment, that was probably meant otherwise. Fixing it
+        changes what players show.
+      </p>
+      <ul>
+        {#each editor.quickFixes.slice(0, MAX_SHOWN) as f (f.index)}
+          {@const cue = cueBefore(f.index)}
+          <li>
+            {#if cue !== null}
+              <button class="link" onclick={() => onjump(cue.index)}>After cue {cue.number}</button>
+            {/if}
+            <code class="excerpt">{excerpt(f.index)}</code>
+            <button onclick={() => editor.applyQuickFix(f.index)}>{f.label}</button>
+          </li>
+        {/each}
+      </ul>
+      {#if editor.quickFixes.length > 1}
+        <button onclick={() => editor.applyAllQuickFixes()}
+          >Fix all {editor.quickFixes.length}</button
+        >
+      {/if}
+    </details>
   {/if}
 
   {#if editor.review.length > 0}
@@ -172,6 +215,26 @@
   .summary {
     margin: 0 0 0.5rem;
     font-size: 0.9rem;
+  }
+  .fixes ul {
+    list-style: none;
+    margin: 0 0 0.4rem;
+    padding: 0;
+    font-size: 0.88rem;
+  }
+  .fixes li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    align-items: center;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .excerpt {
+    flex: 1 1 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .list,
   .imported ul {

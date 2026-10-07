@@ -11,7 +11,7 @@
  * the model can be mirrored into native objects.
  */
 import { LineEndingNormalizer, WebVTTDecoder } from './decode.ts';
-import { parseTimestamp } from './timestamp.ts';
+import { parseLegacyTimestamp, parseTimestamp } from './timestamp.ts';
 
 export interface SourceRange {
   /** Offset of the first character, in the normalized input (after CRLF/CR → LF, NUL → U+FFFD). */
@@ -102,15 +102,18 @@ export interface BlockInfo {
   cue?: ParsedCue;
   stylesheet?: ParsedStylesheet;
   region?: ParsedRegion;
+  /** Header only, in legacy mode: regions defined by old-draft `Region:` lines (2014–15). */
+  legacyRegions?: ParsedRegion[];
 }
 
 export interface ParserOptions {
   /** Called for every block, in file order, once it is complete. */
   onBlock?: (block: BlockInfo) => void;
   /**
-   * Read cue setting values from older drafts of the spec (as YouTube still writes them, e.g.
-   * `position:10%,middle`) as they were meant, instead of ignoring the setting as the spec
-   * requires. Off by default, so `parse` stays exactly the spec's algorithm.
+   * Read what older drafts and other tools wrote as it was meant, instead of ignoring it as the
+   * spec requires: old cue setting names (as YouTube still writes `position:10%,middle`) and
+   * timestamps in other forms (SRT's `00:00:01,000`). Off by default, so `parse` stays exactly
+   * the spec's algorithm.
    */
   legacyValues?: boolean;
 }
@@ -263,6 +266,64 @@ export function modernizeSetting(name: string, value: string): string | null {
   return modern === undefined ? null : `${value.slice(0, comma)},${modern}`;
 }
 
+/** Single-letter cue setting names from the 2010–11 drafts (WebSRT), with value renames. */
+const SINGLE_LETTER: Record<string, { name: string; values?: Record<string, string> }> = {
+  D: { name: 'vertical', values: { vertical: 'rl', 'vertical-lr': 'lr' } },
+  L: { name: 'line' },
+  T: { name: 'position' },
+  S: { name: 'size' },
+  A: { name: 'align' },
+};
+
+const SIGNED_PERCENTAGE = /^(-?[0-9]+(?:\.[0-9]+)?)%$/;
+
+/**
+ * A percentage outside 0–100%, clamped into it; null for anything else. A negative size is not
+ * clamped: a box 0% wide shows nothing, so there is no sensible guess.
+ */
+function clampPercentage(value: string, name: string): string | null {
+  const m = SIGNED_PERCENTAGE.exec(value);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (n >= 0 && n <= 100) return null;
+  if (n < 0 && name === 'size') return null;
+  return n < 0 ? '0%' : '100%';
+}
+
+/**
+ * How import reads a cue setting the spec ignores but older drafts or other tools meant:
+ * single-letter names (2010–11: `A:middle`, `T:10%`, …), old value names (`middle`, position
+ * `start`/`end`) and percentages outside 0–100% (clamped, a guess). Returns the current name and
+ * value and why it changed, or null when nothing applies. The result may still be invalid.
+ */
+export function legacySetting(
+  name: string,
+  value: string,
+): { name: string; value: string; reason: 'name' | 'range' } | null {
+  let reason: 'name' | 'range' | null = null;
+  const letter = SINGLE_LETTER[name];
+  if (letter) {
+    name = letter.name;
+    value = letter.values?.[value] ?? value;
+    reason = 'name';
+  }
+  const modern = modernizeSetting(name, value);
+  if (modern !== null) {
+    value = modern;
+    reason = 'name';
+  }
+  if (name === 'position' || name === 'line' || name === 'size') {
+    const comma = value.indexOf(',');
+    const head = comma === -1 ? value : value.slice(0, comma);
+    const clamped = clampPercentage(head, name);
+    if (clamped !== null) {
+      value = clamped + (comma === -1 ? '' : value.slice(comma));
+      reason ??= 'range';
+    }
+  }
+  return reason === null ? null : { name, value, reason };
+}
+
 /** Parse the WebVTT cue settings (§6.3). */
 function parseCueSettings(
   input: string,
@@ -270,8 +331,10 @@ function parseCueSettings(
   cue: ParsedCue,
   legacy: boolean,
 ): void {
-  for (const [name, written] of settingsOf(input)) {
-    const value = (legacy && modernizeSetting(name, written)) || written;
+  for (const [written, writtenValue] of settingsOf(input)) {
+    const recovered = legacy ? legacySetting(written, writtenValue) : null;
+    const name = recovered?.name ?? written;
+    const value = recovered?.value ?? writtenValue;
     switch (name) {
       case 'region': {
         let found: ParsedRegion | null = null;
@@ -347,15 +410,20 @@ function parseCueTimingsAndSettings(
   const skipWhitespace = (): void => {
     while (pos < line.length && isAsciiWhitespace(line.charCodeAt(pos))) pos++;
   };
+  // In legacy mode, a timestamp the spec rejects (SRT's comma, other digit counts) is read too.
+  const timestamp = (at: number): ReturnType<typeof parseTimestamp> => {
+    const strict = parseTimestamp(line, at);
+    return strict.ok || !legacy ? strict : parseLegacyTimestamp(line, at);
+  };
   skipWhitespace();
-  const start = parseTimestamp(line, pos);
+  const start = timestamp(pos);
   if (!start.ok) return false;
   pos = start.end;
   skipWhitespace();
   if (!line.startsWith(ARROW, pos)) return false;
   pos += ARROW.length;
   skipWhitespace();
-  const end = parseTimestamp(line, pos);
+  const end = timestamp(pos);
   if (!end.ok) return false;
   cue.startMs = start.ms;
   cue.endMs = end.ms;
@@ -600,6 +668,10 @@ export class WebVTTParser {
       info.region = block.region;
     } else if (block.inHeader) {
       info.kind = 'header';
+      if (this.legacy) {
+        const regions = regionsFromHeader(block, this.result.regions);
+        if (regions.length > 0) info.legacyRegions = regions;
+      }
     } else if (block.seenArrow) {
       info.kind = 'invalid-cue';
     } else if (isCommentStart(block.firstLine)) {
@@ -607,6 +679,31 @@ export class WebVTTParser {
     }
     this.onBlock?.(info);
   }
+}
+
+/**
+ * Regions from old-draft `Region:` header lines (2014–15 drafts): `Region:` and settings written
+ * `name=value`, otherwise as in a REGION block today. Added to the parse result, so later cues
+ * can refer to them.
+ */
+function regionsFromHeader(block: Block, regions: ParsedRegion[]): ParsedRegion[] {
+  const found: ParsedRegion[] = [];
+  let start = block.start;
+  for (const line of block.buffer.split('\n')) {
+    if (line.startsWith('Region:')) {
+      const region = newRegion({ start, end: start + line.length });
+      const settings = line
+        .slice('Region:'.length)
+        .split(/[ \t]+/)
+        .map((token) => token.replace('=', ':'))
+        .join(' ');
+      parseRegionSettings(settings, region);
+      regions.push(region);
+      found.push(region);
+    }
+    start += line.length + 1;
+  }
+  return found;
 }
 
 /** Incremental parser over UTF-8 bytes. */

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { FILE_ENCODINGS } from '@microvtt/core';
   import CleanupDialog from './lib/components/CleanupDialog.svelte';
   import CueEditor from './lib/components/CueEditor.svelte';
   import CueTable from './lib/components/CueTable.svelte';
@@ -30,6 +31,12 @@
   let findOpen = $state(false);
   let cleanupOpen = $state(false);
   let glossaryOpen = $state(false);
+  // The "not UTF-8" notice, dismissed for the file open now (it comes back for the next one).
+  let encodingNoticeDismissed = $state(false);
+  $effect(() => {
+    void editor.fileName;
+    encodingNoticeDismissed = false;
+  });
   let mediaInput: HTMLInputElement | undefined = $state();
   let dragging = $state(false);
   let fileInput: HTMLInputElement | undefined = $state();
@@ -293,6 +300,23 @@
     <p class="banner error-text" role="alert">
       {editor.error}
       <button onclick={() => (editor.error = null)}>Dismiss</button>
+    </p>
+  {/if}
+
+  {#if editor.hasDocument && editor.encoding !== 'utf-8' && !encodingNoticeDismissed}
+    <p class="banner offer" role="status">
+      This file is not UTF-8. It was read as
+      <select
+        aria-label="Read the file as"
+        value={editor.encoding}
+        disabled={editor.dirty}
+        title={editor.dirty ? 'Undo your edits to read the file again' : undefined}
+        onchange={(e) => void editor.reopenWithEncoding(e.currentTarget.value)}
+      >
+        {#each FILE_ENCODINGS as e (e.label)}<option value={e.label}>{e.name}</option>{/each}
+      </select>{editor.encodingGuessed ? ' (a guess: check the accented letters)' : ''}. Export
+      writes UTF-8.
+      <button onclick={() => (encodingNoticeDismissed = true)}>Dismiss</button>
     </p>
   {/if}
 

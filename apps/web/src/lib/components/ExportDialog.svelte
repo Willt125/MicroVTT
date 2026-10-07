@@ -27,6 +27,7 @@
   const CRLF = '\r\n';
   let lineEnding = $state<typeof LF | typeof CRLF>(LF);
   let omitZeroHours = $state(false);
+  let headerLines = $state(false);
   let result = $state.raw<ExportedFile | null>(null);
   let failure = $state<string | null>(null);
   let saving = $state(false);
@@ -82,6 +83,7 @@
     const options = {
       lineEnding,
       omitZeroHours,
+      headerLines,
       fileType: editor.fileType,
       compatibility: [...compatibility],
     };
@@ -102,6 +104,8 @@
     }
     return Object.entries(groups);
   });
+
+  const warnings = $derived(result?.diagnostics.filter((d) => d.severity !== 'error').length ?? 0);
 
   const exportName = $derived(editor.fileName.replace(/\.[^.]*$/, '') + '.vtt');
 
@@ -185,10 +189,15 @@
         {/each}
       </ul>
     {/if}
-    {#if result && result.diagnostics.length > 0}
+    {#if result && warnings > 0}
       <p class="warning-text">
-        {result.diagnostics.length} warning{result.diagnostics.length === 1 ? '' : 's'} remain (valid,
-        but possibly not what you meant). See the Problems panel.
+        {warnings} warning{warnings === 1 ? '' : 's'} remain (valid, but possibly not what you meant).
+        See the Problems panel.
+      </p>
+    {/if}
+    {#if result && headerLines && result.diagnostics.some((d) => d.code === 'header-text')}
+      <p class="warning-text">
+        As chosen, the header lines make this file non-conforming WebVTT (for HLS players).
       </p>
     {/if}
   </section>
@@ -215,6 +224,23 @@
           </span>
         </label>
       {/each}
+    </fieldset>
+  {/if}
+
+  {#if result?.headerLines}
+    <fieldset class="compat">
+      <legend>Header lines</legend>
+      <label class="check option">
+        <input type="checkbox" bind:checked={headerLines} />
+        <span>
+          Keep the lines under "WEBVTT" (such as <code>X-TIMESTAMP-MAP=…</code>, <code>Kind:</code>,
+          <code>Language:</code>) instead of writing them as a comment
+          <span class="muted small why"
+            >HLS players need <code>X-TIMESTAMP-MAP</code> there, and YouTube writes its files this way.
+            Valid in the 2014–15 drafts but not today, so the file will not conform.</span
+          >
+        </span>
+      </label>
     </fieldset>
   {/if}
 

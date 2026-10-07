@@ -384,7 +384,7 @@ Split into three PRs:
       underline, `position` and `align`. Recorded in `docs/YOUTUBE-TEST.md` only.
 - [ ] Not yet checked: YouTube TV apps.
 
-### Phase 4d: Legacy and malformed input (planned)
+### Phase 4d: Legacy and malformed input (done)
 
 The editor should open what other tools and older drafts wrote, not only current WebVTT. Every
 recovery lives in the import's legacy mode (`importDocument`; `parse` stays spec-exact), gets
@@ -394,41 +394,40 @@ with SRT import (Phase 8), so this can move next to it if that comes first.
 
 Automatic on import:
 
-- [ ] Lenient timestamps: `,` as the decimal separator (SRT habit), fewer or more than 3
-      fraction digits, one-digit minute or second fields. Today the whole cue is lost (kept only
-      as a NOTE comment).
-- [ ] `<br>` becomes a line break (today it is dropped and the words on each side run
+- [x] Lenient timestamps: `,` as the decimal separator (SRT habit), fewer or more than 3
+      fraction digits, one-digit minute or second fields (parsers drop the whole cue).
+- [x] `<br>` becomes a line break (parsers drop it, running the words on each side
       together).
-- [ ] Encoding fallback: bytes that are not valid UTF-8 are decoded as Windows-1252 with a
+- [x] Encoding fallback: bytes that are not valid UTF-8 are decoded as Windows-1252 with a
       warning, instead of turning into U+FFFD (which cannot be undone). An encoding choice on
       import for other code pages.
-- [ ] Old-draft `Region: id=… width=…` header lines (2014–15 drafts, `=` settings) become
+- [x] Old-draft `Region: id=… width=…` header lines (2014–15 drafts, `=` settings) become
       REGION blocks (vtt.js, Shaka, Firefox and WebKit still honour them).
 - [x] Old alignment names (`middle`; position `start`/`end`): done in 4c, and checked against
       the 2014 and 2015 drafts (`SPEC-NOTES.md`, "Older drafts").
-- [ ] Single-letter cue settings from 2010–11 (`D:`, `L:`, `T:`, `S:`, `A:`) become their
-      current names. They are in no W3C draft (all checked, 2014 onwards), so check their
-      meaning against WHATWG HTML of that time first.
-- [ ] Out-of-range percentages (`position:110%`) are clamped to 0–100% (reported as a guess,
+- [x] Single-letter cue settings from 2010–11 (`D:`, `L:`, `T:`, `S:`, `A:`) become their
+      current names. They are in no W3C draft (all checked, 2014 onwards), and the WHATWG text
+      of the time could not be fetched here, so the mapping follows secondary sources (`S:` is
+      the least certain); worth checking against an archived WHATWG copy.
+- [x] Out-of-range percentages (`position:110%`) are clamped to 0–100% (reported as a guess,
       since parsers drop them).
-- [ ] `<font color>`: a colour matching one of the spec's default colour classes becomes
+- [x] `<font color>`: a colour matching one of the spec's default colour classes becomes
       that class (`<c.yellow>`); any other becomes a generated class with a STYLE rule. Other
       `<font>` attributes are dropped and reported.
 
 Fixes to apply from the problems panel (they change what conforming players show):
 
-- [ ] Text after a blank line inside a caption (a text-only block right after a cue): join it
+- [x] Text after a blank line inside a caption (a text-only block right after a cue): join it
       to the cue.
-- [ ] STYLE or REGION blocks after the first cue: move them to the header.
+- [x] STYLE or REGION blocks after the first cue: move them to the header.
 
 Export option (owner decision, 2026-10-07):
 
-- [ ] Keep `X-TIMESTAMP-MAP` (HLS segment timing) under the `WEBVTT` line, where HLS needs it.
-      Today it becomes a NOTE comment, which loses its meaning. It was a valid metadata header
+- [x] Keep `X-TIMESTAMP-MAP` (HLS segment timing) under the `WEBVTT` line, where HLS needs it.
+      By default it is written as a NOTE comment, which loses its meaning. It was a valid metadata header
       in the 2014–15 drafts but is not in the current spec, so this is the one export that does
-      not conform: off by default, offered only when the file has one, and labelled. Consider
-      the same option for other header lines (`Kind:`, `Language:`) to reproduce YouTube's
-      format.
+      not conform: off by default, offered only when the file has header lines, and labelled.
+      It keeps every header line (`Kind:` and `Language:` too, as YouTube writes them).
 
 ### Phase 5: Timeline and productivity
 

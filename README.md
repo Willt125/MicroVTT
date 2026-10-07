@@ -6,7 +6,9 @@ Status: early development. The editor opens, validates, edits and exports WebVTT
 in the browser (`pnpm dev`, then open the printed URL), and times cues against a local audio or
 video file with keyboard shortcuts (press `?` in the app). YouTube auto-captions are detected
 and can be cleaned up into readable cues (de-rolled and re-segmented, keeping word timings), with
-a glossary for recurring corrections. Export can work around players that misread valid files
+a glossary for recurring corrections. Files written to older drafts or by other tools (SRT-style times, `<br>`, `<font>`, old
+settings, non-UTF-8 encodings) open as they were meant. Export can work around players that
+misread valid files
 (browsers, ffmpeg, video.js, Shaka Player) and lists what YouTube may not keep. Autosave keeps
 unsaved work in the browser. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
 [docs/SPEC-NOTES.md](docs/SPEC-NOTES.md) for the spec digest, and

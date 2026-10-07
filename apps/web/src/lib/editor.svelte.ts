@@ -4,7 +4,15 @@
  * `$state.raw` keeps Svelte from wrapping tens of thousands of cues in reactive proxies.
  */
 import type { Cue, ExportOptions, FileType, VttDocument } from '@microvtt/core';
-import { createCue, createDocument, mergeCues, splitCue, updateCue } from '@microvtt/core';
+import {
+  applyQuickFix,
+  createCue,
+  createDocument,
+  findQuickFixes,
+  mergeCues,
+  splitCue,
+  updateCue,
+} from '@microvtt/core';
 import type {
   AutoCaptionInfo,
   AutosaveMeta,
@@ -58,8 +66,16 @@ export class Editor {
   autoCaptions = $state.raw<AutoCaptionInfo | null>(null);
   /** Whether to show the offer to clean up (until used or dismissed). */
   cleanupOffered = $state(false);
+  /** The encoding the open file was read in; not "utf-8" only for files that are not UTF-8. */
+  encoding = $state('utf-8');
+  encodingGuessed = $state(false);
+  /** The open file's bytes, to read them again in another encoding. */
+  private sourceBytes: ArrayBuffer | null = null;
   /** Censored words and sound tags in the current document (found with validation). */
   review = $state.raw<ReviewMarker[]>([]);
+
+  /** Text kept as a comment that was probably meant otherwise (see core's quickfix.ts). */
+  quickFixes = $derived(findQuickFixes(this.doc));
 
   /** Body indices of cues, in order: row i of the cue table shows body[cueRows[i]]. */
   cueRows = $derived.by(() => {
@@ -193,6 +209,9 @@ export class Editor {
     this.importDiagnostics = importDiagnostics;
     this.autoCaptions = autoCaptions?.detected ? autoCaptions : null;
     this.cleanupOffered = this.autoCaptions !== null;
+    this.encoding = 'utf-8';
+    this.encodingGuessed = false;
+    this.sourceBytes = null;
     this.review = [];
     this.diagnostics = [];
     this.validating = true;
@@ -223,21 +242,49 @@ export class Editor {
     bytes: ArrayBuffer,
     name: string,
     handle: FileSystemFileHandle | null,
+    encoding?: string,
   ): Promise<void> {
     this.busy = `Opening ${name}…`;
     this.error = null;
+    // The worker takes the buffer; keep a copy to reread it in another encoding.
+    const copy = bytes.slice(0);
     try {
-      const imported = await this.worker.import(bytes);
+      const imported = await this.worker.import(bytes, encoding);
       if (!imported.ok) {
         this.error = `${name} is not a WebVTT file: it does not start with "WEBVTT".`;
         return;
       }
       this.load(imported.document, name, imported.diagnostics, imported.autoCaptions, handle);
+      this.encoding = imported.encoding;
+      this.encodingGuessed = imported.encodingGuessed;
+      this.sourceBytes = copy;
     } catch (error) {
       this.error = `Could not open ${name}: ${(error as Error).message}`;
     } finally {
       this.busy = null;
     }
+  }
+
+  /** Applies the fix offered for `body[index]`, as one undo step. */
+  applyQuickFix(index: number): void {
+    const fix = this.quickFixes.find((f) => f.index === index);
+    if (!fix) return;
+    this.apply(applyQuickFix(this.doc, index), fix.label);
+  }
+
+  /** Applies every offered fix, as one undo step. */
+  applyAllQuickFixes(): void {
+    const fixes = this.quickFixes;
+    if (fixes.length === 0) return;
+    // Last first, so earlier indices stay valid.
+    const next = [...fixes].reverse().reduce((doc, f) => applyQuickFix(doc, f.index), this.doc);
+    this.apply(next, `Apply ${fixes.length} ${fixes.length === 1 ? 'fix' : 'fixes'}`);
+  }
+
+  /** Rereads the open file in another encoding. Only before it is edited (it starts afresh). */
+  async reopenWithEncoding(encoding: string): Promise<void> {
+    if (!this.sourceBytes || this.dirty) return;
+    await this.openBytes(this.sourceBytes.slice(0), this.fileName, this.fileHandle, encoding);
   }
 
   /** Repairs, serializes and re-validates; does not save anything by itself. */

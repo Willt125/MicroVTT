@@ -70,6 +70,34 @@ export function parseTimestamp(input: string, position = 0): TimestampParseResul
   return { ok: true, ms: ((value1 * 60 + value2) * 60 + value3) * 1000 + value4, end: pos };
 }
 
+const LEGACY_TIMESTAMP = /^([0-9]+):([0-9]{1,2})(?::([0-9]{1,2}))?(?:[.,]([0-9]+))?/;
+
+/**
+ * Reads a timestamp in the forms other tools write and parsers reject: a comma as the decimal
+ * separator (SRT), one-digit minute or second fields, and any number of fraction digits
+ * (rounded to the millisecond), or none. Two fields are minutes and seconds; three are hours,
+ * minutes and seconds. Minutes and seconds must still be below 60. For import only: the
+ * parser uses it, when asked, after `parseTimestamp` has failed.
+ */
+export function parseLegacyTimestamp(input: string, position = 0): TimestampParseResult {
+  const m = LEGACY_TIMESTAMP.exec(input.slice(position));
+  if (!m) return { ok: false, end: position };
+  const end = position + m[0].length;
+  // Not followed by more of a timestamp (e.g. a fourth field), which would be a misreading.
+  if (/^[0-9:.,]/.test(input.slice(end))) return { ok: false, end };
+  const [h, mm, ss] = m[3] === undefined ? ['0', m[1], m[2]] : [m[1], m[2], m[3]];
+  const hours = Number(h);
+  const minutes = Number(mm);
+  const seconds = Number(ss);
+  if (minutes > 59 || seconds > 59) return { ok: false, end };
+  const fraction = m[4] ?? '';
+  const ms =
+    fraction.length <= 3
+      ? Number(fraction.padEnd(3, '0'))
+      : Number(fraction.slice(0, 3)) + (Number(fraction.charAt(3)) >= 5 ? 1 : 0);
+  return { ok: true, ms: ((hours * 60 + minutes) * 60 + seconds) * 1000 + ms, end };
+}
+
 /**
  * Serializes milliseconds as a conforming WebVTT timestamp. Hours are always emitted
  * (as at least two digits) unless `omitZeroHours` is set and the hours are zero.

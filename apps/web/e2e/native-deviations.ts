@@ -37,7 +37,8 @@ export const DEVIATIONS: Deviation[] = [
   {
     browsers: ['chromium'],
     trigger: /\b(?:line|position):[^\s,]*,/,
-    difference: /^cue \d+ (?:line|position): "auto", expected /,
+    // A percentage line also leaves snapToLines at its default (true).
+    difference: /^cue \d+ (?:(?:line|position): "auto"|snapToLines: true), expected /,
     reason:
       'ignores a line or position setting that has an alignment suffix (no lineAlign/positionAlign)',
     example: `WEBVTT\n\n${CUE} line:0,end\nx\n`,

@@ -16,7 +16,10 @@ interface Case {
   fileType?: FileType;
 }
 
-const CASES: Record<Exclude<DiagnosticCode, 'cue-id-invalid' | 'region-id-invalid'>, Case> = {
+const CASES: Record<
+  Exclude<DiagnosticCode, 'cue-id-invalid' | 'region-id-invalid' | 'file-encoding'>,
+  Case
+> = {
   'signature-invalid': { bad: 'WEBVTT-\n', good: H },
   'signature-line-terminators': { bad: `WEBVTT\n${CUE}x\n`, good: `${H}${CUE}x\n` },
   'header-text': { bad: 'WEBVTT\nKind: captions\n\n', good: `${H}NOTE Kind: captions\n` },
@@ -24,6 +27,10 @@ const CASES: Record<Exclude<DiagnosticCode, 'cue-id-invalid' | 'region-id-invali
   'block-missing-blank-line': {
     bad: `${H}${CUE}a\n00:02.000 --> 00:03.000\nb\n`,
     good: `${H}${CUE}a\n\n00:02.000 --> 00:03.000\nb\n`,
+  },
+  'region-header-legacy': {
+    bad: 'WEBVTT\nRegion: id=r width=40% lines=2\n\n00:00.000 --> 00:01.000 region:r\nx\n',
+    good: `${H}REGION\nid:r width:40% lines:2\n\n00:00.000 --> 00:01.000 region:r\nx\n`,
   },
   'block-discarded': { bad: `${H}hello\n`, good: `${H}NOTE hello\n` },
   'style-after-cue': {
@@ -45,6 +52,10 @@ const CASES: Record<Exclude<DiagnosticCode, 'cue-id-invalid' | 'region-id-invali
     bad: `${H}0:00:00.000 --> 00:01.000\nx\n`,
     good: `${H}00:00:00.000 --> 00:01.000\nx\n`,
   },
+  'timestamp-legacy': {
+    bad: `${H}00:00:01,000 --> 0:02.5\nx\n`,
+    good: `${H}00:00:01.000 --> 00:02.500\nx\n`,
+  },
   'timing-whitespace': {
     bad: `${H}00:00.000-->00:01.000\nx\n`,
     good: `${H}00:00.000\t-->  00:01.000\nx\n`,
@@ -56,6 +67,14 @@ const CASES: Record<Exclude<DiagnosticCode, 'cue-id-invalid' | 'region-id-invali
   'cue-setting-legacy': {
     bad: `${H}00:00.000 --> 00:01.000 position:10%,middle align:middle\nx\n`,
     good: `${H}00:00.000 --> 00:01.000 position:10%,center align:center\nx\n`,
+  },
+  'cue-setting-out-of-range': {
+    bad: `${H}00:00.000 --> 00:01.000 position:110% size:150%\nx\n`,
+    good: `${H}00:00.000 --> 00:01.000 position:100% size:100%\nx\n`,
+  },
+  'cue-text-legacy-tag': {
+    bad: `${H}00:00.000 --> 00:01.000\n<font color="yellow">one</font><br>two\n`,
+    good: `${H}00:00.000 --> 00:01.000\n<c.yellow>one</c>\ntwo\n`,
   },
   'cue-id-keyword': { bad: `${H}NOTES\n${CUE}x\n`, good: `${H}notes\n${CUE}x\n` },
   'cue-end-not-after-start': {
@@ -181,7 +200,12 @@ describe('every diagnostic code', () => {
   }
 
   it('covers every code except the model-only ones', () => {
-    const covered = new Set([...Object.keys(CASES), 'cue-id-invalid', 'region-id-invalid']);
+    const covered = new Set([
+      ...Object.keys(CASES),
+      'cue-id-invalid',
+      'region-id-invalid',
+      'file-encoding', // About bytes, reported on import (see legacy.test.ts).
+    ]);
     expect(Object.keys(DIAGNOSTICS).filter((c) => !covered.has(c))).toEqual([]);
   });
 
