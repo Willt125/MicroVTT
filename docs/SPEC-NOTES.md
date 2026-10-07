@@ -227,6 +227,20 @@ timings) and ignore the repeated line and the hand-off cues. About 1–6% of gro
 word timings (sound tags, short lines). Those lines get their timing from the cue itself. For
 translated tracks, the word timings are only an estimate and must not be presented as accurate.
 
+**Found while building the cleanup** (all ten samples):
+
+- **Screen clears.** After an untimed line, YouTube sometimes clears the screen: the hand-off
+  cue is blank (`" \n "`) and the next growing cue's first line is blank. That line is then
+  shown by no other cue, so the growing cues are the only complete source of the text.
+- **Hand-off cues are copies.** Every hand-off cue's line appears, in order, among the growing
+  cues' new lines (9,000+ lines checked). One growing cue's repeated first line differs from the
+  line it repeats (`"the Navy? With"` re-shown as `"the Navy with"`): YouTube re-punctuates
+  occasionally. The timed new line is the one used.
+- **Untimed lines** are single words in every sample (`"end?"`, `"[music]"`): the first word of a
+  line never has a timestamp, so a one-word line has none.
+- **Machine translations** sometimes put a space before final punctuation (`"En tiedä ."`).
+  Cleanup never starts a cue or a line with such punctuation.
+
 ## Browser support relevant to us (MDN BCD 8.1.4)
 
 | Feature                                                  | Chrome   | Firefox  | Safari   | Consequence                                                                                                            |

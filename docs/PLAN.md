@@ -313,6 +313,41 @@ Split into three PRs, each usable on its own.
 - **Accept:** cleanup of each real sample fixture yields a conforming file with no lost words, and
   every cue's timing stays within its source words' timing.
 
+Split into three PRs:
+
+**4a: cleanup engine in core (done)** (`packages/core/src/autocaption.ts`)
+
+- [x] Detection by structure: consecutive cues repeating a line (roll-up), plus evenly spaced word
+      timestamps for machine translations (approximate timings). Language from the preserved
+      `Language:` header line.
+- [x] De-roll: the new line of each growing cue, as word groups with their timestamps (a group
+      lasts until the next one); hand-off cues skipped. Out-of-order or out-of-range timestamps
+      (the 2 known in 38k words) join the word before.
+- [x] Segmentation chosen as a whole (dynamic programming over break points) rather than greedily:
+      hard limits are line length (42), lines per cue (2), maximum duration (7 s), and breaks at
+      every speaker change (`>>`) and after silences over 1.5 s; costs favour ending cues at
+      sentence ends, then clause punctuation, and penalize cues under 1 s, faster than 20
+      characters per second, or starting with punctuation alone. Lines are balanced, preferring
+      punctuation. Translated tracks break only between YouTube's lines by default (their word
+      times are guesses); breaking between words is an option.
+- [x] Output: word timings kept as timestamp tags (default for speech recognition, off for
+      translations), cue settings reset to defaults (YouTube's `align:start position:0%` kept
+      on request), notes kept in place, head unchanged. Optional whitespace cleanup: collapse
+      repeated spaces, remove doubled U+200B.
+- [x] Review markers: censored-word markers and sound tags, found anywhere in a document.
+- [x] **Accepted** on all 10 real samples (a test that runs where they are present): conforming,
+      no word lost or reordered, cues in order without overlaps, each cue starting and ending on
+      its own words' times, timestamps inside their cue. 12,263 cues (4h18m) become 3,686 in
+      about 0.9 s.
+
+**4b: cleanup in the editor**: offer cleanup when a file is detected, options with a preview,
+apply as one undo step, a review list (censored words, sound tags), and a saved glossary for
+find/replace.
+
+**4c: export for YouTube and other players**: the warnings-only "YouTube upload" check, a test
+file to upload, and ffmpeg (libavformat) and JS player parsers (vtt.js, hls.js) added to the
+parser comparison; their findings decide what a compatibility export option should do.
+
 ### Phase 5: Timeline and productivity
 
 - Canvas timeline with a streamed waveform (WebCodecs, cached peaks), drag to retime, snapping
@@ -411,6 +446,16 @@ Split into three PRs, each usable on its own.
   in the output (for example dropping whitespace-only lines, or writing preserved header text
   after the REGION blocks) is left for a possible "compatibility" export option; the
   whitespace-only lines also go away in Phase 4's auto-caption cleanup.
+
+- **2026-10-07 (Phase 4a):** Cleanup acceptance is measured against the de-rolled lines, which
+  are in turn checked against YouTube's own repetitions: every line YouTube re-shows in a hand-off
+  cue appears in order among them. Neither repetition alone is a complete transcript (YouTube
+  writes no hand-off after an untimed line followed by a screen clear), so no oracle simpler than
+  the growing cues exists.
+- **2026-10-07 (Phase 4a):** Cue times come only from word times: a cue starts at its first word
+  group's start and ends at its last group's end (a group lasts until the next word, so YouTube's
+  continuous roll-up timing carries over). Cues are never stretched into silence, so the
+  acceptance criterion holds literally; holding short cues longer is left to the user.
 
 ## Open questions for the owner
 
