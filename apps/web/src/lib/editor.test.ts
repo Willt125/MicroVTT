@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { VttDocument } from '@microvtt/core';
+import { readFileSync } from 'node:fs';
 import {
+  cleanupAutoCaptions,
   createCue,
   createDocument,
+  detectAutoCaptions,
   exportDocument,
+  findReviewMarkers,
   importDocument,
   validate,
 } from '@microvtt/core';
@@ -27,13 +31,23 @@ function fakeWorker(store: { save: Autosave | null } = { save: null }): VttWorke
     },
     import: async (bytes: ArrayBuffer) => {
       const imported = importDocument(new TextDecoder().decode(bytes));
-      return { ok: imported.ok, document: imported.document, diagnostics: [] };
+      return {
+        ok: imported.ok,
+        document: imported.document,
+        diagnostics: [],
+        autoCaptions: detectAutoCaptions(imported.document),
+      };
     },
     validate: async (doc: VttDocument) => {
       validated = doc;
       const { text, spans } = serializeWithSpans(doc);
-      return locateInSerialized(validate(text).diagnostics, spans);
+      return {
+        diagnostics: locateInSerialized(validate(text).diagnostics, spans),
+        review: findReviewMarkers(doc),
+      };
     },
+    detect: async (doc: VttDocument) => detectAutoCaptions(doc),
+    cleanup: async (doc: VttDocument, options: object) => cleanupAutoCaptions(doc, options),
     export: async (doc: VttDocument) => ({ ...exportDocument(doc), diagnostics: [] }),
   } as unknown as VttWorker;
 }
@@ -161,6 +175,33 @@ describe('Editor', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(store.save).toBeNull();
     vi.useRealTimers();
+  });
+
+  it('offers cleanup for auto-captions and applies it as one undo step', async () => {
+    const sample = readFileSync(
+      new URL('../../../../packages/core/test/fixtures/autocaption-sample.vtt', import.meta.url),
+      'utf8',
+    );
+    const editor = new Editor(fakeWorker());
+    await editor.open(file(sample, 'auto.vtt'));
+    expect(editor.cleanupOffered).toBe(true);
+    expect(editor.autoCaptions?.language).toBe('en');
+    const before = editor.cueRows.length;
+    const result = await editor.previewCleanup({ keepWordTimings: false });
+    expect(editor.cueRows).toHaveLength(before); // A preview changes nothing.
+    editor.applyCleanup(result);
+    expect(editor.cueRows.length).toBeLessThan(before);
+    expect(editor.selectedCue?.text).toMatch(/^Welcome back to the workshop\./);
+    expect(editor.cleanupOffered).toBe(false);
+    editor.undo();
+    expect(editor.cueRows).toHaveLength(before);
+  });
+
+  it('does not offer cleanup for ordinary files, and finds review markers', async () => {
+    const editor = new Editor(fakeWorker());
+    await editor.open(file('WEBVTT\n\n00:00.000 --> 00:01.000\nwhat the [&nbsp;__&nbsp;]\n'));
+    expect(editor.cleanupOffered).toBe(false);
+    await vi.waitFor(() => expect(editor.review.map((m) => m.kind)).toEqual(['censored']));
   });
 
   it('validates in the background and attaches problems to cues', async () => {

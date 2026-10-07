@@ -5,7 +5,15 @@
  */
 import type { Cue, ExportOptions, FileType, VttDocument } from '@microvtt/core';
 import { createCue, createDocument, mergeCues, splitCue, updateCue } from '@microvtt/core';
-import type { AutosaveMeta, ExportedFile, ItemDiagnostic } from './worker/protocol.ts';
+import type {
+  AutoCaptionInfo,
+  AutosaveMeta,
+  CleanupOptions,
+  CleanupResult,
+  ExportedFile,
+  ItemDiagnostic,
+  ReviewMarker,
+} from './worker/protocol.ts';
 import { sliceDocument } from './media.ts';
 import type { VttWorker } from './worker/client.ts';
 
@@ -46,6 +54,12 @@ export class Editor {
   autosaveStatus = $state<'idle' | 'saved' | 'unsupported' | 'failed'>('idle');
   /** Unsaved work from an earlier session, offered for restore on the start screen. */
   restorable = $state.raw<AutosaveMeta | null>(null);
+  /** Set when the open file looks like YouTube auto-captions (cleared by cleanup or "New"). */
+  autoCaptions = $state.raw<AutoCaptionInfo | null>(null);
+  /** Whether to show the offer to clean up (until used or dismissed). */
+  cleanupOffered = $state(false);
+  /** Censored words and sound tags in the current document (found with validation). */
+  review = $state.raw<ReviewMarker[]>([]);
 
   /** Body indices of cues, in order: row i of the cue table shows body[cueRows[i]]. */
   cueRows = $derived.by(() => {
@@ -163,19 +177,23 @@ export class Editor {
 
   /** Starts a new, empty document. */
   newDocument(): void {
-    this.load(createDocument(), 'untitled.vtt', []);
+    this.load(createDocument(), 'untitled.vtt', [], null);
   }
 
   private load(
     doc: VttDocument,
     name: string,
     importDiagnostics: ItemDiagnostic[],
+    autoCaptions: AutoCaptionInfo | null,
     handle: FileSystemFileHandle | null = null,
   ): void {
     this.doc = doc;
     this.fileName = name;
     this.fileHandle = handle;
     this.importDiagnostics = importDiagnostics;
+    this.autoCaptions = autoCaptions?.detected ? autoCaptions : null;
+    this.cleanupOffered = this.autoCaptions !== null;
+    this.review = [];
     this.diagnostics = [];
     this.validating = true;
     this.selected = doc.body.findIndex((item) => item.type === 'cue');
@@ -214,7 +232,7 @@ export class Editor {
         this.error = `${name} is not a WebVTT file: it does not start with "WEBVTT".`;
         return;
       }
-      this.load(imported.document, name, imported.diagnostics, handle);
+      this.load(imported.document, name, imported.diagnostics, imported.autoCaptions, handle);
     } catch (error) {
       this.error = `Could not open ${name}: ${(error as Error).message}`;
     } finally {
@@ -325,6 +343,26 @@ export class Editor {
     return this.selectedCue !== null && this.nextCueIndex() !== -1;
   }
 
+  /** Checks the current document for auto-caption structure (e.g. before offering cleanup). */
+  async detectAutoCaptions(): Promise<AutoCaptionInfo> {
+    const info = await this.worker.detect(this.doc);
+    this.autoCaptions = info.detected ? info : null;
+    return info;
+  }
+
+  /** Runs cleanup without applying it (for the preview). */
+  previewCleanup(options: Partial<CleanupOptions>): Promise<CleanupResult> {
+    return this.worker.cleanup(this.doc, options);
+  }
+
+  /** Replaces the document with a cleanup result, as one undo step. */
+  applyCleanup(result: CleanupResult): void {
+    const first = result.document.body.findIndex((item) => item.type === 'cue');
+    this.apply(result.document, 'Clean up auto-captions', { select: first });
+    this.autoCaptions = null;
+    this.cleanupOffered = false;
+  }
+
   /** Looks for unsaved work from an earlier session. */
   async checkAutosave(): Promise<void> {
     try {
@@ -342,7 +380,7 @@ export class Editor {
       this.error = 'The unsaved work could not be read.';
       return;
     }
-    this.load(save.document, save.meta.fileName, []);
+    this.load(save.document, save.meta.fileName, [], null);
     this.fileType = save.meta.fileType;
     this.dirty = true;
     this.autosaved = true; // It is this session's work now.
@@ -413,9 +451,12 @@ export class Editor {
     const doc = this.doc;
     this.workerDoc = doc;
     try {
-      const diagnostics = await this.worker.validate(doc, this.fileType);
+      const checked = await this.worker.validate(doc, this.fileType);
       // Ignore results for documents that have since changed.
-      if (version === this.validateVersion) this.diagnostics = diagnostics;
+      if (version === this.validateVersion) {
+        this.diagnostics = checked.diagnostics;
+        this.review = checked.review;
+      }
     } catch (error) {
       if (version === this.validateVersion)
         this.error = `Validation failed: ${(error as Error).message}`;

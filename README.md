@@ -4,8 +4,9 @@ An offline, fully-featured, in-browser WebVTT editor.
 
 Status: early development. The editor opens, validates, edits and exports WebVTT files entirely
 in the browser (`pnpm dev`, then open the printed URL), and times cues against a local audio or
-video file with keyboard shortcuts (press `?` in the app). Autosave keeps unsaved work in the
-browser. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
+video file with keyboard shortcuts (press `?` in the app). YouTube auto-captions are detected
+and can be cleaned up into readable cues (de-rolled and re-segmented, keeping word timings), with
+a glossary for recurring corrections. Autosave keeps unsaved work in the browser. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
 [docs/SPEC-NOTES.md](docs/SPEC-NOTES.md) for the spec digest, and
 [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md) for every conformance check and its export fix.
 

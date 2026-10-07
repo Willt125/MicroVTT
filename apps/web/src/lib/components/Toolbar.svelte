@@ -11,6 +11,8 @@
     onexport: () => void;
     onsplit: () => void;
     onfind: () => void;
+    oncleanup: () => void;
+    onglossary: () => void;
     onhelp: () => void;
   }
 
@@ -23,6 +25,8 @@
     onexport,
     onsplit,
     onfind,
+    oncleanup,
+    onglossary,
     onhelp,
   }: Props = $props();
 
@@ -84,6 +88,18 @@
     >
     <button onclick={onfind} disabled={!editor.hasDocument} title="Find and replace ({mod}F)"
       >Find</button
+    >
+  </div>
+  <div class="group" aria-label="Auto-captions">
+    <button
+      onclick={oncleanup}
+      disabled={!editor.hasDocument}
+      title="De-roll YouTube auto-captions and re-segment them into readable cues">Clean up…</button
+    >
+    <button
+      onclick={onglossary}
+      disabled={!editor.hasDocument}
+      title="Corrections applied to the whole file (saved in this browser)">Glossary…</button
     >
   </div>
   <p class="status" aria-live="polite">

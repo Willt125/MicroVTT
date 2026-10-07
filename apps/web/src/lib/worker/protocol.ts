@@ -1,6 +1,10 @@
 /** Messages between the editor and the WebVTT worker. */
 import type {
+  AutoCaptionInfo,
+  CleanupOptions,
+  CleanupResult,
   DiagnosticCode,
+  ReviewMarker,
   ExportOptions,
   FileType,
   RepairEntry,
@@ -24,7 +28,18 @@ export interface ImportedFile {
   document: VttDocument;
   /** Problems in the file as it was imported. */
   diagnostics: ItemDiagnostic[];
+  /** Whether it looks like YouTube auto-captions. */
+  autoCaptions: AutoCaptionInfo;
 }
+
+/** Background checks of the current document. */
+export interface Checked {
+  diagnostics: ItemDiagnostic[];
+  /** Censored words and sound tags to look at. */
+  review: ReviewMarker[];
+}
+
+export type { AutoCaptionInfo, CleanupOptions, CleanupResult, ReviewMarker };
 
 export interface ExportedFile {
   text: string;
@@ -58,6 +73,13 @@ export type WorkerRequest =
   | { id: number; type: 'validate'; document: VttDocument; fileType: FileType }
   | { id: number; type: 'export'; document: VttDocument; options: ExportOptions }
   | { id: number; type: 'preview'; document: VttDocument }
+  | { id: number; type: 'detect'; document: VttDocument }
+  | {
+      id: number;
+      type: 'cleanup';
+      document: VttDocument;
+      options: Partial<CleanupOptions>;
+    }
   | { id: number; type: 'autosave'; save: AutosaveRequest }
   | { id: number; type: 'load-autosave' }
   | { id: number; type: 'clear-autosave' };

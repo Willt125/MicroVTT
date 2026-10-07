@@ -327,8 +327,10 @@ Split into three PRs:
       hard limits are line length (42), lines per cue (2), maximum duration (7 s), and breaks at
       every speaker change (`>>`) and after silences over 1.5 s; costs favour ending cues at
       sentence ends, then clause punctuation, and penalize cues under 1 s, faster than 20
-      characters per second, or starting with punctuation alone. Lines are balanced, preferring
-      punctuation. Translated tracks break only between YouTube's lines by default (their word
+      characters per second, or starting with punctuation alone. A whole sound-tag line
+      (`[Music]`) gets a cue of its own. The last word before a pause is held for at most 2 s
+      (a word otherwise lasts until the next one, so music or silence stretched cues to 14 s).
+      Lines are balanced, preferring punctuation. Translated tracks break only between YouTube's lines by default (their word
       times are guesses); breaking between words is an option.
 - [x] Output: word timings kept as timestamp tags (default for speech recognition, off for
       translations), cue settings reset to defaults (YouTube's `align:start position:0%` kept
@@ -337,12 +339,22 @@ Split into three PRs:
 - [x] Review markers: censored-word markers and sound tags, found anywhere in a document.
 - [x] **Accepted** on all 10 real samples (a test that runs where they are present): conforming,
       no word lost or reordered, cues in order without overlaps, each cue starting and ending on
-      its own words' times, timestamps inside their cue. 12,263 cues (4h18m) become 3,686 in
-      about 0.9 s.
+      its own words' times, timestamps inside their cue. 12,263 cues (4h18m) become about 3,700
+      in about 0.9 s.
 
-**4b: cleanup in the editor**: offer cleanup when a file is detected, options with a preview,
-apply as one undo step, a review list (censored words, sound tags), and a saved glossary for
-find/replace.
+**4b: cleanup in the editor (done)**
+
+- [x] Detection runs on import (in the worker); a detected file gets a banner offering cleanup.
+      "Clean up…" in the toolbar works on any file (it says when there is nothing to de-roll).
+- [x] Cleanup dialog: every segmentation and output option, with a live preview (cue count and
+      the first cues) computed in the worker; Apply is one undo step.
+- [x] "To review" in the side panel: censored-word markers and sound tags, found with each
+      background validation, each linked to its cue.
+- [x] Glossary: find → replace corrections applied to the whole file at once (one undo step),
+      saved in this browser, editable as `find => replace` text. Matching is whole-word and
+      case-insensitive by default, and spaces match across word-timing tags, so corrections
+      still apply after cleanup keeps word timings. The find bar has the same option
+      ("Across timings", on by default).
 
 **4c: export for YouTube and other players**: the warnings-only "YouTube upload" check, a test
 file to upload, and ffmpeg (libavformat) and JS player parsers (vtt.js, hls.js) added to the

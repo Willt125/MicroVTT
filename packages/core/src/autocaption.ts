@@ -207,6 +207,12 @@ export interface SegmentOptions {
   /** Start a new cue after a silence this long (default 1500). */
   maxGapMs: number;
   /**
+   * How long the last word before a pause stays on screen (default 2000). A word lasts until the
+   * next one starts, so without this, a pause (or music) would stretch its cue; sound tags such
+   * as `[music]` keep their full duration.
+   */
+  maxWordHoldMs: number;
+  /**
    * 'word' lets cues break between any timed words; 'line' only between YouTube's lines (for
    * approximate timings, where word times are guesses). Default: 'line' when approximate.
    */
@@ -228,12 +234,19 @@ export const DEFAULT_SEGMENT_OPTIONS: SegmentOptions = {
   maxCharsPerSecond: 20,
   breakOnSpeakerChange: true,
   maxGapMs: 1500,
+  maxWordHoldMs: 2000,
   unit: 'word',
   collapseSpaces: false,
   removeDoubledZeroWidthSpaces: false,
 };
 
 type GapOptions = Pick<SegmentOptions, 'collapseSpaces' | 'removeDoubledZeroWidthSpaces'>;
+
+/** A sound tag such as `[Music]` (not the censored-word marker `[ __ ]`). */
+const isSoundTag = (raw: string): boolean => {
+  const text = raw.replace(/<[^>]*>/g, '');
+  return /^\[[^\]]*\]$/.test(text) && !text.includes('__');
+};
 
 /** The separator written before a word (one space where the source had none). */
 export function gapText(gap: string, o: GapOptions): string {
@@ -264,6 +277,8 @@ interface Unit {
   speakerChange: boolean;
   /** Starts with punctuation alone (" ." in some translations): never break before it. */
   attached: boolean;
+  /** Only a sound tag (a whole "[Music]" line): it gets a cue of its own. */
+  soundOnly: boolean;
   /** Visible text of the last word. */
   lastWord: string;
 }
@@ -280,13 +295,22 @@ export function visibleLength(raw: string): number {
 
 const wordsOf = (groups: WordGroup[]): CaptionWord[] => groups.flatMap((g) => g.words);
 
-function toUnits(lines: CaptionLine[], unit: 'word' | 'line', o: GapOptions): Unit[] {
-  const make = (groups: WordGroup[], source: number): Unit => {
+function toUnits(
+  lines: CaptionLine[],
+  unit: 'word' | 'line',
+  o: GapOptions & Pick<SegmentOptions, 'maxWordHoldMs'>,
+): Unit[] {
+  // `soundLine`: the caption line is nothing but sound tags (a whole "[Music]" line).
+  const make = (groups: WordGroup[], source: number, soundLine: boolean): Unit => {
     const words = wordsOf(groups);
     const last = words.at(-1) as CaptionWord;
+    const lastGroup = groups.at(-1) as WordGroup;
+    const sound = soundLine;
     return {
       startMs: (groups[0] as WordGroup).startMs,
-      endMs: (groups.at(-1) as WordGroup).endMs,
+      endMs: sound
+        ? lastGroup.endMs
+        : Math.min(lastGroup.endMs, lastGroup.startMs + o.maxWordHoldMs),
       groups,
       source,
       chars: words.reduce(
@@ -296,14 +320,16 @@ function toUnits(lines: CaptionLine[], unit: 'word' | 'line', o: GapOptions): Un
       gapBefore: visibleLength(gapText((words[0] as CaptionWord).gap, o)),
       speakerChange: (words[0] as CaptionWord).text.startsWith('&gt;&gt;'),
       attached: isPunctuation((words[0] as CaptionWord).text),
+      soundOnly: soundLine,
       lastWord: last.text.replace(/<[^>]*>/g, ''),
     };
   };
-  return lines.flatMap((line) =>
-    unit === 'line'
-      ? [make(line.groups, line.source)]
-      : line.groups.map((g) => make([g], line.source)),
-  );
+  return lines.flatMap((line) => {
+    const soundLine = wordsOf(line.groups).every((w) => isSoundTag(w.text));
+    return unit === 'line'
+      ? [make(line.groups, line.source, soundLine)]
+      : line.groups.map((g) => make([g], line.source, soundLine));
+  });
 }
 
 // Segmentation measures the same words many times; cache their lengths.
@@ -385,9 +411,12 @@ export function segment(lines: CaptionLine[], options: Partial<SegmentOptions> =
   const forcedBefore = (k: number): boolean => {
     if (k <= 0 || k >= n) return false;
     const u = units[k] as Unit;
+    const prev = units[k - 1] as Unit;
     return (
+      u.soundOnly ||
+      prev.soundOnly ||
       (o.breakOnSpeakerChange && u.speakerChange) ||
-      u.startMs - (units[k - 1] as Unit).endMs > o.maxGapMs
+      u.startMs - prev.endMs > o.maxGapMs
     );
   };
   const breakCost = (j: number): number => {

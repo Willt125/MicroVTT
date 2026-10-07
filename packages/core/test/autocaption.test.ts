@@ -34,7 +34,7 @@ const words = (raw: string): string[] =>
 
 /**
  * The Phase 4 acceptance checks: the result conforms, no word is lost or reordered, cues are in
- * order without overlaps, every cue starts and ends on its own words' times, word timestamps lie
+ * order without overlaps, every cue's times lie within its own words' times, word timestamps lie
  * inside their cue in increasing order, and lines respect the length limit (a single word that
  * is longer, or punctuation that must stay with its word, may exceed it).
  */
@@ -49,12 +49,15 @@ function checkCleanup(doc: VttDocument): void {
   const source = lines.flatMap((l) => l.groups.flatMap((g) => g.words.map((w) => w.text)));
   expect(cues.flatMap((c) => words(c.text))).toEqual(source);
 
-  const starts = new Set(lines.flatMap((l) => l.groups.map((g) => g.startMs)));
-  const ends = new Set(lines.flatMap((l) => l.groups.map((g) => g.endMs)));
+  // A cue starts on a word group's start and ends inside its last group (at its end, or
+  // earlier when a word before a pause is held for at most maxWordHoldMs).
+  const groups = lines.flatMap((l) => l.groups);
+  const byStart = new Map(groups.map((g) => [g.startMs, g]));
   cues.forEach((cue, i) => {
     if (i > 0) expect(cue.startMs).toBeGreaterThanOrEqual((cues[i - 1] as Cue).endMs);
-    expect(starts.has(cue.startMs)).toBe(true);
-    expect(ends.has(cue.endMs)).toBe(true);
+    expect(byStart.has(cue.startMs)).toBe(true);
+    const final = groups.filter((g) => g.startMs < cue.endMs).at(-1) as (typeof groups)[number];
+    expect(cue.endMs).toBeLessThanOrEqual(final.endMs);
     let last = cue.startMs;
     for (const m of cue.text.matchAll(/<([0-9:.]+)>/g)) {
       const ts = parseTimestamp(m[1] as string);
@@ -188,6 +191,28 @@ describe('segmentation', () => {
       400,
     );
     for (const t of text(segment([line], { maxDurationMs: 4000 }))) expect(t).not.toMatch(/^\./);
+  });
+
+  it('gives a whole sound-tag line its own cue, but not a tag inside speech', () => {
+    const speech = lineOf(['Later', '[music]', 'on.'], 0, 400);
+    const music = lineOf(['[Music]'], 1200, 3000);
+    const more = lineOf(['And', 'then', 'the', 'next', '[&nbsp;__&nbsp;]', 'thing.'], 4200, 300);
+    expect(text(segment([speech, music, more]))).toEqual([
+      'Later [music] on.',
+      '[Music]',
+      'And then the next [&nbsp;__&nbsp;] thing.',
+    ]);
+  });
+
+  it('holds the last word before a pause for at most maxWordHoldMs', () => {
+    const line = lineOf(['Give', 'me', 'that.'], 0, 300);
+    line.groups[2]!.endMs = 14_000; // Music follows: YouTube's line runs on.
+    line.endMs = 14_000;
+    const [cue] = segment([line]);
+    expect(cue).toMatchObject({ startMs: 0, endMs: 600 + 2000 });
+    expect(text(segment([line]))).toEqual(['Give me that.']);
+    const [held] = segment([line], { maxWordHoldMs: 20_000, maxDurationMs: 20_000 });
+    expect(held?.endMs).toBe(14_000);
   });
 
   it('wraps two balanced lines, preferring punctuation', () => {

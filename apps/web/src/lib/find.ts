@@ -1,6 +1,8 @@
 /**
  * Find and replace over cue text. Searches the raw text (markup included), so what is found is
- * exactly what gets replaced; a phrase split by word-timing tags is not matched as one.
+ * exactly what gets replaced. With `acrossTimings`, a space in a plain-text query also matches
+ * the word-timing tags around it, so "chat gpt" finds "chat <00:00:01.000>gpt"; replacing such a
+ * match drops the timing tags inside it.
  */
 import type { Cue, VttDocument } from '@microvtt/core';
 
@@ -10,7 +12,12 @@ export interface FindOptions {
   wholeWord: boolean;
   /** Treat `query` as a JavaScript regular expression; replacements may use $1, $<name>. */
   regex: boolean;
+  /** Let spaces in a plain query match across word-timing and class tags. */
+  acrossTimings?: boolean;
 }
+
+/** Whitespace between words, with any tags (timestamps, `<c>` spans) on either side. */
+const ACROSS_TAGS = String.raw`(?:<[^>\n]*>)*[ \t\n]+(?:<[^>\n]*>)*`;
 
 export interface Match {
   bodyIndex: number;
@@ -23,7 +30,16 @@ const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&')
 /** Builds the search pattern, or returns an error message for an invalid expression. */
 export function buildPattern(options: FindOptions): RegExp | string | null {
   if (options.query === '') return null;
-  let source = options.regex ? options.query : escape(options.query);
+  let source = options.regex
+    ? options.query
+    : options.acrossTimings
+      ? options.query
+          .trim()
+          .split(/[ \t\n]+/)
+          .map(escape)
+          .join(ACROSS_TAGS)
+      : escape(options.query);
+  if (source === '') return null;
   // \b only knows ASCII; words in other scripts need Unicode classes.
   if (options.wholeWord) source = `(?<![\\p{L}\\p{N}_])(?:${source})(?![\\p{L}\\p{N}_])`;
   try {
