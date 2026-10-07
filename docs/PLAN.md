@@ -288,10 +288,23 @@ Split into three PRs, each usable on its own.
   tasks when media loads, typing stays in step, autosave lands within about 2 s of the last
   keystroke, restore takes about 0.7 s, and find over all cues takes 50–100 ms.
 
-**3c: cross-browser tests**
+**3c: cross-browser tests (done)**
 
-- Playwright e2e on Chromium, Firefox and WebKit, in CI.
-- Mirror the model into native `VTTCue`/`VTTRegion` objects and compare (deferred from Phase 2).
+- [x] Playwright e2e (`pnpm e2e`, `apps/web/e2e/`) against the production build: opening,
+      editing with live validation and undo, keyboard navigation, split/merge, nudging, export
+      and download, find/replace, paste, the shortcuts dialog, autosave and restore across a
+      reload, and media (caption preview, seek on select, follow, loop, timing at the playhead)
+      with a WAV generated in the test.
+- [x] Native parser comparison (`native.e2e.ts`): the WPT file-parsing inputs, our fixtures and
+      150 seeded fuzz documents (as generated and after export) are loaded into real `<track>`
+      elements and every `VTTCue`/`VTTRegion` attribute the browser implements is compared with
+      ours. A difference on a WPT input counts as the browser's when the browser fails that WPT
+      test; any other difference must match a documented deviation (see `SPEC-NOTES.md`).
+- [x] CI: one job per browser (Chromium, Firefox, WebKit), uploading traces on failure.
+- [x] Green on Chromium, Firefox and WebKit. Firefox and WebKit cannot be downloaded in the
+      development sandbox, so their differences are minimized inside the browser in CI and
+      reported with a reproduction. 16 browser deviations are documented, each with a tested
+      example; none turned out to be ours.
 
 ### Phase 4: Auto-caption cleanup (primary use case)
 
@@ -385,6 +398,19 @@ Split into three PRs, each usable on its own.
   not WebVTT text, so a restore is exact even for content export would repair.
 - **2026-10-06 (Phase 3b):** Times from the media element are rounded to whole milliseconds
   before they reach the document (`currentTime × 1000` is rarely an integer).
+
+- **2026-10-06 (Phase 3c):** The "mirror the model into native `VTTCue`" check compares parsers
+  rather than constructing `VTTCue`s by hand: the same bytes go to the browser and to us. That
+  also covers export, since exported fuzz documents are among the inputs. Known browser
+  deviations are described by what triggers them (not by test-case name), so a new kind of
+  difference still fails.
+- **2026-10-06 (Phase 3c):** Every engine misreads some valid files we may export (see
+  `SPEC-NOTES.md`): Chromium drops non-default line/position alignments, Firefox ends cues at
+  whitespace-only lines and ignores regions after a comment, and all three drop some cue ids
+  starting with block keywords. Export keeps writing the spec form. Working around browsers
+  in the output (for example dropping whitespace-only lines, or writing preserved header text
+  after the REGION blocks) is left for a possible "compatibility" export option; the
+  whitespace-only lines also go away in Phase 4's auto-caption cleanup.
 
 ## Open questions for the owner
 
