@@ -40,6 +40,16 @@
     if (file) waveform.open(file, () => player.durationMs);
     else waveform.close();
   });
+
+  // The waveform worker holds its OPFS peak file open (exclusively): let it go when the page
+  // goes away, so a reload or another tab can use the cache, and pick it up again if the page
+  // comes back from the back/forward cache.
+  function onpagehide(): void {
+    waveform.close();
+  }
+  function onpageshow(event: PageTransitionEvent): void {
+    if (event.persisted && player.file) waveform.open(player.file, () => player.durationMs);
+  }
   // The "not UTF-8" notice, dismissed for the file open now (it comes back for the next one).
   let encodingNoticeDismissed = $state(false);
   $effect(() => {
@@ -245,6 +255,8 @@
 </script>
 
 <svelte:window
+  {onpagehide}
+  {onpageshow}
   {onkeydown}
   {onpaste}
   ondragover={(e) => {

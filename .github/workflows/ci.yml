@@ -40,6 +40,8 @@ jobs:
       matrix:
         browser: [chromium, firefox, webkit]
     name: e2e (${{ matrix.browser }})
+    # A hung browser otherwise holds the job for hours, without uploading its log.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
