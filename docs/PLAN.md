@@ -402,11 +402,13 @@ Automatic on import:
 - [ ] Encoding fallback: bytes that are not valid UTF-8 are decoded as Windows-1252 with a
       warning, instead of turning into U+FFFD (which cannot be undone). An encoding choice on
       import for other code pages.
-- [ ] Old-draft `Region: id=… width=…` header lines become REGION blocks (vtt.js, Shaka,
-      Firefox and WebKit still honour them).
-- [ ] Single-letter cue settings from the 2010–11 drafts (`D:`, `L:`, `T:`, `S:`, `A:`)
-      become their current names. Check against the WHATWG drafts of that time first; the
-      archived W3C drafts here start in 2015.
+- [ ] Old-draft `Region: id=… width=…` header lines (2014–15 drafts, `=` settings) become
+      REGION blocks (vtt.js, Shaka, Firefox and WebKit still honour them).
+- [x] Old alignment names (`middle`; position `start`/`end`): done in 4c, and checked against
+      the 2014 and 2015 drafts (`SPEC-NOTES.md`, "Older drafts").
+- [ ] Single-letter cue settings from 2010–11 (`D:`, `L:`, `T:`, `S:`, `A:`) become their
+      current names. They are in no W3C draft (all checked, 2014 onwards), so check their
+      meaning against WHATWG HTML of that time first.
 - [ ] Out-of-range percentages (`position:110%`) are clamped to 0–100% (reported as a guess,
       since parsers drop them).
 - [ ] `<font color>`: a colour matching one of the spec's default colour classes becomes
@@ -419,12 +421,14 @@ Fixes to apply from the problems panel (they change what conforming players show
       to the cue.
 - [ ] STYLE or REGION blocks after the first cue: move them to the header.
 
-Needs an owner decision:
+Export option (owner decision, 2026-10-07):
 
-- [ ] `X-TIMESTAMP-MAP` (HLS segment timing): today it is kept as a NOTE comment, which loses
-      its meaning. HLS needs it on the header line, which is not conforming WebVTT, so keeping
-      it would be the one export that does not conform: an export option, off by default and
-      labelled as such.
+- [ ] Keep `X-TIMESTAMP-MAP` (HLS segment timing) under the `WEBVTT` line, where HLS needs it.
+      Today it becomes a NOTE comment, which loses its meaning. It was a valid metadata header
+      in the 2014–15 drafts but is not in the current spec, so this is the one export that does
+      not conform: off by default, offered only when the file has one, and labelled. Consider
+      the same option for other header lines (`Kind:`, `Language:`) to reproduce YouTube's
+      format.
 
 ### Phase 5: Timeline and productivity
 

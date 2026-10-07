@@ -16,6 +16,25 @@ read the linked section of the pinned revision.
 | BCP 47 / IANA Language Subtag Registry                         | Snapshot to be bundled                                                             | Validating `<lang>` annotations (an authoring requirement only).                                            |
 | MDN browser-compat-data                                        | 8.1.4                                                                              | Browser support matrix below.                                                                               |
 
+### Older drafts (for reading legacy files)
+
+Every W3C publication of WebVTT, used to decide what old files meant (Phase 4d). Not normative.
+
+| Draft                                                                    | What it has that the current spec does not                                                                                                                                                               |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [2014-11-13 FPWD](https://www.w3.org/TR/2014/WD-webvtt1-20141113/)       | `middle` for text, line and position alignment; position alignment `start`/`end` = the box's left/right side; metadata headers (`Name: value` lines after `WEBVTT`); `Region:` headers with `=` settings |
+| [2015-12-08 WD](https://www.w3.org/TR/2015/WD-webvtt1-20151208/)         | `center` replaces `middle`; position alignment still `start`/`center`/`end` (`start` = left side); metadata headers and `Region:` headers; STYLE blocks arrive                                           |
+| [2017-07-13 WD](https://www.w3.org/TR/2017/WD-webvtt1-20170713/) onwards | The current shape: REGION blocks, `line-left`/`center`/`line-right`, no metadata headers                                                                                                                 |
+
+Later publications: [2017-08-08 WD](https://www.w3.org/TR/2017/WD-webvtt1-20170808/),
+[2018-05-10 CR](https://www.w3.org/TR/2018/CR-webvtt1-20180510/),
+[2019-04-04 CR](https://www.w3.org/TR/2019/CR-webvtt1-20190404/),
+[2026-05-20 CRD](https://www.w3.org/TR/2026/CRD-webvtt1-20260520/). None of them has the
+single-letter settings (`A:`, `T:`, …), which predate the W3C drafts (WHATWG HTML, 2010–11).
+
+So YouTube's `Kind:`/`Language:` lines, `X-TIMESTAMP-MAP=…` (HLS) and `Region:` lines were
+conforming metadata headers under the 2014–15 drafts, and YouTube's `,middle` is 2014 syntax.
+
 When a spec revision lands, re-run `pnpm sync:spec`, diff `index.bs` against the pinned hash,
 update this file, and re-run `pnpm sync:wpt`.
 
