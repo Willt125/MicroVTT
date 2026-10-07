@@ -2,11 +2,25 @@
  * Parsing, validation and export run here, off the main thread, so a 12-hour file never
  * blocks typing or scrolling.
  */
-import { exportDocument, importDocument, validate, validateImport } from '@microvtt/core';
+import {
+  cleanupAutoCaptions,
+  detectAutoCaptions,
+  exportDocument,
+  findReviewMarkers,
+  importDocument,
+  validate,
+  validateImport,
+} from '@microvtt/core';
 import { clearAutosave, readAutosave, writeAutosave } from './autosave.ts';
 import { locateInSerialized, locateInSource, serializeWithSpans } from './locate.ts';
 import type { VttDocument } from '@microvtt/core';
-import type { ExportedFile, ImportedFile, WorkerRequest, WorkerResponse } from './protocol.ts';
+import type {
+  Checked,
+  ExportedFile,
+  ImportedFile,
+  WorkerRequest,
+  WorkerResponse,
+} from './protocol.ts';
 
 // The app's TypeScript config uses the DOM library; describe just the worker scope we use.
 const scope = self as unknown as {
@@ -24,14 +38,26 @@ async function handle(request: WorkerRequest): Promise<unknown> {
       const text = new TextDecoder('utf-8').decode(request.bytes);
       const imported = importDocument(text);
       const diagnostics = locateInSource(validateImport(imported), imported.document);
-      return { ok: imported.ok, document: imported.document, diagnostics } satisfies ImportedFile;
+      return {
+        ok: imported.ok,
+        document: imported.document,
+        diagnostics,
+        autoCaptions: detectAutoCaptions(imported.document),
+      } satisfies ImportedFile;
     }
     case 'validate': {
       current = request.document;
       const { text, spans } = serializeWithSpans(request.document);
       const result = validate(text, { fileType: request.fileType });
-      return locateInSerialized(result.diagnostics, spans);
+      return {
+        diagnostics: locateInSerialized(result.diagnostics, spans),
+        review: findReviewMarkers(request.document),
+      } satisfies Checked;
     }
+    case 'detect':
+      return detectAutoCaptions(request.document);
+    case 'cleanup':
+      return cleanupAutoCaptions(request.document, request.options);
     case 'export': {
       const exported = exportDocument(request.document, request.options);
       const { spans } = serializeWithSpans(exported.document);

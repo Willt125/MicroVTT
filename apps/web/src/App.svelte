@@ -1,10 +1,12 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import CleanupDialog from './lib/components/CleanupDialog.svelte';
   import CueEditor from './lib/components/CueEditor.svelte';
   import CueTable from './lib/components/CueTable.svelte';
   import DiagnosticsPanel from './lib/components/DiagnosticsPanel.svelte';
   import ExportDialog from './lib/components/ExportDialog.svelte';
   import FindBar from './lib/components/FindBar.svelte';
+  import GlossaryDialog from './lib/components/GlossaryDialog.svelte';
   import HelpDialog from './lib/components/HelpDialog.svelte';
   import MediaPanel from './lib/components/MediaPanel.svelte';
   import Toolbar from './lib/components/Toolbar.svelte';
@@ -26,6 +28,8 @@
   let exportOpen = $state(false);
   let helpOpen = $state(false);
   let findOpen = $state(false);
+  let cleanupOpen = $state(false);
+  let glossaryOpen = $state(false);
   let mediaInput: HTMLInputElement | undefined = $state();
   let dragging = $state(false);
   let fileInput: HTMLInputElement | undefined = $state();
@@ -89,7 +93,7 @@
   }
 
   function onpaste(event: ClipboardEvent): void {
-    if (isTyping(event.target) || exportOpen || helpOpen) return;
+    if (isTyping(event.target) || exportOpen || helpOpen || cleanupOpen || glossaryOpen) return;
     const text = event.clipboardData?.getData('text/plain') ?? '';
     if (!/^\uFEFF?WEBVTT(?:[ \t\r\n]|$)/.test(text)) {
       if (!editor.hasDocument && text.trim() !== '')
@@ -188,7 +192,15 @@
   function onkeydown(event: KeyboardEvent): void {
     const mod = event.ctrlKey || event.metaKey;
     if (!mod) {
-      if (event.defaultPrevented || !editor.hasDocument || exportOpen || helpOpen) return;
+      if (
+        event.defaultPrevented ||
+        !editor.hasDocument ||
+        exportOpen ||
+        helpOpen ||
+        cleanupOpen ||
+        glossaryOpen
+      )
+        return;
       if (event.key === ' ' && ownsSpace(event.target)) return;
       const action = actionFor(event, isTyping(event.target));
       if (action) {
@@ -272,6 +284,8 @@
     onexport={openExport}
     onsplit={split}
     onfind={() => (findOpen = true)}
+    oncleanup={() => (cleanupOpen = true)}
+    onglossary={() => (glossaryOpen = true)}
     onhelp={() => (helpOpen = true)}
   />
 
@@ -279,6 +293,15 @@
     <p class="banner error-text" role="alert">
       {editor.error}
       <button onclick={() => (editor.error = null)}>Dismiss</button>
+    </p>
+  {/if}
+
+  {#if editor.hasDocument && editor.cleanupOffered && editor.autoCaptions}
+    <p class="banner offer" role="status">
+      This looks like YouTube auto-captions ({editor.autoCaptions.lines.toLocaleString()} caption lines
+      in {editor.autoCaptions.cues.toLocaleString()} rolling cues).
+      <button class="primary" onclick={() => (cleanupOpen = true)}>Clean up…</button>
+      <button onclick={() => (editor.cleanupOffered = false)}>Not now</button>
     </p>
   {/if}
 
@@ -331,6 +354,8 @@
 
   <ExportDialog {editor} bind:open={exportOpen} />
   <HelpDialog bind:open={helpOpen} {mod} />
+  <CleanupDialog {editor} bind:open={cleanupOpen} />
+  <GlossaryDialog {editor} bind:open={glossaryOpen} />
 </div>
 
 <style>

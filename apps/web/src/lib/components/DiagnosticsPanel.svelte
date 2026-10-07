@@ -39,6 +39,11 @@
     return Object.entries(groups).sort((a, b) => b[1].count - a[1].count);
   });
 
+  const reviewCounts = $derived({
+    censored: editor.review.filter((m) => m.kind === 'censored').length,
+    sound: editor.review.filter((m) => m.kind === 'sound').length,
+  });
+
   /** Body index → 1-based row number in the cue table. */
   const rowOf = $derived(
     Object.fromEntries(editor.cueRows.map((bodyIndex, row) => [bodyIndex, row + 1])) as Record<
@@ -97,6 +102,38 @@
     <p class="muted">
       … and {sorted.length - MAX_SHOWN} more. Fix these first, or export: export fixes errors automatically.
     </p>
+  {/if}
+
+  {#if editor.review.length > 0}
+    <details class="review" open>
+      <summary>
+        To review ({editor.review.length})
+        <span class="muted">
+          · {reviewCounts.censored} censored {reviewCounts.censored === 1 ? 'word' : 'words'}, {reviewCounts.sound}
+          sound {reviewCounts.sound === 1 ? 'tag' : 'tags'}
+        </span>
+      </summary>
+      <p class="muted">
+        YouTube hides words it censors as <code>[ __ ]</code>; you will usually want to restore
+        them. Sound tags like <code>[music]</code> are worth a check.
+      </p>
+      <ul>
+        {#each editor.review.slice(0, MAX_SHOWN) as m, i (i)}
+          <li>
+            {#if cueNumber(m.index) !== null}
+              <button class="link" onclick={() => onjump(m.index)}>Cue {cueNumber(m.index)}</button>
+            {/if}
+            <span class={m.kind === 'censored' ? 'warning-text' : 'muted'}
+              >{m.kind === 'censored' ? 'Censored word' : 'Sound tag'}</span
+            >
+            <code>{m.text}</code>
+          </li>
+        {/each}
+      </ul>
+      {#if editor.review.length > MAX_SHOWN}
+        <p class="muted">… and {editor.review.length - MAX_SHOWN} more.</p>
+      {/if}
+    </details>
   {/if}
 
   {#if imported.length > 0}
@@ -167,8 +204,22 @@
     color: var(--info);
     font-size: 0.8rem;
   }
-  .imported {
+  .imported,
+  .review {
     margin-top: 0.75rem;
+  }
+  .review ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.88rem;
+  }
+  .review li {
+    padding: 0.25rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .review summary {
+    cursor: pointer;
   }
   .imported summary {
     cursor: pointer;

@@ -27,11 +27,12 @@
   let matchCase = $state(false);
   let wholeWord = $state(false);
   let regex = $state(false);
+  let acrossTimings = $state(true);
   let current = $state.raw<Match | null>(null);
   let status = $state<string | null>(null);
   let input: HTMLInputElement | undefined = $state();
 
-  const pattern = $derived(buildPattern({ query, matchCase, wholeWord, regex }));
+  const pattern = $derived(buildPattern({ query, matchCase, wholeWord, regex, acrossTimings }));
   const matches = $derived(
     pattern instanceof RegExp ? findAll(editor.doc, editor.cueRows, pattern) : [],
   );
@@ -162,6 +163,9 @@
       >
       <label title="Regular expression (JavaScript syntax)"
         ><input type="checkbox" bind:checked={regex} /> .*</label
+      >
+      <label title="Spaces also match across word-timing tags (replacing drops the tags inside)"
+        ><input type="checkbox" bind:checked={acrossTimings} disabled={regex} /> Across timings</label
       >
     </div>
     <div class="row">

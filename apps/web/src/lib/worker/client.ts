@@ -1,11 +1,14 @@
 /** Promise-based client for the WebVTT worker. */
 import type { ExportOptions, FileType, VttDocument } from '@microvtt/core';
 import type {
+  AutoCaptionInfo,
   Autosave,
   AutosaveRequest,
+  Checked,
+  CleanupOptions,
+  CleanupResult,
   ExportedFile,
   ImportedFile,
-  ItemDiagnostic,
   WorkerRequest,
   WorkerResponse,
 } from './protocol.ts';
@@ -45,8 +48,16 @@ export class VttWorker {
     return this.request({ type: 'import', bytes }, [bytes]);
   }
 
-  validate(document: VttDocument, fileType: FileType): Promise<ItemDiagnostic[]> {
+  validate(document: VttDocument, fileType: FileType): Promise<Checked> {
     return this.request({ type: 'validate', document, fileType });
+  }
+
+  detect(document: VttDocument): Promise<AutoCaptionInfo> {
+    return this.request({ type: 'detect', document });
+  }
+
+  cleanup(document: VttDocument, options: Partial<CleanupOptions>): Promise<CleanupResult> {
+    return this.request({ type: 'cleanup', document, options });
   }
 
   export(document: VttDocument, options: ExportOptions): Promise<ExportedFile> {

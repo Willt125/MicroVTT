@@ -94,7 +94,7 @@ export function* serializeChunks(
 ): Generator<string> {
   const eol = options.lineEnding ?? '\n';
   const fix = eol === '\n' ? (s: string) => s : (s: string) => s.replace(/\n/g, eol);
-  const bom = options.byteOrderMark ? '﻿' : '';
+  const bom = options.byteOrderMark ? '\ufeff' : '';
   // The signature line is followed by a blank line even when no blocks follow (§4.1 requires
   // two or more line terminators); blocks are separated by one blank line.
   yield `${bom}WEBVTT${doc.title === '' ? '' : ` ${doc.title}`}${eol}${eol}`;

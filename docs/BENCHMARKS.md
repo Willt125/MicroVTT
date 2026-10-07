@@ -70,3 +70,16 @@ The remaining 0.2 s task is most likely the validation round trip (copying the d
 worker and taking the results back), which predates 3b; it is not profiled yet. Before the
 preview was limited to a window around the playhead, every preview refresh cost about 0.3 s on
 the main thread while Chromium parsed the full track.
+
+## Auto-caption cleanup (Phase 4a, Node)
+
+`cleanupAutoCaptions` on the real samples (detection, de-roll and segmentation together):
+
+| Sample   | Cues in | Cues out |  Words | Time    |
+| -------- | ------: | -------: | -----: | ------- |
+| 5m48s    |     289 |       90 |    909 | ~50 ms  |
+| 48m33s   |   2,427 |      786 |  6,905 | ~110 ms |
+| 4h18m29s |  12,263 |    3,686 | 38,589 | ~0.9 s  |
+
+Segmentation is most of it (the dynamic program re-checks line wrapping for each candidate cue).
+It runs in the worker, so the UI stays responsive.
