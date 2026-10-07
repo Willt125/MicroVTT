@@ -125,19 +125,37 @@ export const DEVIATIONS: Deviation[] = [
     example: `WEBVTT\nREGION\nid:r\n\n${CUE} region:r\nx\n`,
   },
   {
-    browsers: ['firefox', 'webkit'],
+    browsers: ['webkit'],
     trigger: new RegExp(`(?:^|${NL})REGION${LINE}*(?:${NL}${LINE}+)*?${NL}${LINE}*-->`),
     difference: /^cue \d+ region: null, expected /,
     reason: 'ignores a REGION block that a timing line ends without a blank line',
     example: `WEBVTT\n\nREGION\nid:r\n${CUE} region:r\nx\n`,
   },
   {
+    // Exported files keep unparsed header text as a leading comment, which hides their regions.
     browsers: ['firefox'],
-    trigger: new RegExp(`(?:^|${NL})NOTE[\\s\\S]*${NL}REGION`),
+    trigger: new RegExp(
+      `^\\uFEFF?WEBVTT${LINE}*${NL}(?:${NL})*(?!REGION)${LINE}[\\s\\S]*${NL}REGION`,
+    ),
     difference: /^cue \d+ region: null, expected /,
-    reason: 'ignores REGION blocks that come after a comment',
-    example: `WEBVTT\n\nNOTE\nx\n\nREGION\nid:r\n\n${CUE} region:r\nx\n`,
+    reason:
+      'ignores REGION blocks unless they come first after the signature (header text or a comment before them hides them)',
+    example: `WEBVTT\nLanguage: en\n\nREGION\nid:r\n\n${CUE} region:r\nx\n`,
     exportedFiles: true,
+  },
+  {
+    browsers: ['firefox', 'webkit'],
+    trigger: new RegExp(`-->${LINE}*\\b(?:line|size|vertical):`),
+    difference: /^cue \d+ region: \S+, expected null$/,
+    reason: 'keeps a cue in its region when it also has a line, size or vertical setting',
+    example: `WEBVTT\n\nREGION\nid:r\n\n${CUE} region:r line:1\nx\n`,
+  },
+  {
+    browsers: ['firefox'],
+    trigger: new RegExp(`-->${LINE}*\\bregion:${LINE}*\\bregion:`),
+    difference: /^cue \d+ region: \S+, expected null$/,
+    reason: 'a later region setting with an unknown id does not clear an earlier one',
+    example: `WEBVTT\n\nREGION\nid:r\n\n${CUE} region:r region:zz\nx\n`,
   },
 ];
 
