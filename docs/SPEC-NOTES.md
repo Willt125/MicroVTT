@@ -57,14 +57,35 @@ own requirements:
    requirements apply, and the CSS applied to cues has to be limited to the properties the
    spec allows (§7.4 and the `::cue` property list).
 
-**One deliberate divergence, on import only:** cue setting values written with an older draft's
-names (`align:middle`, `line:…,middle`, `position:…,start|middle|end`) are read as they were
-meant, where the spec's parser ignores the whole setting. YouTube still writes
-`position:X%,middle` in its own WebVTT, and editing YouTube captions is MicroVTT's main use, so
-dropping those positions would lose what the file says. The validator reports each one
-(`cue-setting-legacy`), and export writes the current name, so output still conforms. The parser
-itself stays exactly the spec's algorithm unless asked (`parse(text, { legacyValues: true })`;
-`importDocument` asks), so the WPT and browser comparisons are unaffected.
+**Deliberate divergences, on import only (Phase 4d):** the editor reads what older drafts and
+other tools wrote as it was meant, where the spec's parser ignores it. YouTube still writes
+`position:X%,middle`, SRT habits end up in `.vtt` files, and old files predate the current
+syntax; editing such files is MicroVTT's main use, so dropping what they say would lose it.
+
+| Input                                                                             | The spec's parser                  | MicroVTT's import                                                             | Diagnostic                 |
+| --------------------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------- | -------------------------- |
+| `align:middle`, `line:…,middle`, `position:…,start\|middle\|end` (2014–15 drafts) | ignores the setting                | the current name                                                              | `cue-setting-legacy`       |
+| `A:middle`, `T:10%`, `L:-1`, `S:50%`, `D:vertical` (2010–11 drafts)               | ignores the setting                | the current setting                                                           | `cue-setting-legacy`       |
+| `position:110%`, `size:-5%`                                                       | ignores the setting                | clamped to 0–100% (a guess)                                                   | `cue-setting-out-of-range` |
+| `00:00:01,000`, `0:01.5`, `00:01.50` (SRT, other digit counts)                    | drops the cue                      | the time meant                                                                | `timestamp-legacy`         |
+| `Region: id=r width=40%` header lines (2014–15)                                   | ignores them                       | REGION blocks                                                                 | `region-header-legacy`     |
+| `<br>`                                                                            | drops the tag (words run together) | a line break                                                                  | `cue-text-legacy-tag`      |
+| `<font color="yellow">`, `color="#ff8800"`                                        | drops the tag                      | `<c.yellow>` (a default colour class), or a generated class with a STYLE rule | `cue-text-legacy-tag`      |
+| bytes that are not UTF-8                                                          | turns letters into `�`             | Windows-1252, or a chosen encoding; a UTF-16 BOM is honoured                  | `file-encoding`            |
+
+The validator reports each one, and export writes the current form, so output still conforms.
+The parser itself stays exactly the spec's algorithm unless asked
+(`parse(text, { legacyValues: true })`; `importDocument` asks), so the WPT and browser
+comparisons are unaffected. The single-letter settings are mapped from secondary sources
+(no W3C draft has them, and the 2010–11 WHATWG text could not be fetched here); `D:`, `L:`,
+`T:` and `A:` agree across those sources, `S:` (size) less firmly.
+
+Two recoveries change what conforming players show, so they are offered in the problems panel
+("Can be fixed") instead of applied: joining text that follows a blank line inside a caption
+to that caption, and moving a STYLE or REGION block that comes after the first cue to the
+header (reconnecting the cues that named that region). One export option writes
+non-conforming output on request: header lines (`X-TIMESTAMP-MAP=…` for HLS, `Kind:`,
+`Language:`) kept under `WEBVTT`, as the 2014–15 drafts' metadata headers.
 
 Also: **implementations must not normalize Unicode** (§2.2). Never call `String.prototype.normalize`
 on cue text, IDs, or selectors.

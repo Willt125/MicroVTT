@@ -1,4 +1,4 @@
-export { parseTimestamp, formatTimestamp } from './timestamp.ts';
+export { formatTimestamp, parseLegacyTimestamp, parseTimestamp } from './timestamp.ts';
 export type { TimestampParseResult } from './timestamp.ts';
 export { LineEndingNormalizer, WebVTTDecoder } from './decode.ts';
 export { WebVTTParser, WebVTTByteParser, parse, parseBytes, sortCues } from './parser.ts';
@@ -24,9 +24,9 @@ export type {
   CueTimestampNode,
 } from './cuetext.ts';
 export { consumeCharacterReference } from './charref.ts';
-export { isCommentStart, modernizeSetting } from './parser.ts';
+export { isCommentStart, legacySetting, modernizeSetting } from './parser.ts';
 export type { BlockInfo, BlockKind, ParserOptions } from './parser.ts';
-export { normalizeInput } from './decode.ts';
+export { FILE_ENCODINGS, decodeFile, normalizeInput } from './decode.ts';
 export {
   createCue,
   createDocument,
@@ -55,6 +55,7 @@ export { checkStylesheet, parseStylesheet, repairStylesheet } from './css.ts';
 export type { CssDeclaration, CssRule, CssSheet } from './css.ts';
 export {
   formatDecimal,
+  hasHeaderLines,
   serialize,
   serializeChunks,
   serializeCue,
@@ -126,3 +127,7 @@ export {
   compatibilityIssues,
 } from './compat.ts';
 export type { CompatibilityFix, CompatibilityId } from './compat.ts';
+export { colourClass, findLegacyTags, modernizeCueText } from './legacy-text.ts';
+export type { LegacyTag } from './legacy-text.ts';
+export { applyQuickFix, findQuickFixes } from './quickfix.ts';
+export type { QuickFix, QuickFixKind } from './quickfix.ts';

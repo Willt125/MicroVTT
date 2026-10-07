@@ -32,6 +32,10 @@ export interface ImportedFile {
   diagnostics: ItemDiagnostic[];
   /** Whether it looks like YouTube auto-captions. */
   autoCaptions: AutoCaptionInfo;
+  /** The encoding it was read in ("utf-8" unless it is not valid UTF-8, or one was chosen). */
+  encoding: string;
+  /** True when a non-UTF-8 encoding was guessed rather than chosen. */
+  encodingGuessed: boolean;
 }
 
 /** Background checks of the current document. */
@@ -50,6 +54,8 @@ export interface ExportedFile {
   diagnostics: ItemDiagnostic[];
   /** Player-compatibility fixes that would change the document, and how much. */
   compatibility: { id: CompatibilityId; count: number }[];
+  /** Whether the source had text under the "WEBVTT" line (`X-TIMESTAMP-MAP`, `Kind:`, …). */
+  headerLines: boolean;
   /** Features YouTube does not keep or reports on upload, and how many cues or blocks use them. */
   youtube: { id: FeatureId; count: number }[];
 }
@@ -75,7 +81,7 @@ export interface AutosaveRequest {
 }
 
 export type WorkerRequest =
-  | { id: number; type: 'import'; bytes: ArrayBuffer }
+  | { id: number; type: 'import'; bytes: ArrayBuffer; encoding?: string }
   | { id: number; type: 'validate'; document: VttDocument; fileType: FileType }
   | { id: number; type: 'export'; document: VttDocument; options: ExportOptions }
   | { id: number; type: 'preview'; document: VttDocument }

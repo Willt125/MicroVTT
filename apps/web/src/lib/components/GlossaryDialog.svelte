@@ -80,7 +80,11 @@
   }
 </script>
 
-<dialog bind:this={dialog} onclose={() => (open = false)} aria-labelledby="glossary-heading">
+<dialog
+  bind:this={dialog}
+  onclose={() => (open = dialog?.open ?? false)}
+  aria-labelledby="glossary-heading"
+>
   <h2 id="glossary-heading">Glossary</h2>
   <p class="muted intro">
     Corrections for every file: names and terms the speech recognition gets wrong. Spaces also match

@@ -111,7 +111,11 @@
   }
 </script>
 
-<dialog bind:this={dialog} onclose={() => (open = false)} aria-labelledby="cleanup-heading">
+<dialog
+  bind:this={dialog}
+  onclose={() => (open = dialog?.open ?? false)}
+  aria-labelledby="cleanup-heading"
+>
   <h2 id="cleanup-heading">Clean up auto-captions</h2>
 
   {#if checking}

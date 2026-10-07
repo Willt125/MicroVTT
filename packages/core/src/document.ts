@@ -20,6 +20,7 @@ import type {
   PositionAlignSetting,
   SourceRange,
 } from './parser.ts';
+import { colourStyleSheet, modernizeCueText } from './legacy-text.ts';
 import { parse } from './parser.ts';
 
 export interface Cue {
@@ -40,6 +41,11 @@ export interface Cue {
   size: number;
   align: AlignSetting;
   source?: SourceRange;
+  /**
+   * A `region:` id the cue names that was not defined before it (so the cue is in no region).
+   * Kept so that moving a late REGION block to the header can reconnect the cue.
+   */
+  unresolvedRegion?: string;
 }
 
 export interface Region {
@@ -170,6 +176,14 @@ function regionFromParsed(region: ParsedRegion): Region {
   return { type: 'region', ...values, source: range };
 }
 
+/** The last `region:` id on a cue's timing line, if no region with that id exists. */
+function unresolvedRegion(block: string, regions: ParsedRegion[]): string | null {
+  const timing = block.split('\n').find((line) => line.includes('-->')) ?? '';
+  const ids = [...timing.matchAll(/(?:^|[ \t])region:([^ \t]+)/g)].map((m) => m[1] as string);
+  const id = ids[ids.length - 1];
+  return id !== undefined && !regions.some((r) => r.id === id) ? id : null;
+}
+
 /**
  * Imports decoded text into a document, keeping comments and preserving discarded text.
  * Byte input should be decoded with `WebVTTDecoder` first (UTF-8, as the spec requires).
@@ -188,6 +202,7 @@ export function importDocument(text: string): ImportResult {
 
   const slice = (r: SourceRange): string => normalized.slice(r.start, r.end);
   let seenCue = false;
+  const colours = new Map<string, string>();
   const place = (item: Note | Region | Style): void => {
     if (item.type === 'note' && seenCue) document.body.push(item);
     else document.head.push(item);
@@ -200,10 +215,20 @@ export function importDocument(text: string): ImportResult {
         document.title = line.length > 7 ? line.slice(7) : '';
         break;
       }
-      case 'cue':
-        document.body.push(cueFromParsed(block.cue as ParsedCue));
+      case 'cue': {
+        const cue = cueFromParsed(block.cue as ParsedCue);
+        const named = unresolvedRegion(slice(block.range), parsed.regions);
+        if (cue.region === null && named !== null) cue.unresolvedRegion = named;
+        // `<br>` and `<font color>` (SRT and HTML habits) are read as meant.
+        const modern = modernizeCueText(cue.text);
+        if (modern) {
+          cue.text = modern.text;
+          for (const [name, css] of modern.classes) colours.set(name, css);
+        }
+        document.body.push(cue);
         seenCue = true;
         break;
+      }
       case 'region':
         place(regionFromParsed(block.region as ParsedRegion));
         break;
@@ -213,16 +238,21 @@ export function importDocument(text: string): ImportResult {
       case 'note':
         place({ type: 'note', text: slice(block.range).slice(4), source: block.range });
         break;
-      case 'header':
+      case 'header': {
         // Empty when a cue directly follows the signature line: nothing to keep.
         if (block.range.end === block.range.start) break;
-        place({
-          type: 'note',
-          text: `\n${slice(block.range)}`,
-          preserved: 'header',
-          source: block.range,
-        });
+        // Old-draft `Region:` lines become regions; the rest is kept as a comment.
+        for (const region of block.legacyRegions ?? []) place(regionFromParsed(region));
+        const rest = block.legacyRegions
+          ? slice(block.range)
+              .split('\n')
+              .filter((line) => !line.startsWith('Region:'))
+              .join('\n')
+          : slice(block.range);
+        if (rest === '') break;
+        place({ type: 'note', text: `\n${rest}`, preserved: 'header', source: block.range });
         break;
+      }
       case 'invalid-cue':
       case 'discarded':
         place({
@@ -234,5 +264,7 @@ export function importDocument(text: string): ImportResult {
         break;
     }
   }
+  // Generated colour classes get their colours from a style sheet at the end of the header.
+  if (colours.size > 0) document.head.push({ type: 'style', css: colourStyleSheet(colours) });
   return { ok: true, document, parsed, blocks, normalized };
 }

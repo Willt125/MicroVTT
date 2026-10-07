@@ -16,7 +16,18 @@ export interface SerializeOptions {
   omitZeroHours?: boolean;
   /** Start the file with U+FEFF. Default false. */
   byteOrderMark?: boolean;
+  /**
+   * Write the text that followed the "WEBVTT" line in the source (kept as a NOTE comment on
+   * import: `Kind:`, `Language:`, HLS's `X-TIMESTAMP-MAP=…`) back under that line. HLS players
+   * need `X-TIMESTAMP-MAP` there. These were metadata headers in the 2014–15 drafts; the
+   * current spec has none, so the output does not conform. Default false.
+   */
+  headerLines?: boolean;
 }
+
+/** Whether a document has header lines that `headerLines` would write. */
+export const hasHeaderLines = (doc: VttDocument): boolean =>
+  doc.head.some((item) => item.type === 'note' && item.preserved === 'header');
 
 /** Formats a number in plain decimal notation (WebVTT syntax has no exponents). */
 export function formatDecimal(n: number): string {
@@ -97,7 +108,11 @@ export function* serializeChunks(
   const bom = options.byteOrderMark ? '\ufeff' : '';
   // The signature line is followed by a blank line even when no blocks follow (§4.1 requires
   // two or more line terminators); blocks are separated by one blank line.
-  yield `${bom}WEBVTT${doc.title === '' ? '' : ` ${doc.title}`}${eol}${eol}`;
+  const header = options.headerLines
+    ? doc.head.filter((item): item is Note => item.type === 'note' && item.preserved === 'header')
+    : [];
+  const headerText = header.map((note) => `${fix(note.text.replace(/^\n/, ''))}${eol}`).join('');
+  yield `${bom}WEBVTT${doc.title === '' ? '' : ` ${doc.title}`}${eol}${headerText}${eol}`;
   let first = true;
   const block = (text: string): string => {
     const out = `${first ? '' : eol}${fix(text)}${eol}`;
@@ -105,6 +120,7 @@ export function* serializeChunks(
     return out;
   };
   for (const item of doc.head) {
+    if (header.includes(item as Note)) continue;
     yield block(
       item.type === 'region'
         ? serializeRegion(item)

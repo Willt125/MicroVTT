@@ -315,6 +315,13 @@ function sharedDifferences(theirs: SharedView[], ours: SharedView[]): string[] {
 
 const SHAKA_DEVIATIONS: Deviation[] = [
   {
+    // Shaka's cue.size 0 means "auto", so a 0% size cannot be told from no size at all.
+    trigger: /\bsize:0(?:\.0+)?%/,
+    difference: /^cue \d+ size: 100, expected 0$/,
+    reason: 'treats size:0% as the default size',
+    example: 'WEBVTT\n\n00:00.000 --> 00:01.000 size:0%\nhello\n',
+  },
+  {
     trigger: /(?:^|\n)(?:NOTE(?:[ \t][^\n]*)?|STYLE|REGION)\n[^\n]*-->/,
     difference: /^\d+ cues, expected \d+$/,
     reason:

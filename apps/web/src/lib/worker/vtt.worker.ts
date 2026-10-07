@@ -4,6 +4,8 @@
  */
 import {
   cleanupAutoCaptions,
+  decodeFile,
+  hasHeaderLines,
   compatibilityIssues,
   detectAutoCaptions,
   exportDocument,
@@ -36,15 +38,26 @@ let current: VttDocument | null = null;
 async function handle(request: WorkerRequest): Promise<unknown> {
   switch (request.type) {
     case 'import': {
-      // UTF-8 only (spec §6.1); one leading BOM is stripped by the decoder.
-      const text = new TextDecoder('utf-8').decode(request.bytes);
-      const imported = importDocument(text);
+      // WebVTT is UTF-8 (spec §6.1); a file that is not is read in the encoding it was saved in.
+      const decoded = decodeFile(new Uint8Array(request.bytes), request.encoding);
+      const imported = importDocument(decoded.text);
       const diagnostics = locateInSource(validateImport(imported), imported.document);
+      if (decoded.encoding !== 'utf-8') {
+        diagnostics.unshift({
+          code: 'file-encoding',
+          severity: 'error',
+          message: `The file is not UTF-8; it was read as ${decoded.encoding}${decoded.guessed ? ' (a guess)' : ''}. Export writes UTF-8.`,
+          list: 'file',
+          index: 0,
+        });
+      }
       return {
         ok: imported.ok,
         document: imported.document,
         diagnostics,
         autoCaptions: detectAutoCaptions(imported.document),
+        encoding: decoded.encoding,
+        encodingGuessed: decoded.guessed,
       } satisfies ImportedFile;
     }
     case 'validate': {
@@ -73,6 +86,7 @@ async function handle(request: WorkerRequest): Promise<unknown> {
           count: x.count,
         })),
         youtube: youtubeCheck(request.document).map((x) => ({ id: x.feature.id, count: x.count })),
+        headerLines: hasHeaderLines(request.document),
       } satisfies ExportedFile;
     }
     case 'preview':
