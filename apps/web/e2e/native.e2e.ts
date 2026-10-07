@@ -23,7 +23,7 @@ import {
   type CueView,
 } from '../../../packages/core/test/wpt-support.ts';
 import { Gen, generateDocument, rng } from '../../../packages/core/test/fuzz/generate.ts';
-import { knownDeviation } from './native-deviations.ts';
+import { DEVIATIONS, knownDeviation, type BrowserName } from './native-deviations.ts';
 
 interface Input {
   name: string;
@@ -256,7 +256,14 @@ async function compare(page: Page, browser: string, inputs: Input[]): Promise<vo
   };
   const decoder = new TextDecoder();
   let minimized = 0;
-  for (const [i, input] of inputs.entries()) {
+  // Files we export matter most, so their differences are minimized first.
+  const order = [...inputs.keys()].sort(
+    (a, b) =>
+      Number(!inputs[a]?.name.endsWith('/exported')) -
+      Number(!inputs[b]?.name.endsWith('/exported')),
+  );
+  for (const i of order) {
+    const input = inputs[i] as Input;
     const result = parseBytes(input.bytes);
     const diffs = differences(natives[i] as NativeResult, cueList(result), result.ok, skip);
     if (diffs.length === 0) continue;
@@ -292,6 +299,33 @@ test.describe('native parser agrees with ours', () => {
 
   test('committed fixtures', async ({ page, browserName }) => {
     await compare(page, browserName, fixtureInputs());
+  });
+
+  test('documented deviations still reproduce', async ({ page, browserName }) => {
+    const entries = DEVIATIONS.filter((d) => d.browsers.includes(browserName as BrowserName));
+    test.skip(entries.length === 0, `no documented deviations for ${browserName}`);
+    await page.goto('/');
+    const skip = await unsupportedAttributes(page);
+    const encoder = new TextEncoder();
+    const inputs = entries.map((d, i) => ({
+      name: `example ${i}`,
+      bytes: encoder.encode(d.example),
+    }));
+    const natives = await nativeParse(page, inputs);
+    const problems: string[] = [];
+    entries.forEach((d, i) => {
+      const result = parseBytes(inputs[i]?.bytes as Uint8Array);
+      const diffs = differences(natives[i] as NativeResult, cueList(result), result.ok, skip);
+      if (!d.trigger.test(d.example))
+        problems.push(`${d.reason}: the example does not match the trigger`);
+      else if (!diffs.some((diff) => d.difference.test(diff)))
+        problems.push(
+          `${d.reason}: no longer reproduces (${diffs.join('; ') || 'no differences'})`,
+        );
+      else if (!knownDeviation(browserName, d.example, diffs))
+        problems.push(`${d.reason}: the example shows other differences too: ${diffs.join('; ')}`);
+    });
+    expect(problems).toEqual([]);
   });
 
   test('fuzz documents, as generated and after export', async ({ page, browserName }) => {

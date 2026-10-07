@@ -1,95 +1,143 @@
 /**
  * Known places where a browser's WebVTT parser differs from the spec (and so from ours), found by
  * `native.e2e.ts`. Each entry gives what in the input triggers it, the differences it causes, and
- * a minimal reproduction. A difference is excused only when every difference for that input is
+ * a minimal example. A difference is excused only when every difference for that input is
  * covered by an entry whose trigger matches the input, so a new kind of difference still fails.
+ * The examples are themselves tested: each must still show its difference in the browsers listed,
+ * so an entry that was wrong, or that a browser has since fixed, fails instead of hiding things.
  *
  * Our parser is checked against the spec by the WPT suite and by differential fuzzing against
  * the WPT reference parser, so where we and a browser disagree on these inputs, the browser is
- * the one off the spec. Several of these also affect files a user exports (noted below).
+ * the one off the spec. Entries marked `exportedFiles` can affect valid files MicroVTT writes.
  */
 
 export type BrowserName = 'chromium' | 'firefox' | 'webkit';
 
-interface Deviation {
+export interface Deviation {
   browsers: BrowserName[];
   /** Matches the input text when the deviation can occur. */
   trigger: RegExp;
   /** Matches each difference it explains (as `native.e2e.ts` words them). */
   difference: RegExp;
   reason: string;
+  /** A minimal input that shows it. */
+  example: string;
+  exportedFiles?: boolean;
 }
 
 const NL = String.raw`(?:\r\n|\r|\n)`;
 const LINE = String.raw`[^\r\n]`;
+const CUE = '00:00.000 --> 00:01.000';
 
-const DEVIATIONS: Deviation[] = [
+export const DEVIATIONS: Deviation[] = [
   {
-    // "00:00.000 --> 00:01.000 line:0,end" → line "auto". Affects exported files.
     browsers: ['chromium'],
     trigger: /\b(?:line|position):[^\s,]*,/,
     difference: /^cue \d+ (?:line|position): "auto", expected /,
     reason:
-      'Chromium ignores a line or position setting that has an alignment suffix (it has no lineAlign/positionAlign)',
+      'ignores a line or position setting that has an alignment suffix (no lineAlign/positionAlign)',
+    example: `WEBVTT\n\n${CUE} line:0,end\nx\n`,
+    exportedFiles: true,
   },
   {
-    // "size:6.%", "position:5.%", "line:1.", "line:-.5" are accepted.
     browsers: ['chromium', 'firefox'],
     trigger: /\b(?:line|position|size):-?(?:\d+\.(?!\d)|\.\d)/,
     difference: /^cue \d+ (?:line|position|size): /,
     reason: 'accepts numbers with a bare "." ("6.", ".5") that the spec rejects',
+    example: `WEBVTT\n\n${CUE} size:6.%\nx\n`,
   },
   {
-    // "... --> 00:01.000 ::\fposition:69%" → position "auto".
     browsers: ['chromium', 'webkit'],
     trigger: new RegExp(`-->${LINE}*\\f`),
     difference: /^cue \d+ (?:line|position|size|align|vertical|region): /,
     reason: 'does not treat a form feed as whitespace between cue settings',
+    example: `WEBVTT\n\n${CUE} align:start\fposition:69%\nx\n`,
   },
   {
-    // "WEBVTT\n \n00:00.000 --> 00:01.000" → cue id " " (WPT header-space, header-tab).
-    browsers: ['chromium', 'webkit'],
+    browsers: ['chromium', 'webkit', 'firefox'],
     trigger: new RegExp(`${LINE}+${NL}${LINE}+${NL}${LINE}*-->`),
     difference: /^cue \d+ id: ".*", expected ""$/,
     reason:
       'takes the line before a timing line as the cue id even where the spec ends the block (in the header, or after two lines of a block)',
+    example: `WEBVTT\nheader\n${CUE}\nx\n`,
   },
   {
-    // "WEBVTT\n\nSTYLE \n00:00.000 --> 00:01.000" → cue id "". Affects exported files.
     browsers: ['chromium', 'webkit'],
     trigger: new RegExp(`(?:^|${NL})STYLE${LINE}*${NL}${LINE}*-->`),
     difference: /^cue \d+ id: "", expected "STYLE/,
     reason: 'drops a cue id that starts with "STYLE" before the first cue',
+    example: `WEBVTT\n\nSTYLE\n${CUE}\nx\n`,
+    exportedFiles: true,
   },
   {
-    // "WEBVTT\n\nREGION\n00:00.000 --> 00:01.000" → cue id "". Affects exported files.
     browsers: ['webkit'],
     trigger: new RegExp(`(?:^|${NL})REGION${LINE}*${NL}${LINE}*-->`),
     difference: /^cue \d+ id: "", expected "REGION/,
     reason: 'drops a cue id that starts with "REGION" before the first cue',
+    example: `WEBVTT\n\nREGION\n${CUE}\nx\n`,
+    exportedFiles: true,
   },
   {
-    // "WEBVTT\n\nNOTE\n00:00.000 --> 00:01.000" → cue id "". Affects exported files.
     browsers: ['firefox'],
     trigger: new RegExp(`(?:^|${NL})(?:NOTE|STYLE|REGION)${LINE}*${NL}${LINE}*-->`),
     difference: /^cue \d+ id: "", expected "(?:NOTE|STYLE|REGION)/,
     reason: 'drops a cue id that starts with "NOTE", "STYLE" or "REGION"',
+    example: `WEBVTT\n\nNOTE\n${CUE}\nx\n`,
+    exportedFiles: true,
   },
   {
-    // "WEBVTT\n\n00:00.000 --> 00:01.000\none\n \ntwo" → text "one". Affects exported files,
-    // and YouTube auto-captions, which put a " " line in most cues.
+    browsers: ['chromium'],
+    trigger: new RegExp(`(?:^|${NL})NOTE${NL}STYLE[ \\t]*${NL}`),
+    difference: /^cue \d+ id: /,
+    reason: 'misreads the next cue id after a comment whose first line is "STYLE"',
+    example: `WEBVTT\n\nNOTE\nSTYLE\n\n${CUE}\nx\n`,
+    exportedFiles: true,
+  },
+  {
+    // YouTube auto-captions put a " " line in most cues.
     browsers: ['firefox'],
     trigger: new RegExp(`${NL}[ \\t]+(?:${NL}|$)`),
     difference: /^cue \d+ text: /,
     reason: 'ends a cue at a line of only spaces or tabs, as if it were blank',
+    example: `WEBVTT\n\n${CUE}\none\n \ntwo\n`,
+    exportedFiles: true,
   },
   {
-    // "WEBVTT\n\nNOTE\nSTYLE\n\n00:00.000 --> 00:01.000" → cue id "NOTE". Affects exported files
-    // that keep a discarded STYLE block as a comment.
-    browsers: ['chromium'],
-    trigger: new RegExp(`(?:^|${NL})NOTE${NL}STYLE[ \\t]*${NL}`),
-    difference: /^cue \d+ id: /,
-    reason: 'Chromium misreads the next cue id after a comment whose first line is "STYLE"',
+    browsers: ['firefox'],
+    trigger: /\bline:[^\s,]*,(?!(?:start|center|end)(?:\s|$))/,
+    difference: /^cue \d+ line: /,
+    reason: 'keeps a line setting whose alignment is invalid ("line:19,") instead of rejecting it',
+    example: `WEBVTT\n\n${CUE} line:19,\nx\n`,
+  },
+  {
+    browsers: ['firefox'],
+    trigger: /\bline:[^\s,]*,(?:start|center|end)\b/,
+    difference: /^cue \d+ lineAlign: /,
+    reason: 'applies a line alignment even when the line position is rejected ("line:-83%,end")',
+    example: `WEBVTT\n\n${CUE} line:-83%,end\nx\n`,
+  },
+  {
+    // An older draft defined regions in the header.
+    browsers: ['firefox', 'webkit'],
+    trigger: new RegExp(`^\\uFEFF?WEBVTT${LINE}*(?:${NL}${LINE}+)*?${NL}REGION`),
+    difference: /^cue \d+ region: \S+, expected null$/,
+    reason: 'defines a region from REGION lines in the header, which the spec ignores',
+    example: `WEBVTT\nREGION\nid:r\n\n${CUE} region:r\nx\n`,
+  },
+  {
+    browsers: ['firefox', 'webkit'],
+    trigger: new RegExp(`(?:^|${NL})REGION${LINE}*(?:${NL}${LINE}+)*?${NL}${LINE}*-->`),
+    difference: /^cue \d+ region: null, expected /,
+    reason: 'ignores a REGION block that a timing line ends without a blank line',
+    example: `WEBVTT\n\nREGION\nid:r\n${CUE} region:r\nx\n`,
+  },
+  {
+    browsers: ['firefox'],
+    trigger: new RegExp(`(?:^|${NL})NOTE[\\s\\S]*${NL}REGION`),
+    difference: /^cue \d+ region: null, expected /,
+    reason: 'ignores REGION blocks that come after a comment',
+    example: `WEBVTT\n\nNOTE\nx\n\nREGION\nid:r\n\n${CUE} region:r\nx\n`,
+    exportedFiles: true,
   },
 ];
 
