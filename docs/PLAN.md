@@ -437,6 +437,30 @@ Export option (owner decision, 2026-10-07):
 - **Accept:** a 12 h media file shows a waveform (where `AudioDecoder` exists) without memory
   growing in proportion to the media's length.
 
+Split into three PRs:
+
+**5a: waveform and timeline view (done)**
+
+- [x] Peaks in a worker: Mediabunny (MPL-2.0; reads MP4/MOV, WebM/MKV, MP3, WAV, Ogg, FLAC
+      from the `File` in chunks) feeding WebCodecs `AudioDecoder`, reduced to min/max peaks as
+      the audio streams past, so decoded audio never accumulates.
+- [x] Fine peaks stored in OPFS per file (name, size, modified time); only a coarse overview
+      stays in memory, and a view reads just the range it shows. Reopening the file reuses them.
+- [x] Fallback without WebCodecs (or for a codec it cannot decode): `decodeAudioData` at a low
+      sample rate under a duration cap set by measurement (10 minutes: it costs about 45 MB per
+      minute of stereo, see `BENCHMARKS.md`); above the cap, no waveform.
+- [x] Canvas timeline under the player: waveform, cue blocks (selected one highlighted), the
+      playhead; zoom (whole file to a few seconds), scroll, click to seek and select.
+- [x] **Accepted:** browser memory grows by about 220 MB whether the media is 1 h or 12 h
+      (12 h computes in about 3 minutes); `BENCHMARKS.md`, and an opt-in test to repeat it.
+
+**5b: timing tools**: drag cue edges and whole cues on the timeline, snapping (word timings,
+cue edges, the playhead), frame stepping, global shift and two-point scale (resync),
+multi-selection and bulk operations.
+
+**5c: quality checks**: reading speed, line length, minimum and maximum duration, gaps and
+overlaps; configurable, listed apart from conformance problems, with fixes where one is clear.
+
 ### Phase 6: Spec renderer and full feature coverage
 
 - §7 renderer overlay (positioning, snap-to-lines, regions, roll-up, `::cue` styling, `:past` and
@@ -564,6 +588,16 @@ Export option (owner decision, 2026-10-07):
 - **2026-10-07 (owner):** The editor should serve as many subtitle-editing uses as is
   reasonable, including updating files written to older drafts or by other tools, even though
   the owner's main use is YouTube. Recovering such input is planned as Phase 4d.
+
+- **2026-10-07 (Phase 5a):** Media is demuxed with Mediabunny (MPL-2.0, used unmodified as a
+  dependency of the web app; `packages/core` stays dependency-free). Writing MP4 and WebM/MKV
+  demuxers ourselves was the alternative; Mediabunny also covers MP3, WAV, Ogg and FLAC, reads a
+  `File` in chunks, and decodes PCM itself, so WAV gets a waveform even without WebCodecs.
+- **2026-10-07 (Phase 5a):** The waveform is drawn scaled to the file's loudest point (at most
+  16× gain), not the view's, so scrolling never rescales it and quiet recordings stay readable.
+- **2026-10-07 (Phase 5a):** The `decodeAudioData` fallback is capped at 10 minutes, set by
+  measurement: it decodes at the codec's own rate whatever rate is asked for (1.39 GB for an hour
+  of mono Opus in Chromium).
 
 ## Open questions for the owner
 

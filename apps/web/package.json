@@ -12,7 +12,8 @@
     "e2e": "playwright test"
   },
   "dependencies": {
-    "@microvtt/core": "workspace:*"
+    "@microvtt/core": "workspace:*",
+    "mediabunny": "^1.61.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
