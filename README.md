@@ -36,3 +36,13 @@ pnpm build
 pnpm bench       # parser benchmarks (see docs/BENCHMARKS.md)
 pnpm fuzz        # long differential/streaming fuzz run (CI runs a short one)
 ```
+
+### Editor setup (VS Code)
+
+Open the repository folder and accept the recommended extensions (Svelte, ESLint, Prettier,
+EditorConfig, Vitest, Playwright). The workspace settings use the repo's TypeScript, format with
+Prettier and fix ESLint problems on save, and leave whitespace to `.editorconfig`, which keeps the
+byte-exact test fixtures untouched. Vendored and generated files (`tests/wpt/`,
+`docs/DIAGNOSTICS.md`, `docs/youtube-test*.vtt`) open read-only: change their sources and
+regenerate. Tasks (`Terminal → Run Task`) cover dev, test, e2e, typecheck, lint, build and a
+CI-order check; the debugger can launch the editor in Chrome or debug the open test file.

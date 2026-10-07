@@ -1,0 +1,32 @@
+{
+  // Use the workspace's TypeScript, the version `pnpm typecheck` runs.
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+
+  // Prettier formats (as `pnpm lint` checks), ESLint fixes on save.
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" },
+  "prettier.requireConfig": true,
+  "prettier.documentSelectors": ["**/*.svelte"],
+  "eslint.validate": ["javascript", "typescript", "svelte"],
+
+  // Whitespace comes from .editorconfig (EditorConfig extension), which leaves the byte-exact
+  // test fixtures alone; a global "trim trailing whitespace" here would corrupt them.
+  "files.associations": { "*.vtt": "plaintext" },
+
+  // Vendored and generated files: edit their sources and regenerate instead.
+  "files.readonlyInclude": {
+    "tests/wpt/**": true,
+    "docs/DIAGNOSTICS.md": true,
+    "docs/youtube-test*.vtt": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/test-results": true,
+    "**/playwright-report": true,
+    ".spec": true,
+    "pnpm-lock.yaml": true
+  }
+}
