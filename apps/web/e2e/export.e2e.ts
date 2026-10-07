@@ -43,12 +43,6 @@ test('offers player-compatibility fixes and the YouTube check on export', async 
   ).toBeChecked();
   await expect(fixes.getByRole('checkbox', { name: /Write characters instead/ })).toBeChecked();
   await expect(lang).not.toBeChecked();
-  const youtube = dialog.locator('details.youtube');
-  await expect(youtube.locator('summary')).toHaveText(
-    /Uploading to YouTube\?\s+5\s+features to check/,
-  );
-  await youtube.locator('summary').click();
-  await expect(youtube).toContainText('Language spans (<lang fi>): 1 (not tested on YouTube yet)');
 
   await lang.check();
   await ids.uncheck();
@@ -57,4 +51,20 @@ test('offers player-compatibility fixes and the YouTube check on export', async 
   expect(vtt).toBe(
     'WEBVTT\n\nREGION\nid:r\n\nNOTE\nLanguage: fi\n\nNOTES\n00:00:00.000 --> 00:00:01.000 region:r\ncafé kiitos\n',
   );
+
+  // The YouTube check: regions are dropped there, and an export fix avoids that.
+  await page.keyboard.press('ControlOrMeta+s');
+  const youtube = dialog.locator('details.youtube');
+  await expect(youtube.locator('summary')).toHaveText(
+    /Uploading to YouTube\?\s+1\s+feature to check/,
+  );
+  await youtube.locator('summary').click();
+  await expect(youtube).toContainText('Regions (REGION blocks, region:): 2 (dropped');
+  const regions = fixes.getByRole('checkbox', { name: /Remove STYLE and REGION blocks/ });
+  await expect(regions).not.toBeChecked();
+  await youtube.getByRole('button', { name: 'Tick the fixes for YouTube' }).click();
+  await expect(regions).toBeChecked();
+  await expect(ids).toBeChecked();
+  await expect(youtube).toContainText('Avoided: "Remove STYLE and REGION blocks" is ticked.');
+  await expect(youtube.getByRole('button', { name: 'Tick the fixes for YouTube' })).toBeHidden();
 });

@@ -33,28 +33,46 @@ say how), or **dropped** (the feature, or the whole caption, is lost).
 
 ## Results
 
-Not yet run. Date, player(s) and file used:
+**2026-10-07**, `youtube-test.vtt`, YouTube web player. `YOUTUBE` in `features.ts` follows this
+table.
 
-| #   | Time | Feature                 | What to check                                                 | Web | Notes |
-| --- | ---- | ----------------------- | ------------------------------------------------------------- | --- | ----- |
-| 1   | 0:06 | `italic-bold-underline` | italic, bold and underlined words                             |     |       |
-| 2   | 0:12 | `class`                 | text shown (no colour expected: it comes from a player style) |     |       |
-| 3   | 0:18 | `voice`                 | text shown, no "Alice" tag visible                            |     |       |
-| 4   | 0:24 | `language`              | text shown, no tags visible                                   |     |       |
-| 5   | 0:30 | `ruby`                  | "kanji" small above 漢字                                      |     |       |
-| 6   | 0:36 | `timestamps`            | words appear one by one (or all at once: say which)           |     |       |
-| 7   | 0:42 | `character-references`  | café, ©, and no `&` codes visible                             |     |       |
-| 8   | 0:48 | `multiple-lines`        | three lines                                                   |     |       |
-| 9   | 0:54 | `cue-id`                | "intro" not shown                                             |     |       |
-| 10  | 1:00 | `line`                  | at the top                                                    |     |       |
-| 11  | 1:06 | `line-percent`          | in the middle, top to bottom                                  |     |       |
-| 12  | 1:12 | `position`              | near the left edge                                            |     |       |
-| 13  | 1:18 | `size`                  | wrapped in a narrow box                                       |     |       |
-| 14  | 1:24 | `align`                 | lines right-aligned                                           |     |       |
-| 15  | 1:30 | `alignment-suffix`      | at the top, box ending at 90% across                          |     |       |
-| 16  | 1:36 | `vertical`              | vertical text on the right                                    |     |       |
-| 17  | 1:42 | `region`                | in a box at the lower left                                    |     |       |
-| 18  | 1:48 | `style`                 | "green" in green                                              |     |       |
-| 19  | 1:54 | `note`                  | the comment never shown                                       |     |       |
-| 20  | 2:00 | `overlap`               | both captions on screen together, the second from 2:01        |     |       |
-| 21  | 2:06 | `whitespace-line`       | an empty-looking line between two lines, all in one caption   |     |       |
+On upload, YouTube Studio reported errors on four lines and offered to import anyway:
+
+| Line | What is there                                                  | Meaning                                                       |
+| ---- | -------------------------------------------------------------- | ------------------------------------------------------------- |
+| 3    | the `REGION` block                                             | REGION blocks are not supported (STYLE is accepted)           |
+| 88   | `line:0 position:90%,line-right size:40%`                      | the `,line-right` alignment suffix                            |
+| 98   | `region:test`                                                  | the region setting                                            |
+| 126  | `…and below it, in the same cue.`, after a line of only spaces | the cue ended at the space-only line; this line was left over |
+
+Studio's own caption editor then warned that it would discard some formatting if the captions
+were saved from it, so edit captions in MicroVTT and upload them again rather than editing in
+Studio.
+
+The second file (`youtube-test-no-blocks.vtt`) was not needed: everything else imported.
+
+| #   | Time | Feature                 | What to check                                                 | Web     | Notes                                                                    |
+| --- | ---- | ----------------------- | ------------------------------------------------------------- | ------- | ------------------------------------------------------------------------ |
+| 1   | 0:06 | `italic-bold-underline` | italic, bold and underlined words                             | kept    |                                                                          |
+| 2   | 0:12 | `class`                 | text shown (no colour expected: it comes from a player style) | kept    |                                                                          |
+| 3   | 0:18 | `voice`                 | text shown, no "Alice" tag visible                            | kept    |                                                                          |
+| 4   | 0:24 | `language`              | text shown, no tags visible                                   | kept    |                                                                          |
+| 5   | 0:30 | `ruby`                  | "kanji" small above 漢字                                      | changed | "kanji" shown in brackets right after "漢字", as 漢字(kanji)             |
+| 6   | 0:36 | `timestamps`            | words appear one by one (or all at once: say which)           | kept    | one by one                                                               |
+| 7   | 0:42 | `character-references`  | café, ©, and no `&` codes visible                             | kept    |                                                                          |
+| 8   | 0:48 | `multiple-lines`        | three lines                                                   | kept    |                                                                          |
+| 9   | 0:54 | `cue-id`                | "intro" not shown                                             | kept    |                                                                          |
+| 10  | 1:00 | `line`                  | at the top                                                    | kept    |                                                                          |
+| 11  | 1:06 | `line-percent`          | in the middle, top to bottom                                  | kept    |                                                                          |
+| 12  | 1:12 | `position`              | near the left edge                                            | kept    |                                                                          |
+| 13  | 1:18 | `size`                  | wrapped in a narrow box                                       | dropped | not wrapped                                                              |
+| 14  | 1:24 | `align`                 | lines right-aligned                                           | kept    |                                                                          |
+| 15  | 1:30 | `alignment-suffix`      | at the top, box ending at 90% across                          | kept    | upload error on its timing line (line 88), but shown as described        |
+| 16  | 1:36 | `vertical`              | vertical text on the right                                    | dropped | horizontal, default position and alignment                               |
+| 17  | 1:42 | `region`                | in a box at the lower left                                    | dropped | default position and alignment; upload errors (lines 3 and 98)           |
+| 18  | 1:48 | `style`                 | "green" in green                                              | dropped | no colour change                                                         |
+| 19  | 1:54 | `note`                  | the comment never shown                                       | kept    |                                                                          |
+| 20  | 2:00 | `overlap`               | both captions on screen together, the second from 2:01        | kept    |                                                                          |
+| 21  | 2:06 | `whitespace-line`       | an empty-looking line between two lines, all in one caption   | dropped | only "Above an empty-looking line…" shown; upload error on the next line |
+
+Not yet checked: the mobile and TV apps, which render captions separately.

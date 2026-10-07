@@ -50,7 +50,7 @@ export interface ExportedFile {
   diagnostics: ItemDiagnostic[];
   /** Player-compatibility fixes that would change the document, and how much. */
   compatibility: { id: CompatibilityId; count: number }[];
-  /** Features YouTube is not known to keep, and how many cues or blocks use them. */
+  /** Features YouTube does not keep or reports on upload, and how many cues or blocks use them. */
   youtube: { id: FeatureId; count: number }[];
 }
 

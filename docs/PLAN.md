@@ -356,7 +356,7 @@ Split into three PRs:
       still apply after cleanup keeps word timings. The find bar has the same option
       ("Across timings", on by default).
 
-**4c: export for YouTube and other players (done, YouTube results pending)**
+**4c: export for YouTube and other players (done)**
 
 - [x] Feature catalogue (`packages/core/src/features.ts`): 21 WebVTT features, each with a
       counter and a minimal example whose caption says what a viewer should see.
@@ -373,11 +373,14 @@ Split into three PRs:
       every option on, ffmpeg and Shaka read exported fuzz documents exactly as we do (bar
       ffmpeg's removal of duplicate cues).
 - [x] New warning `cue-id-keyword` for valid cue ids that every player tested misreads.
-- [x] YouTube upload check: the export dialog lists the features a file uses that YouTube is
-      not known to keep. Test files and instructions in `docs/YOUTUBE-TEST.md`.
-- [ ] Owner: upload the test files and record the results; then set `YOUTUBE` in
-      `features.ts` (and, if YouTube drops something an export option could avoid, add a
-      YouTube preset).
+- [x] YouTube upload check: the export dialog lists the features a file uses that YouTube
+      does not keep or reports on upload. Test files and instructions in `docs/YOUTUBE-TEST.md`.
+- [x] YouTube results (owner, 2026-10-07, web player) recorded in `YOUTUBE`: size, vertical,
+      regions and STYLE are dropped, ruby is shown as `base(annotation)`, and a space-only line
+      ends the cue (the rest of its text is lost); REGION, `region:`, alignment suffixes and
+      that leftover text are upload errors. The export dialog's YouTube list now shows only
+      those, with a button that ticks the fixes avoiding them.
+- [ ] Not yet checked: YouTube's mobile and TV apps.
 
 ### Phase 5: Timeline and productivity
 
@@ -493,10 +496,12 @@ Split into three PRs:
   conforming player shows unchanged are on by default; the rest change layout, language
   information or styling and stay opt-in, labelled as such. Duplicate cues (which ffmpeg drops)
   get no option: removing them would change what conforming players show.
-- **2026-10-07 (Phase 4c):** YouTube's support table starts as "untested" for every feature
-  rather than from memory or third-party reports, so the upload check is honest until the
-  test files have been uploaded; until then it lists every feature a file uses beyond plain
-  text.
+- **2026-10-07 (Phase 4c):** YouTube's support table comes only from uploading the test file,
+  not from memory or third-party reports. The YouTube fixes are not on by default, because
+  trimming space-only lines and removing STYLE/REGION blocks change what conforming players
+  show; the export dialog offers them in one click when a file needs them. A space-only line
+  loses text on YouTube, so YouTube's own auto-caption downloads (which have one in most cues)
+  may lose text when re-uploaded as they are; the auto-caption cleanup already removes them.
 
 ## Open questions for the owner
 

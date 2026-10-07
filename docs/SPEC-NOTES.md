@@ -348,56 +348,14 @@ are valid, but every player tested misreads them.
 ### YouTube
 
 YouTube's caption processing cannot be run locally, so `docs/YOUTUBE-TEST.md` describes a manual
-check with generated test files, and the export dialog lists the features a file uses that
-YouTube is not known to keep (warnings only; `YOUTUBE` in `features.ts` records the results).
+check with generated test files and records the results (2026-10-07, web player). YouTube
+keeps text markup, word timings, character references, line, position and alignment, and
+overlapping cues. It ignores `size`, `vertical`, STYLE blocks and regions, shows ruby as
+`base(annotation)`, and, like Firefox, ends a cue at a line of only spaces, losing the rest of
+its text. YouTube Studio reports upload errors for REGION blocks, `region:` settings,
+position/line alignment suffixes and the text left over after a space-only line.
 
-## Test corpus
-
-- `tests/wpt/file-parsing/*.test`: 38 parser tests. The format is title, metadata, JS assertions over
-  `cues`, then `===`, then the VTT body. `packages/core/test/wpt-support.ts` reproduces the build
-  script exactly: Python `unicode_escape` decoding, UTF-8 encoding, cues exposed as VTTCue-shaped
-  objects in text track cue order, and testharness.js `same_value` semantics (so `-0` ≠ `0`).
-- `tests/wpt/file-parsing/*.vtt`: 11 files with invalid signatures, all of which must be rejected.
-- `tests/wpt/cue-text-parsing/*.dat`: 78 cue-text tree tests. Each input is wrapped in a one-cue
-  file, as WPT's `common.js` does, and compared with a serialization of the §6.5 DOM mapping.
-- `tests/wpt/api/`: VTTCue/VTTRegion behaviour in the browser. These need a real `<video>` and
-  `<track>`, so they do not run against the core; Phase 3's Playwright tests check our model
-  against native `VTTCue` objects instead.
-- Our own unit tests cover what WPT does not: numeric character references (C1 remapping,
-  surrogates, overflow), annotations, the language stack, chapter titles, streaming across
-  chunk boundaries, source ranges, and timestamps beyond the safe-integer range.
-
-### Reference parser deviations
-
-`reference-parser.py` describes itself as "a direct translation" of the parser algorithm, but it
-diverges from the spec. `packages/core/test/fuzz/reference_driver.py` patches each deviation at
-load time, asserting that every patch applies exactly once:
-
-| Deviation                                                                                                                   | Spec                                |
-| --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| Splits settings with a pattern that matches the empty string, so in Python 3.7+ no cue or region setting is ever recognized | §6.2/§6.3 "split on spaces"         |
-| Rejects 59 as a minutes or seconds value (`>= 59`)                                                                          | §6.3: error only if greater than 59 |
-| `\d` and `\s` accept non-ASCII digits and spaces                                                                            | ASCII digits, ASCII whitespace      |
-| Line numbers keep `-0` and accept values that overflow to infinity                                                          | HTML floating-point parsing rules   |
-| Position alignment is stored as line alignment                                                                              | §6.3 `position` setting             |
-| `vertical`, `line` and non-100 `size` do not take the cue out of its region                                                 | §6.3                                |
-
-The reference parser does not implement cue text parsing, so cue text is covered by WPT's
-`.dat` tests and our unit tests instead.
-
-### Fuzzing
-
-`packages/core/test/fuzz/` generates adversarial documents from a seed: broken timestamps, odd
-arrows, settings edge cases, regions with duplicate ids, STYLE/REGION blocks after cues, mixed
-line endings and NULs. Each document is checked twice:
-
-- **Differential:** it is parsed by our parser and by the patched reference parser, and the
-  results are compared field by field.
-- **Streaming:** its UTF-8 bytes are split into random chunks (including inside multi-byte
-  sequences and CRLF pairs) and parsed incrementally; the result must match parsing it whole.
-
-Planted bugs confirmed the fuzzer is effective. Each of these was caught: STYLE recognized after
-a cue, first-instead-of-last region lookup, an arrow on line 2 after failed timings, `size`,
-`vertical` or `line` not taking a cue out of its region, `-0` kept, and non-ASCII whitespace
-accepted after `STYLE`. CI runs 3,000 cases. `pnpm fuzz` runs 200,000 (override with
-`FUZZ_CASES`/`FUZZ_SEED`).
+`YOUTUBE` in `features.ts` holds these results. The export dialog lists the features a file
+uses that YouTube does not keep or reports on upload (warnings only), and a button ticks the
+export fixes that avoid them (`YOUTUBE_FIXES`: the default fixes plus "trim whitespace" and
+"remove STYLE and REGION blocks").

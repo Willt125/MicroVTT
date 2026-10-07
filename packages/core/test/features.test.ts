@@ -5,6 +5,8 @@ import {
   featureTestFile,
   importDocument,
   usedFeatures,
+  YOUTUBE_FIXES,
+  exportDocument,
   validate,
   youtubeCheck,
 } from '../src/index.ts';
@@ -40,7 +42,15 @@ describe('feature catalogue', () => {
     expect(used).toContain('vertical');
   });
 
-  it('lists every feature YouTube is not known to keep', () => {
+  it('the YouTube fixes avoid every YouTube problem an export fix can avoid', () => {
+    const doc = importDocument(featureTestFile()).document;
+    const before = youtubeCheck(doc).filter((x) => x.support.fixedBy);
+    expect(before.map((x) => x.feature.id).sort()).toEqual(['region', 'style', 'whitespace-line']);
+    const fixed = exportDocument(doc, { compatibility: YOUTUBE_FIXES }).document;
+    expect(youtubeCheck(fixed).filter((x) => x.support.fixedBy)).toEqual([]);
+  });
+
+  it('lists the features YouTube does not keep or reports on upload', () => {
     const doc = importDocument(featureTestFile()).document;
     expect(youtubeCheck(doc).length).toBeGreaterThan(0);
     expect(

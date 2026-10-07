@@ -4,7 +4,13 @@
 -->
 <script lang="ts">
   import type { CompatibilityFix, CompatibilityId, FileType } from '@microvtt/core';
-  import { COMPATIBILITY_FIXES, DIAGNOSTICS, FEATURES, YOUTUBE } from '@microvtt/core';
+  import {
+    COMPATIBILITY_FIXES,
+    DIAGNOSTICS,
+    FEATURES,
+    YOUTUBE,
+    YOUTUBE_FIXES,
+  } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import type { ExportedFile } from '../worker/protocol.ts';
   import { canSaveInPlace, download, pickSaveFile, writeFile } from '../files.ts';
@@ -34,10 +40,24 @@
     COMPATIBILITY_FIXES.find((f) => f.id === id) as CompatibilityFix;
   const featureName = (id: string): string => FEATURES.find((f) => f.id === id)?.name ?? id;
   const STATUS: Record<string, string> = {
+    kept: 'shown as written',
     untested: 'not tested on YouTube yet',
     changed: 'shown differently',
     dropped: 'dropped',
   };
+
+  /** Whether a fix that avoids a YouTube problem in this file is not ticked yet. */
+  const youtubeFixable = $derived(
+    result?.youtube.some((y) => {
+      const fix = YOUTUBE[y.id].fixedBy;
+      return fix !== undefined && !compatibility.includes(fix);
+    }) ?? false,
+  );
+
+  /** Ticks every fix that helps on YouTube (the others stay as they are). */
+  function forYouTube(): void {
+    compatibility = [...new Set([...compatibility, ...YOUTUBE_FIXES])];
+  }
 
   function toggle(id: CompatibilityId, on: boolean): void {
     compatibility = on ? [...compatibility, id] : compatibility.filter((x) => x !== id);
@@ -205,8 +225,8 @@
         {result.youtube.length === 1 ? 'feature' : 'features'} to check
       </summary>
       <p class="muted small">
-        YouTube may show these differently or drop them. The file is valid either way; this is only
-        a warning.
+        Found by uploading a test file (docs/YOUTUBE-TEST.md). The file is valid either way; this is
+        only a warning.
       </p>
       <ul>
         {#each result.youtube as y (y.id)}
@@ -218,9 +238,16 @@
                 ? `: ${support.note}`
                 : ''})</span
             >
+            {#if support.fixedBy && compatibility.includes(support.fixedBy)}
+              <strong class="avoided">Avoided: "{fixById(support.fixedBy).label}" is ticked.</strong
+              >
+            {/if}
           </li>
         {/each}
       </ul>
+      {#if youtubeFixable}
+        <button onclick={forYouTube}>Tick the fixes for YouTube</button>
+      {/if}
     </details>
   {/if}
 
@@ -320,6 +347,10 @@
   .youtube {
     margin-top: 0.75rem;
     font-size: 0.9rem;
+  }
+  .avoided {
+    display: block;
+    font-weight: 600;
   }
   .youtube ul {
     padding-left: 1.2rem;

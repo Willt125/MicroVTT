@@ -7,6 +7,8 @@
  *   for checking a player or platform by eye;
  * - as minimal inputs for comparing other players' parsers with ours.
  */
+import type { CompatibilityId } from './compat.ts';
+import { COMPATIBILITY_FIXES } from './compat.ts';
 import type { CueNode, CueSpanType } from './cuetext.ts';
 import { parseCueText } from './cuetext.ts';
 import type { Cue, VttDocument } from './document.ts';
@@ -269,48 +271,79 @@ export type PlatformStatus = 'kept' | 'changed' | 'dropped' | 'untested';
 export interface PlatformSupport {
   status: PlatformStatus;
   note?: string;
+  /** The platform reports an error for it on upload (even if what viewers see is right). */
+  uploadError?: boolean;
+  /** The export compatibility fix that avoids the problem there. */
+  fixedBy?: CompatibilityId;
 }
 
-const untested: PlatformSupport = { status: 'untested' };
+const kept: PlatformSupport = { status: 'kept' };
 
 /**
  * What YouTube does with each feature when a WebVTT file is uploaded as captions, found by
- * uploading `featureTestFile()` (docs/YOUTUBE-TEST.md records the results and how to repeat it).
+ * uploading `featureTestFile()` and watching on the web player (docs/YOUTUBE-TEST.md records the
+ * results and how to repeat it).
  */
 export const YOUTUBE: Readonly<Record<FeatureId, PlatformSupport>> = {
-  'italic-bold-underline': untested,
-  class: untested,
-  voice: untested,
-  language: untested,
-  ruby: untested,
-  timestamps: untested,
-  'character-references': untested,
-  'multiple-lines': untested,
-  'cue-id': untested,
-  line: untested,
-  'line-percent': untested,
-  position: untested,
-  size: untested,
-  align: untested,
-  'alignment-suffix': untested,
-  vertical: untested,
-  region: untested,
-  style: untested,
-  note: untested,
-  overlap: untested,
-  'whitespace-line': untested,
+  'italic-bold-underline': kept,
+  class: kept,
+  voice: kept,
+  language: kept,
+  ruby: {
+    status: 'changed',
+    note: 'the annotation is shown in brackets after its base text, as 漢字(kanji)',
+  },
+  timestamps: kept,
+  'character-references': kept,
+  'multiple-lines': kept,
+  'cue-id': kept,
+  line: kept,
+  'line-percent': kept,
+  position: kept,
+  size: { status: 'dropped', note: 'the text is not wrapped to the narrower box' },
+  align: kept,
+  'alignment-suffix': {
+    status: 'kept',
+    note: 'placed as written, but YouTube Studio reports an error on the timing line',
+    uploadError: true,
+  },
+  vertical: { status: 'dropped', note: 'shown horizontally, in the default place' },
+  region: {
+    status: 'dropped',
+    note: 'YouTube Studio reports an error at the REGION block and at each region setting; the cues show in the default place',
+    uploadError: true,
+    fixedBy: 'styles-and-regions',
+  },
+  style: {
+    status: 'dropped',
+    note: 'the style sheet is ignored',
+    fixedBy: 'styles-and-regions',
+  },
+  note: kept,
+  overlap: kept,
+  'whitespace-line': {
+    status: 'dropped',
+    note: 'the caption ends at that line and the text after it is lost (YouTube Studio reports an error there)',
+    uploadError: true,
+    fixedBy: 'trim-whitespace',
+  },
 };
 
+/** Export compatibility fixes for YouTube: the recommended ones plus those that avoid its problems. */
+export const YOUTUBE_FIXES: readonly CompatibilityId[] = COMPATIBILITY_FIXES.filter(
+  (f) => f.recommended || Object.values(YOUTUBE).some((s) => s.fixedBy === f.id),
+).map((f) => f.id);
+
 /**
- * The upload check: features a document uses that YouTube may not show as written. Warnings
- * only; the file is valid either way.
+ * The upload check: features a document uses that YouTube does not show as written, or reports
+ * as an error on upload. Warnings only; the file is valid either way.
  */
 export function youtubeCheck(
   doc: VttDocument,
 ): { feature: Feature; count: number; support: PlatformSupport }[] {
   return usedFeatures(doc)
     .map((u) => ({ ...u, support: YOUTUBE[u.feature.id] }))
-    .filter((u) => u.support.status !== 'kept');
+    .filter((u) => u.support.status !== 'kept' || u.support.uploadError === true);
 }
 
 /** Features a document uses, with how many cues or blocks use each. */
