@@ -5,6 +5,7 @@ import {
   featureTestFile,
   importDocument,
   usedFeatures,
+  YOUTUBE,
   YOUTUBE_FIXES,
   exportDocument,
   validate,
@@ -45,9 +46,14 @@ describe('feature catalogue', () => {
   it('the YouTube fixes avoid every YouTube problem an export fix can avoid', () => {
     const doc = importDocument(featureTestFile()).document;
     const before = youtubeCheck(doc).filter((x) => x.support.fixedBy);
-    expect(before.map((x) => x.feature.id).sort()).toEqual(['region', 'style', 'whitespace-line']);
+    expect(before.map((x) => x.feature.id).sort()).toEqual(['region', 'whitespace-line']);
     const fixed = exportDocument(doc, { compatibility: YOUTUBE_FIXES }).document;
     expect(youtubeCheck(fixed).filter((x) => x.support.fixedBy)).toEqual([]);
+  });
+
+  it('aims YouTube fixes only at upload errors', () => {
+    for (const support of Object.values(YOUTUBE))
+      if (support.fixedBy) expect(support.uploadError).toBe(true);
   });
 
   it('lists the features YouTube does not keep or reports on upload', () => {

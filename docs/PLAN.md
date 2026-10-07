@@ -380,7 +380,9 @@ Split into three PRs:
       ends the cue (the rest of its text is lost); REGION, `region:`, alignment suffixes and
       that leftover text are upload errors. The export dialog's YouTube list now shows only
       those, with a button that ticks the fixes avoiding them.
-- [ ] Not yet checked: YouTube's mobile and TV apps.
+- [x] YouTube mobile app (owner, 2026-10-07): as the web player, but it also ignores bold,
+      underline, `position` and `align`. Recorded in `docs/YOUTUBE-TEST.md` only.
+- [ ] Not yet checked: YouTube TV apps.
 
 ### Phase 5: Timeline and productivity
 
@@ -502,6 +504,11 @@ Split into three PRs:
   show; the export dialog offers them in one click when a file needs them. A space-only line
   loses text on YouTube, so YouTube's own auto-caption downloads (which have one in most cues)
   may lose text when re-uploaded as they are; the auto-caption cleanup already removes them.
+
+- **2026-10-07 (Phase 4c, owner):** Export for YouTube only aims at what YouTube Studio rejects
+  on upload. How YouTube's players then draw what it accepted (ignored sizes, positions,
+  styles, the mobile app's missing bold) is left to YouTube: the export dialog lists it as
+  information, but no fix targets it. A test keeps every YouTube fix tied to an upload error.
 
 ## Open questions for the owner
 

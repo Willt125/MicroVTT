@@ -33,8 +33,9 @@ say how), or **dropped** (the feature, or the whole caption, is lost).
 
 ## Results
 
-**2026-10-07**, `youtube-test.vtt`, YouTube web player. `YOUTUBE` in `features.ts` follows this
-table.
+**2026-10-07**, `youtube-test.vtt`, the YouTube web player and the YouTube mobile app.
+`YOUTUBE` in `features.ts` follows the web column; the export fixes for YouTube only aim at
+what YouTube Studio reports as errors on upload (see the decisions log in PLAN.md).
 
 On upload, YouTube Studio reported errors on four lines and offered to import anyway:
 
@@ -51,28 +52,34 @@ Studio.
 
 The second file (`youtube-test-no-blocks.vtt`) was not needed: everything else imported.
 
-| #   | Time | Feature                 | What to check                                                 | Web     | Notes                                                                    |
-| --- | ---- | ----------------------- | ------------------------------------------------------------- | ------- | ------------------------------------------------------------------------ |
-| 1   | 0:06 | `italic-bold-underline` | italic, bold and underlined words                             | kept    |                                                                          |
-| 2   | 0:12 | `class`                 | text shown (no colour expected: it comes from a player style) | kept    |                                                                          |
-| 3   | 0:18 | `voice`                 | text shown, no "Alice" tag visible                            | kept    |                                                                          |
-| 4   | 0:24 | `language`              | text shown, no tags visible                                   | kept    |                                                                          |
-| 5   | 0:30 | `ruby`                  | "kanji" small above 漢字                                      | changed | "kanji" shown in brackets right after "漢字", as 漢字(kanji)             |
-| 6   | 0:36 | `timestamps`            | words appear one by one (or all at once: say which)           | kept    | one by one                                                               |
-| 7   | 0:42 | `character-references`  | café, ©, and no `&` codes visible                             | kept    |                                                                          |
-| 8   | 0:48 | `multiple-lines`        | three lines                                                   | kept    |                                                                          |
-| 9   | 0:54 | `cue-id`                | "intro" not shown                                             | kept    |                                                                          |
-| 10  | 1:00 | `line`                  | at the top                                                    | kept    |                                                                          |
-| 11  | 1:06 | `line-percent`          | in the middle, top to bottom                                  | kept    |                                                                          |
-| 12  | 1:12 | `position`              | near the left edge                                            | kept    |                                                                          |
-| 13  | 1:18 | `size`                  | wrapped in a narrow box                                       | dropped | not wrapped                                                              |
-| 14  | 1:24 | `align`                 | lines right-aligned                                           | kept    |                                                                          |
-| 15  | 1:30 | `alignment-suffix`      | at the top, box ending at 90% across                          | kept    | upload error on its timing line (line 88), but shown as described        |
-| 16  | 1:36 | `vertical`              | vertical text on the right                                    | dropped | horizontal, default position and alignment                               |
-| 17  | 1:42 | `region`                | in a box at the lower left                                    | dropped | default position and alignment; upload errors (lines 3 and 98)           |
-| 18  | 1:48 | `style`                 | "green" in green                                              | dropped | no colour change                                                         |
-| 19  | 1:54 | `note`                  | the comment never shown                                       | kept    |                                                                          |
-| 20  | 2:00 | `overlap`               | both captions on screen together, the second from 2:01        | kept    |                                                                          |
-| 21  | 2:06 | `whitespace-line`       | an empty-looking line between two lines, all in one caption   | dropped | only "Above an empty-looking line…" shown; upload error on the next line |
+| #   | Time | Feature                 | What to check                                                 | Web     | Mobile  | Notes                                                                    |
+| --- | ---- | ----------------------- | ------------------------------------------------------------- | ------- | ------- | ------------------------------------------------------------------------ |
+| 1   | 0:06 | `italic-bold-underline` | italic, bold and underlined words                             | kept    | changed | mobile: only italic is formatted                                         |
+| 2   | 0:12 | `class`                 | text shown (no colour expected: it comes from a player style) | kept    | kept    |                                                                          |
+| 3   | 0:18 | `voice`                 | text shown, no "Alice" tag visible                            | kept    | kept    |                                                                          |
+| 4   | 0:24 | `language`              | text shown, no tags visible                                   | kept    | kept    |                                                                          |
+| 5   | 0:30 | `ruby`                  | "kanji" small above 漢字                                      | changed | changed | "kanji" shown in brackets right after "漢字", as 漢字(kanji)             |
+| 6   | 0:36 | `timestamps`            | words appear one by one (or all at once: say which)           | kept    | kept    | one by one                                                               |
+| 7   | 0:42 | `character-references`  | café, ©, and no `&` codes visible                             | kept    | kept    |                                                                          |
+| 8   | 0:48 | `multiple-lines`        | three lines                                                   | kept    | kept    |                                                                          |
+| 9   | 0:54 | `cue-id`                | "intro" not shown                                             | kept    | kept    |                                                                          |
+| 10  | 1:00 | `line`                  | at the top                                                    | kept    | kept    |                                                                          |
+| 11  | 1:06 | `line-percent`          | in the middle, top to bottom                                  | kept    | kept    |                                                                          |
+| 12  | 1:12 | `position`              | near the left edge                                            | kept    | changed | mobile: position ignored                                                 |
+| 13  | 1:18 | `size`                  | wrapped in a narrow box                                       | dropped | dropped | not wrapped                                                              |
+| 14  | 1:24 | `align`                 | lines right-aligned                                           | kept    | changed | mobile: alignment ignored                                                |
+| 15  | 1:30 | `alignment-suffix`      | at the top, box ending at 90% across                          | kept    | kept    | upload error on its timing line (line 88), but shown as described        |
+| 16  | 1:36 | `vertical`              | vertical text on the right                                    | dropped | dropped | horizontal, default position and alignment                               |
+| 17  | 1:42 | `region`                | in a box at the lower left                                    | dropped | dropped | default position and alignment; upload errors (lines 3 and 98)           |
+| 18  | 1:48 | `style`                 | "green" in green                                              | dropped | dropped | no colour change                                                         |
+| 19  | 1:54 | `note`                  | the comment never shown                                       | kept    | kept    |                                                                          |
+| 20  | 2:00 | `overlap`               | both captions on screen together, the second from 2:01        | kept    | kept    |                                                                          |
+| 21  | 2:06 | `whitespace-line`       | an empty-looking line between two lines, all in one caption   | dropped | dropped | only "Above an empty-looking line…" shown; upload error on the next line |
 
-Not yet checked: the mobile and TV apps, which render captions separately.
+The mobile app also ignores bold, underline, `position` and `align`. A space-only line loses
+the rest of the cue on both. Studio reports the line after it as an error while reading the
+file, which points to the cue being cut when the file is parsed rather than the second line
+being pushed off screen when it is drawn. To confirm: Studio's caption editor, or the
+captions downloaded back from Studio, should show caption 21 with only its first line.
+
+Not yet checked: TV apps.

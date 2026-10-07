@@ -273,7 +273,10 @@ export interface PlatformSupport {
   note?: string;
   /** The platform reports an error for it on upload (even if what viewers see is right). */
   uploadError?: boolean;
-  /** The export compatibility fix that avoids the problem there. */
+  /**
+   * The export compatibility fix that avoids an upload error there. Fixes target only what
+   * the platform rejects on upload, not how its players draw what it accepted.
+   */
   fixedBy?: CompatibilityId;
 }
 
@@ -282,7 +285,7 @@ const kept: PlatformSupport = { status: 'kept' };
 /**
  * What YouTube does with each feature when a WebVTT file is uploaded as captions, found by
  * uploading `featureTestFile()` and watching on the web player (docs/YOUTUBE-TEST.md records the
- * results and how to repeat it).
+ * results, the mobile app's too, and how to repeat it).
  */
 export const YOUTUBE: Readonly<Record<FeatureId, PlatformSupport>> = {
   'italic-bold-underline': kept,
@@ -314,11 +317,7 @@ export const YOUTUBE: Readonly<Record<FeatureId, PlatformSupport>> = {
     uploadError: true,
     fixedBy: 'styles-and-regions',
   },
-  style: {
-    status: 'dropped',
-    note: 'the style sheet is ignored',
-    fixedBy: 'styles-and-regions',
-  },
+  style: { status: 'dropped', note: 'the style sheet is ignored' },
   note: kept,
   overlap: kept,
   'whitespace-line': {
@@ -329,7 +328,7 @@ export const YOUTUBE: Readonly<Record<FeatureId, PlatformSupport>> = {
   },
 };
 
-/** Export compatibility fixes for YouTube: the recommended ones plus those that avoid its problems. */
+/** Export compatibility fixes for YouTube: the recommended ones plus those that avoid upload errors. */
 export const YOUTUBE_FIXES: readonly CompatibilityId[] = COMPATIBILITY_FIXES.filter(
   (f) => f.recommended || Object.values(YOUTUBE).some((s) => s.fixedBy === f.id),
 ).map((f) => f.id);
