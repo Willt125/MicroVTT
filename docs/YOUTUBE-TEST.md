@@ -76,10 +76,35 @@ The second file (`youtube-test-no-blocks.vtt`) was not needed: everything else i
 | 20  | 2:00 | `overlap`               | both captions on screen together, the second from 2:01        | kept    | kept    |                                                                          |
 | 21  | 2:06 | `whitespace-line`       | an empty-looking line between two lines, all in one caption   | dropped | dropped | only "Above an empty-looking line…" shown; upload error on the next line |
 
-The mobile app also ignores bold, underline, `position` and `align`. A space-only line loses
-the rest of the cue on both. Studio reports the line after it as an error while reading the
-file, which points to the cue being cut when the file is parsed rather than the second line
-being pushed off screen when it is drawn. To confirm: Studio's caption editor, or the
-captions downloaded back from Studio, should show caption 21 with only its first line.
+The mobile app also ignores bold, underline, `position` and `align`.
+
+A space-only line cuts the cue when YouTube reads the file, not when a player draws it: Studio
+reports the line after it as an error, and caption 21 in Studio's editor, in Studio's SBV
+download and in YouTube's WebVTT has only its first line. The rest of the text is gone from
+YouTube's copy.
+
+## What YouTube stored
+
+Two downloads of the uploaded captions show what YouTube kept:
+
+- **Studio's download** is SBV: times and plain text only (all markup removed; ruby written
+  as `漢字(kanji)`).
+- **YouTube's WebVTT** (as yt-dlp downloads it; kept as
+  `packages/core/test/fixtures/youtube-reexport.vtt`) adds `Kind:`/`Language:` header lines
+  and keeps ids, `<i>`, `<b>`, `<u>`, classes and word timings. It drops REGION and STYLE
+  blocks, comments, voice and language spans and `vertical`, and rewrites the rest:
+
+| Uploaded                                  | YouTube's WebVTT                        | Notes                                                     |
+| ----------------------------------------- | --------------------------------------- | --------------------------------------------------------- |
+| `line:0`                                  | `line:0%`                               | line numbers become percentages                           |
+| `position:10% align:start`                | `align:start position:10%,middle`       | `middle` is an old draft's name: parsers drop the setting |
+| `line:0 position:90%,line-right size:40%` | `size:40% position:90%,middle line:0%`  | the `line-right` alignment becomes `middle`               |
+| `align:end`                               | `align:end position:100%`               |                                                           |
+| `<c.yellow>yellow</c> (…)`                | `<c.yellow>yellow</c><c.> (…)</c>`      | `<c.>` is invalid (an empty class)                        |
+| `<ruby>漢字<rt>kanji</rt></ruby>`         | `<ruby>漢字</ruby>(()<rt>kanji</rt>())` | invalid: `<rt>` outside `<ruby>`                          |
+
+So YouTube's own WebVTT does not conform. MicroVTT imports it and its export repairs it as
+parsers read it: `<c.>` becomes `<c>`, the ruby becomes the text `漢字(()kanji())`, and the
+`,middle` positions are dropped (the cues keep `align:start` or `line:0%`). A test pins this.
 
 Not yet checked: TV apps.

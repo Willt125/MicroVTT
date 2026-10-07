@@ -355,6 +355,11 @@ overlapping cues. It ignores `size`, `vertical`, STYLE blocks and regions, shows
 its text. YouTube Studio reports upload errors for REGION blocks, `region:` settings,
 position/line alignment suffixes and the text left over after a space-only line.
 
+YouTube's own WebVTT (as yt-dlp downloads it) does not conform: it writes `<c.>`, `<rt>` outside
+`<ruby>`, and position alignments as an old draft's `middle`, which parsers reject with the
+whole setting (`docs/YOUTUBE-TEST.md`, "What YouTube stored"; fixture
+`youtube-reexport.vtt`).
+
 `YOUTUBE` in `features.ts` holds these results. The export dialog lists the features a file
 uses that YouTube does not keep or reports on upload (warnings only), and a button ticks the
 export fixes that avoid them (`YOUTUBE_FIXES`: the default fixes plus "trim whitespace" and

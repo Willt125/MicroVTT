@@ -307,7 +307,7 @@ export const YOUTUBE: Readonly<Record<FeatureId, PlatformSupport>> = {
   align: kept,
   'alignment-suffix': {
     status: 'kept',
-    note: 'placed as written, but YouTube Studio reports an error on the timing line',
+    note: 'placed as written, but YouTube Studio reports an error on the timing line, and YouTube\'s own WebVTT writes the alignment as the obsolete "middle"',
     uploadError: true,
   },
   vertical: { status: 'dropped', note: 'shown horizontally, in the default place' },

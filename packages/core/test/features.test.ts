@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   FEATURES,
@@ -88,5 +89,28 @@ describe('docs/youtube-test*.vtt', () => {
     const at = (i: number): string =>
       `${Math.floor(((i + 1) * 6) / 60)}:${String(((i + 1) * 6) % 60).padStart(2, '0')}`;
     expect(rows).toEqual(FEATURES.map((f, i) => [i + 1, at(i), f.id]));
+  });
+});
+
+describe("YouTube's own WebVTT (yt-dlp download of the uploaded test file)", () => {
+  const text = readFileSync(new URL('./fixtures/youtube-reexport.vtt', import.meta.url), 'utf8');
+
+  it('is not conforming, in the ways docs/YOUTUBE-TEST.md describes', () => {
+    const codes = new Set(validate(text).diagnostics.map((d) => d.code));
+    expect([...codes].sort()).toEqual([
+      'cue-setting-value', // position:10%,middle (an old draft's name for center)
+      'cue-text-class', // <c.>
+      'cue-text-nesting', // </rt> outside <ruby>
+      'cue-text-ruby', // <ruby> without <rt>
+      'header-text', // Kind: / Language:
+    ]);
+  });
+
+  it('exports conforming, keeping what a viewer reads', () => {
+    const exported = exportDocument(importDocument(text).document);
+    expect(exported.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+    expect(exported.text).toContain('Small text should sit above: 漢字(()kanji()).');
+    // The space-only line cut caption 21 on upload; only its first line survives.
+    expect(exported.text).toMatch(/00:02:10\.000\nAbove an empty-looking line…\n$/);
   });
 });
