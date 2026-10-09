@@ -461,6 +461,41 @@ multi-selection and bulk operations.
 **5c: quality checks**: reading speed, line length, minimum and maximum duration, gaps and
 overlaps; configurable, listed apart from conformance problems, with fixes where one is clear.
 
+### Ongoing: text in any language and script
+
+The editor should handle non-English and non-Latin text well: pick up language hints on import,
+and process and render each script correctly. Done alongside the phases, not as one PR. Known
+gaps (2026-10-08):
+
+- [ ] Auto-caption cleanup inserts spaces between timed words that had none (`gapText`), which
+      breaks Japanese, Chinese, Thai and other unspaced scripts. Keep empty gaps empty, and join
+      lines without a space in those scripts. Confirm on a real YouTube Japanese auto-caption file.
+- [ ] Lengths in graphemes (`Intl.Segmenter`), not UTF-16 units, so combining marks (Devanagari,
+      Thai, decomposed Vietnamese) and astral characters (emoji, rare Han) count once. Line-length
+      and reading-speed presets per script (CJK lines are about 13–16 full-width characters);
+      belongs with 5c.
+- [ ] Line-break preferences that know non-Latin punctuation (`。、！？`, `؟ ،`, `।`, `¿¡`), and
+      never start a line with closing punctuation of any script.
+- [ ] `dir="auto"` on cue text in the editor and the table, so right-to-left cues (Arabic,
+      Hebrew, Persian, Urdu) display and edit with the right base direction. Make direction marks
+      (U+200E, U+200F and the isolates) visible and insertable.
+- [ ] Language hints on import: YouTube's `Language:` header, a language code in the file name
+      (`video.ja.vtt`, as yt-dlp writes), and `<lang>` spans. An explicit hint sets the `lang`
+      of the text fields (spell check, and the right Han glyphs for Japanese against Chinese);
+      without one, the text fields keep the page language.
+- [ ] Without an explicit hint, guess the language and, only when the guess is confident, ask
+      whether to use it. Script alone settles some (kana: Japanese; Hangul: Korean; Thai); letters
+      distinguish others (Ukrainian `ії є`, Persian `پ چ ژ گ`, Urdu `ے ٹ`); Latin-script languages
+      need a small n-gram model. Never switch silently.
+- [ ] Find: optional Unicode normalization (NFC against NFD), and note the limits of
+      case-insensitive matching (Turkish `İ`/`ı`, `ß`).
+- [ ] More fallback encodings: Windows-1258 (Vietnamese), Windows-1257 (Baltic), KOI8-R, EUC-JP.
+- [ ] Test fixtures in CJK, Arabic, Hebrew, Devanagari and Thai, through import, cleanup, split,
+      find and export.
+- [ ] Optional, may be dropped: spell check beyond the browser's own. The browser checks
+      with the dictionaries the user has, guided by `lang`; anything more means dictionaries
+      fetched on demand (never bundled) and a license check per dictionary.
+
 ### Phase 6: Spec renderer and full feature coverage
 
 - §7 renderer overlay (positioning, snap-to-lines, regions, roll-up, `::cue` styling, `:past` and
@@ -598,6 +633,12 @@ overlaps; configurable, listed apart from conformance problems, with fixes where
 - **2026-10-07 (Phase 5a):** The `decodeAudioData` fallback is capped at 10 minutes, set by
   measurement: it decodes at the codec's own rate whatever rate is asked for (1.39 GB for an hour
   of mono Opus in Chromium).
+
+- **2026-10-08 (owner):** The editor should handle arbitrary non-English and non-Latin scripts:
+  pick up language hints on import, and process and render them correctly. The text fields'
+  language changes only on an explicit marker; a confident guess without one leads to a
+  question, never a silent switch. Spell check beyond the browser's own is welcome if it stays
+  small and unintrusive, but may be dropped.
 
 ## Open questions for the owner
 
