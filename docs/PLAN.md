@@ -469,33 +469,33 @@ Split into three PRs:
       playhead), two-point resync, and frame-rate change (for example 25 to 23.976 fps). Word
       timings move with their cues. Core: `resyncCues`, `syncMap`, `sortCuesMapped`.
 
-**5c: quality checks (style and accessibility rules)**: rules from subtitle style guides
-and accessibility guidance, kept apart from the format's errors and warnings: their own
-category, list and severity, never shown as conformance problems, and never blocking export.
+**5c: quality checks (style and accessibility rules) (done)**: rules from subtitle style
+guides and accessibility guidance, kept apart from the format's errors and warnings: their own
+panel, grouped by rule, never shown as conformance problems, and never blocking export. Details
+in `docs/QUALITY-RULES.md`.
 
-- [ ] A rule engine in `packages/core`: each rule has an id, a category (timing, reading speed,
-      layout, text, accessibility), a severity, adjustable thresholds and a source it cites
-      (guide, section, the version or date it was read). Fixes where one is clear.
-- [ ] A lite default set, on unless switched off: reading speed, line length, at most two lines,
-      minimum and maximum duration, overlapping cues, too-small gaps between cues, and empty
-      cues. Thresholds loose enough not to flag ordinary YouTube captions; lengths counted in
-      graphemes, with per-script presets (see "text in any language and script").
-- [ ] Profiles that switch on stricter sets, limited to the rules the editor can reasonably
-      detect: WCAG 2.2, the Netflix Timed Text Style Guide (2025-12-19 edition; general and
-      per-language), and the BBC Subtitle Guidelines (March 2026 edition). Others to consider
-      later: the DCMP Captioning Key and the FCC's caption-quality rules. Users can edit
-      thresholds and save their own profile.
-- [ ] Rules that need judgement are limited to what text can show: speaker identification on a
-      change of speaker, sound descriptions present, line breaks that split a name or article
-      from its noun. Anything that needs the audio (accuracy, sync against speech) is out of
-      scope until the timeline can compare against speech.
-- [ ] Every threshold in a profile is checked against the published guide before it ships, and
-      the guide's version is recorded; values from memory are not good enough.
+- [x] A rule engine in `packages/core/src/quality/`. Each rule has an id, a category (timing,
+      reading speed, layout, text, accessibility) and numeric settings. Each ruleset entry has
+      a severity and cites its guide and section, with the edition read. Fixes are data, applied
+      by the editor as one undo step each (or "Fix all" per rule).
+- [x] Basic checks, on by default: empty cues, duration, characters per second, line length,
+      lines, overlaps and very short gaps, loose enough that ordinary captions pass. Lengths are
+      counted in graphemes of the text a viewer reads. Checks wait until auto-captions are
+      cleaned up ("Check anyway" runs them).
+- [x] Rulesets: Netflix English (USA), adult and children's (General Requirements of
+      2022-10-07, English guide of 2025-12-19); BBC (March 2026); WCAG 2.2 (W3C Recommendation
+      of 2024-12-12), limited to what a caption file can show. Each threshold was read from the
+      supplied copies, and a test pins them.
+- [x] Users can switch rules off and change settings per ruleset (Rules… dialog), kept in the
+      browser, with a reset to the guide's values. New guides are added as rulesets (see
+      `QUALITY-RULES.md`).
+- [ ] Later: Netflix's Subtitle Timing Guidelines (frame gaps, shot changes) and glyph list,
+      once supplied; other Netflix languages; the DCMP Captioning Key and FCC caption-quality
+      rules; per-script line-length presets (see "text in any language and script"); checks
+      for speaker identification and sound descriptions.
 - **Note on WCAG:** WCAG requires captions (1.2.2, 1.2.4) but sets few measurable values for
-  them. Its checkable parts are contrast of colours set in STYLE blocks (1.4.3; the themes
-  already have a contrast test to reuse) and three flashes or below (2.3.1; not checkable from
-  the file). A WCAG profile is therefore small, and should say so rather than imply that
-  passing it makes captions accessible.
+  them. The WCAG ruleset checks contrast of colours set in STYLE blocks (1.4.3), and says that
+  passing it does not make captions accessible.
 
 ### Ongoing: text in any language and script
 
@@ -705,6 +705,10 @@ gaps (2026-10-08):
   each move, the selection following the cues), since an out-of-order cue is a conformance
   error. A shift that would put a cue before 0 is reduced, not clamped per cue, so cues keep
   their lengths and spacing.
+- **2026-10-10 (Phase 5c):** One ruleset is active at a time (the guides disagree on ellipses,
+  labels and gaps). Characters per second count spaces and punctuation but not line breaks; the
+  guides do not define it. Style checks wait while a file looks like uncleaned auto-captions,
+  since nearly every rolling cue fails them.
 - **2026-10-10 (owner):** The 5c profiles target WCAG 2.2, the Netflix Timed Text Style Guide
   of 2025-12-19 and the BBC Subtitle Guidelines of March 2026, each limited to what the editor
   can reasonably detect.

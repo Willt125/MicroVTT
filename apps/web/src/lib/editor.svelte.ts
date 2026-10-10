@@ -3,9 +3,19 @@
  * operations are pure), so undo/redo keeps references to earlier documents and never deep-copies.
  * `$state.raw` keeps Svelte from wrapping tens of thousands of cues in reactive proxies.
  */
-import type { Cue, ExportOptions, FileType, VttDocument } from '@microvtt/core';
+import type {
+  Cue,
+  ExportOptions,
+  FileType,
+  QualityFinding,
+  QualityRuleId,
+  VttDocument,
+} from '@microvtt/core';
 import {
+  applyQualityFix as applyQualityFixTo,
+  applyQualityFixes,
   applyQuickFix,
+  RULES,
   createCue,
   createDocument,
   findQuickFixes,
@@ -27,6 +37,11 @@ import type {
   ReviewMarker,
 } from './worker/protocol.ts';
 import { sliceDocument } from './media.ts';
+import {
+  loadQualitySettings,
+  saveQualitySettings,
+  type QualitySettings,
+} from './quality-settings.ts';
 import type { VttWorker } from './worker/client.ts';
 
 const HISTORY_LIMIT = 500;
@@ -98,6 +113,46 @@ export class Editor {
   private sourceBytes: ArrayBuffer | null = null;
   /** Censored words and sound tags in the current document (found with validation). */
   review = $state.raw<ReviewMarker[]>([]);
+  /** Style and accessibility findings for the current document (found with validation). */
+  quality = $state.raw<QualityFinding[]>([]);
+  /** The ruleset and the user's changes to it, kept in this browser. */
+  qualitySettings = $state.raw<QualitySettings>(loadQualitySettings());
+  /** Set to check uncleaned auto-captions anyway (they fail most rules until cleaned up). */
+  qualityAnyway = $state(false);
+  /** The document `quality` was found in; its fixes apply only to that one. */
+  private qualityDoc: VttDocument | null = null;
+
+  /** True while checks wait for auto-captions to be cleaned up. */
+  get qualityPaused(): boolean {
+    return this.autoCaptions !== null && !this.qualityAnyway && this.qualitySettings.ruleset !== '';
+  }
+
+  /** Changes the ruleset or its rules, and checks again. */
+  setQualitySettings(settings: QualitySettings): void {
+    this.qualitySettings = settings;
+    saveQualitySettings(settings);
+    this.scheduleValidation(0);
+  }
+
+  /** Checks uncleaned auto-captions anyway. */
+  checkQualityAnyway(): void {
+    this.qualityAnyway = true;
+    this.scheduleValidation(0);
+  }
+
+  /** Applies one finding's fix, as one undo step; nothing if the document has changed since. */
+  applyQualityFix(finding: QualityFinding): void {
+    if (!finding.fix || this.qualityDoc !== this.doc) return;
+    this.apply(applyQualityFixTo(this.doc, finding), finding.fix.label);
+  }
+
+  /** Applies every fix offered for one rule, as one undo step. */
+  applyRuleFixes(rule: QualityRuleId): void {
+    if (this.qualityDoc !== this.doc) return;
+    const findings = this.quality.filter((f) => f.rule === rule && f.fix);
+    if (findings.length === 0) return;
+    this.apply(applyQualityFixes(this.doc, findings), `${RULES[rule].title}: fix all`);
+  }
 
   /** Text kept as a comment that was probably meant otherwise (see core's quickfix.ts). */
   quickFixes = $derived(findQuickFixes(this.doc));
@@ -315,6 +370,9 @@ export class Editor {
     this.encodingGuessed = false;
     this.sourceBytes = null;
     this.review = [];
+    this.quality = [];
+    this.qualityDoc = null;
+    this.qualityAnyway = false;
     this.diagnostics = [];
     this.validating = true;
     this.selected = doc.body.findIndex((item) => item.type === 'cue');
@@ -689,11 +747,18 @@ export class Editor {
     const doc = this.doc;
     this.workerDoc = doc;
     try {
-      const checked = await this.worker.validate(doc, this.fileType);
+      const { ruleset, overrides } = this.qualitySettings;
+      const quality =
+        ruleset === '' || this.qualityPaused
+          ? null
+          : { ruleset, overrides: overrides[ruleset] ?? {} };
+      const checked = await this.worker.validate(doc, this.fileType, quality);
       // Ignore results for documents that have since changed.
       if (version === this.validateVersion) {
         this.diagnostics = checked.diagnostics;
         this.review = checked.review;
+        this.quality = checked.quality;
+        this.qualityDoc = doc;
       }
     } catch (error) {
       if (version === this.validateVersion)

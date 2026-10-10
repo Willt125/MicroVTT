@@ -9,7 +9,9 @@ import type {
   ReviewMarker,
   ExportOptions,
   FileType,
+  QualityFinding,
   RepairEntry,
+  RuleOverrides,
   Severity,
   VttDocument,
 } from '@microvtt/core';
@@ -43,6 +45,14 @@ export interface Checked {
   diagnostics: ItemDiagnostic[];
   /** Censored words and sound tags to look at. */
   review: ReviewMarker[];
+  /** Style and accessibility findings (empty when no ruleset was asked for). */
+  quality: QualityFinding[];
+}
+
+/** Which style and accessibility rules to check, as the user has set them. */
+export interface QualityRequest {
+  ruleset: string;
+  overrides: RuleOverrides;
 }
 
 export type { AutoCaptionInfo, CleanupOptions, CleanupResult, ReviewMarker };
@@ -82,7 +92,13 @@ export interface AutosaveRequest {
 
 export type WorkerRequest =
   | { id: number; type: 'import'; bytes: ArrayBuffer; encoding?: string }
-  | { id: number; type: 'validate'; document: VttDocument; fileType: FileType }
+  | {
+      id: number;
+      type: 'validate';
+      document: VttDocument;
+      fileType: FileType;
+      quality: QualityRequest | null;
+    }
   | { id: number; type: 'export'; document: VttDocument; options: ExportOptions }
   | { id: number; type: 'preview'; document: VttDocument }
   | { id: number; type: 'detect'; document: VttDocument }

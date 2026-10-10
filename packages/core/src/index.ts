@@ -134,3 +134,4 @@ export { colourClass, findLegacyTags, modernizeCueText } from './legacy-text.ts'
 export type { LegacyTag } from './legacy-text.ts';
 export { applyQuickFix, findQuickFixes } from './quickfix.ts';
 export type { QuickFix, QuickFixKind } from './quickfix.ts';
+export * from './quality/index.ts';
