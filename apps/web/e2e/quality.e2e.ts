@@ -68,3 +68,11 @@ test('waits for auto-captions to be cleaned up', async ({ page }) => {
   await panel(page).getByRole('button', { name: 'Check anyway' }).click();
   await expect(panel(page).getByRole('status')).toContainText(/warnings?/);
 });
+
+test('checks Finnish subtitles against the Netflix Finnish guide', async ({ page }) => {
+  await open(page, 'WEBVTT\n\n00:00.000 --> 00:03.000\nEn tiedä .\n');
+  await panel(page).getByLabel('Check against').selectOption('netflix-fi');
+  await panel(page).getByText('Space before punctuation (1)').click();
+  await panel(page).getByRole('button', { name: 'Remove the space' }).click();
+  await expect(cueText(page)).toHaveValue('En tiedä.');
+});

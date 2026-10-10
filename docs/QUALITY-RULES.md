@@ -27,33 +27,40 @@ cue fails them. "Check anyway" runs them regardless.
 
 ## Rules
 
-| Rule                 | Category      | Checks                                                                                                                        | Fix                                              |
-| -------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `empty-cue`          | text          | a cue with no text to read                                                                                                    | delete                                           |
-| `min-duration`       | timing        | duration under the minimum                                                                                                    | lengthen, when the next cue leaves room          |
-| `max-duration`       | timing        | duration over the maximum                                                                                                     | none                                             |
-| `min-gap`            | timing        | a gap between cues that is more than 0 and less than the minimum                                                              | close the gap                                    |
-| `frame-gaps`         | timing        | a gap other than exactly the minimum frames (2) that is under half a second, at the video's frame rate (24 fps without media) | leave exactly the minimum frames                 |
-| `overlap`            | timing        | a cue still showing when the next starts                                                                                      | end where the next starts                        |
-| `chars-per-second`   | reading speed | characters per second over the maximum                                                                                        | none                                             |
-| `words-per-minute`   | reading speed | words per minute over the maximum                                                                                             | none                                             |
-| `max-lines`          | layout        | more lines than the maximum                                                                                                   | none                                             |
-| `line-length`        | layout        | a line longer than the maximum                                                                                                | rewrap (plain text only, into at most two lines) |
-| `line-shape`         | layout        | two lines where the top is longer, or holds only one or two words                                                             | rewrap (plain text only)                         |
-| `single-line`        | layout        | two lines that would fit on one (dual-speaker cues aside)                                                                     | join (plain text only)                           |
-| `line-break-words`   | layout        | a line ending in an article or preposition (English)                                                                          | none                                             |
-| `centred`            | layout        | a cue not centred (`align` other than center, or a position set)                                                              | centre                                           |
-| `ellipsis-character` | text          | three dots instead of `…`                                                                                                     | use `…`                                          |
-| `double-space`       | text          | two spaces in a row                                                                                                           | single spaces                                    |
-| `dash-characters`    | text          | an en or em dash                                                                                                              | none                                             |
-| `speaker-hyphen`     | text          | a line starting with a hyphen and a space                                                                                     | remove the space                                 |
-| `okay-spelling`      | text          | "OK" or "Ok"                                                                                                                  | "okay" ("Okay" at a sentence start)              |
-| `lowercase-labels`   | text          | a bracketed label written in capitals                                                                                         | none (proper nouns may stay capitalised)         |
-| `lyrics-notes`       | text          | lyrics not enclosed in `♪ … ♪`                                                                                                | none                                             |
-| `glyph-list`         | text          | characters not in the Netflix Glyph List (version 2), e.g. emoji, or direction marks                                          | none                                             |
-| `bbc-characters`     | text          | characters outside the BBC's list (§9.3)                                                                                      | straight quotes and three dots                   |
-| `bbc-colours`        | accessibility | `::cue` colours other than the BBC's four, or a coloured background                                                           | none                                             |
-| `contrast`           | accessibility | `::cue` text and background contrast, at worst over a black or white picture                                                  | none                                             |
+| Rule                       | Category      | Checks                                                                                                                        | Fix                                              |
+| -------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `empty-cue`                | text          | a cue with no text to read                                                                                                    | delete                                           |
+| `min-duration`             | timing        | duration under the minimum                                                                                                    | lengthen, when the next cue leaves room          |
+| `max-duration`             | timing        | duration over the maximum                                                                                                     | none                                             |
+| `min-gap`                  | timing        | a gap between cues that is more than 0 and less than the minimum                                                              | close the gap                                    |
+| `frame-gaps`               | timing        | a gap other than exactly the minimum frames (2) that is under half a second, at the video's frame rate (24 fps without media) | leave exactly the minimum frames                 |
+| `overlap`                  | timing        | a cue still showing when the next starts                                                                                      | end where the next starts                        |
+| `chars-per-second`         | reading speed | characters per second over the maximum                                                                                        | none                                             |
+| `words-per-minute`         | reading speed | words per minute over the maximum                                                                                             | none                                             |
+| `max-lines`                | layout        | more lines than the maximum                                                                                                   | none                                             |
+| `line-length`              | layout        | a line longer than the maximum                                                                                                | rewrap (plain text only, into at most two lines) |
+| `line-shape`               | layout        | two lines where the top is longer, or holds only one or two words                                                             | rewrap (plain text only)                         |
+| `single-line`              | layout        | two lines that would fit on one (dual-speaker cues aside)                                                                     | join (plain text only)                           |
+| `line-break-words`         | layout        | a line ending in an article or preposition (English)                                                                          | none                                             |
+| `centred`                  | layout        | a cue not centred (`align` other than center, or a position set)                                                              | centre                                           |
+| `ellipsis-character`       | text          | three dots instead of `…`                                                                                                     | use `…`                                          |
+| `double-space`             | text          | two spaces in a row                                                                                                           | single spaces                                    |
+| `dash-characters`          | text          | an en or em dash                                                                                                              | none                                             |
+| `speaker-hyphen`           | text          | a line starting with a hyphen and a space                                                                                     | remove the space                                 |
+| `okay-spelling`            | text          | "OK" or "Ok"                                                                                                                  | "okay" ("Okay" at a sentence start)              |
+| `lowercase-labels`         | text          | a bracketed label written in capitals                                                                                         | none (proper nouns may stay capitalised)         |
+| `lyrics-notes`             | text          | lyrics not enclosed in `♪ … ♪`                                                                                                | none                                             |
+| `glyph-list`               | text          | characters not in the Netflix Glyph List (version 2), e.g. emoji, or direction marks                                          | none                                             |
+| `dual-speaker-second-line` | text          | a two-speaker cue with a hyphen on both lines (Finnish: second line only)                                                     | remove the first hyphen                          |
+| `continuation-hyphen`      | text          | a cue ending with no punctuation before another cue (Finnish: end with " -")                                                  | add " -"                                         |
+| `space-before-punctuation` | text          | a space before . , ! ? : ; or …                                                                                               | remove the space                                 |
+| `finnish-numbers`          | text          | 10,000, 7:45 and 1.5 (Finnish: 10 000, 7.45, 1,5)                                                                             | Finnish formats                                  |
+| `acronym-periods`          | text          | acronyms with full stops (U.S.A.); initials before a name are left alone                                                      | remove the full stops                            |
+| `finnish-abbreviations`    | text          | common abbreviations without their full stop (esim., jne., vrt. …), or "klo."                                                 | fix                                              |
+| `agency-names`             | text          | Finnish state body names in capitals that Kotus writes otherwise (KELA:n → Kelan)                                             | official form                                    |
+| `bbc-characters`           | text          | characters outside the BBC's list (§9.3)                                                                                      | straight quotes and three dots                   |
+| `bbc-colours`              | accessibility | `::cue` colours other than the BBC's four, or a coloured background                                                           | none                                             |
+| `contrast`                 | accessibility | `::cue` text and background contrast, at worst over a black or white picture                                                  | none                                             |
 
 Fixes are offered only where the right change is clear. Each fix is one undo step, and "Fix all"
 applies one rule's fixes together.
@@ -146,6 +153,45 @@ The glyph list is built into `packages/core/src/quality/netflix-glyphs.generated
 ranges (38,645 code points). To update it, export the spreadsheet's source sheet as CSV and run
 `pnpm gen:glyphs path/to/file.csv`; the CSV itself is not committed. The list has no emoji, no
 zero-width joiner and no left-to-right or right-to-left marks, so those are reported.
+
+### Netflix Finnish, and children's, SDH and SDH children's variants
+
+Sources: Netflix Finnish Timed Text Style Guide (2025-12-19), with the General Requirements,
+timing guidelines and glyph list; and the two Kotus lists the guide refers to for
+abbreviations (_Lyhenneluettelo_; _Valtionhallinnon nimet ja niiden lyhenteet_), supplied
+2026-10-10.
+
+| Rule                                      | Setting                                    | Section                        |
+| ----------------------------------------- | ------------------------------------------ | ------------------------------ |
+| Duration, frame gaps, glyph list, centred |                                            | General 1, 3, 5; Timing 5      |
+| Lines, line length                        | 2 lines of 42                              | Finnish 11, 2                  |
+| Reading speed                             | 17 / 13 children's; SDH 20 / 17 children's | Finnish 15, 20                 |
+| Line shape (bottom-heavy)                 |                                            | Finnish 11                     |
+| Ellipsis character, continuation hyphen   |                                            | Finnish 4                      |
+| Speaker hyphens (second line only)        |                                            | Finnish 6                      |
+| Number formats                            |                                            | Finnish 12                     |
+| Acronyms without full stops               |                                            | Finnish 1                      |
+| Abbreviations, state body names           |                                            | Kotus (Finnish 1)              |
+| Space before punctuation                  |                                            | Finnish 13 (Kotus conventions) |
+| Lowercase labels, lyrics notes (SDH only) |                                            | Finnish 20                     |
+
+Not checked: condensing and merging (the guide asks for a condensed style), italics, quotes,
+spelled-out numbers, and timing to the audio and to shot changes. The guide allows two lines
+even when the text would fit on one, so the one-line rule is not used.
+
+Of the Kotus lists, only what can be checked without false alarms is used:
+
+- **Missing full stops:** 16 abbreviations common in dialogue that Kotus writes only with a full
+  stop, and whose form without it is neither another abbreviation nor a word: esim., jne., yms.,
+  tms., jms., vrt., ks., ym., ts., pvm., ko., em., nk., huom., eKr., jKr. Left out: "ns.",
+  "mm.", "ml." and "n.", which are units without the stop. Also flagged: "klo" written with one.
+- **State body names:** the 26 short names with a single official mixed-case form (Kela, Syke,
+  Traficom …). They are flagged in capitals, with any case ending (KELA:n → Kelan), but not in
+  all-capital cues (forced narratives).
+
+Run on three real YouTube auto-caption files machine-translated into Finnish (after cleanup),
+these Finnish-specific rules raised no false alarms. Space before punctuation and the
+continuation hyphen caught real problems.
 
 ### BBC
 

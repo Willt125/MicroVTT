@@ -31,6 +31,13 @@ export type QualityRuleId =
   | 'lowercase-labels'
   | 'lyrics-notes'
   | 'glyph-list'
+  | 'dual-speaker-second-line'
+  | 'continuation-hyphen'
+  | 'space-before-punctuation'
+  | 'finnish-numbers'
+  | 'acronym-periods'
+  | 'finnish-abbreviations'
+  | 'agency-names'
   | 'bbc-characters'
   | 'bbc-colours'
   | 'contrast';
