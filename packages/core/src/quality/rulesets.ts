@@ -28,6 +28,11 @@ const NETFLIX_TEMPLATES: GuideSource = {
   title: 'Netflix Timed Text Style Guide: Subtitle Templates',
   edition: 'as supplied 2026-10-10',
 };
+const NETFLIX_GLYPHS: GuideSource = {
+  id: 'netflix-glyphs',
+  title: 'Netflix Glyph List (NGL2)',
+  edition: 'version 2, as supplied 2026-10-10',
+};
 const BBC: GuideSource = {
   id: 'bbc',
   title: 'BBC Subtitle Guidelines',
@@ -65,11 +70,10 @@ const netflix = (children: boolean): Ruleset => ({
   id: children ? 'netflix-en-us-children' : 'netflix-en-us',
   name: children ? 'Netflix English (USA), children’s' : 'Netflix English (USA)',
   description: `Netflix’s general requirements and English (USA) guide, ${children ? 'children’s programs (17 characters per second)' : 'adult programs (20 characters per second)'}. Rules marked SDH apply to subtitles for the deaf and hard of hearing.`,
-  sources: [NETFLIX_GENERAL, NETFLIX_EN_US, NETFLIX_TIMING],
+  sources: [NETFLIX_GENERAL, NETFLIX_EN_US, NETFLIX_TIMING, NETFLIX_GLYPHS],
   notChecked: [
     'Accuracy and completeness against the audio, italics use, numbers, punctuation style and quotations (judgement, or need the audio).',
     'Timing to the audio and to shot changes (need the audio and the picture).',
-    'The Netflix glyph list: a separate document, not supplied.',
   ],
   rules: {
     'empty-cue': { severity: 'warning' },
@@ -147,6 +151,11 @@ const netflix = (children: boolean): Ruleset => ({
       source: 'netflix-en-us',
       section: 'I.6 / II.8 Dual Speakers',
     },
+    'glyph-list': {
+      severity: 'warning',
+      source: 'netflix-glyphs',
+      section: 'General Requirements 3. Glyph List',
+    },
     'okay-spelling': {
       severity: 'info',
       source: 'netflix-en-us',
@@ -169,11 +178,10 @@ const netflixTemplate = (children: boolean): Ruleset => ({
   id: children ? 'netflix-template-en-children' : 'netflix-template-en',
   name: children ? 'Netflix English template, children’s' : 'Netflix English template',
   description: `Netflix’s rules for English subtitle templates (the files translations are made from), with the timing guidelines: ${children ? 'children’s programs, 15' : 'adult programs, 17'} characters per second, and text kept on one line whenever it fits.`,
-  sources: [NETFLIX_TEMPLATES, NETFLIX_TIMING, NETFLIX_EN_US],
+  sources: [NETFLIX_TEMPLATES, NETFLIX_TIMING, NETFLIX_EN_US, NETFLIX_GLYPHS],
   notChecked: [
     'Coverage, annotations, forced narratives and segmentation (judgement).',
     'Timing to the audio and to shot changes (need the audio and the picture).',
-    'The Netflix glyph list (version 2): a separate document, not supplied.',
   ],
   rules: {
     'empty-cue': { severity: 'warning' },
@@ -250,6 +258,11 @@ const netflixTemplate = (children: boolean): Ruleset => ({
       severity: 'warning',
       source: 'netflix-en-us',
       section: 'II.15 Punctuation',
+    },
+    'glyph-list': {
+      severity: 'warning',
+      source: 'netflix-glyphs',
+      section: 'Templates 16. Glyph List (version 2)',
     },
   },
 });

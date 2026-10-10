@@ -20,6 +20,7 @@
     "bench": "node --expose-gc packages/core/bench/parse.bench.ts",
     "fuzz": "FUZZ_CASES=200000 vitest run packages/core/test/fuzz",
     "gen:entities": "node scripts/gen-entities.mjs",
+    "gen:glyphs": "node scripts/gen-glyphs.mjs",
     "gen:diagnostics": "node scripts/diagnostics-doc.mjs",
     "gen:youtube-test": "node scripts/youtube-test.mjs",
     "sync:wpt": "bash scripts/sync-wpt.sh",

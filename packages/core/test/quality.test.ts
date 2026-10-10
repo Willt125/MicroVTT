@@ -19,6 +19,7 @@ import {
   createCue,
   createDocument,
   graphemeLength,
+  inNetflixGlyphList,
   parseColour,
   readableLines,
   wordCount,
@@ -183,6 +184,17 @@ describe('rules', () => {
     expect(checkQuality(doc(left), only('centred'))[0]?.fix?.change).toEqual({ kind: 'centre' });
   });
 
+  it('the Netflix glyph list', () => {
+    for (const ch of 'aZé…♪’–ñ漢한ありがとうЖ')
+      expect(inNetflixGlyphList(ch.codePointAt(0)!), ch).toBe(true);
+    for (const ch of ['😀', '\u200d', '\u200e'])
+      expect(inNetflixGlyphList(ch.codePointAt(0)!)).toBe(false);
+    expect(checkQuality(doc(createCue(0, 2000, 'Café… ♪ 漢字')), only('glyph-list'))).toEqual([]);
+    expect(
+      checkQuality(doc(createCue(0, 2000, 'So happy 😀\u200e')), only('glyph-list'))[0]?.message,
+    ).toBe('Not in the Netflix glyph list: 😀 (U+1F600), (U+200E).');
+  });
+
   it('one line when the text fits', () => {
     const [f] = checkQuality(
       doc(createCue(0, 2000, 'I might become\nthe first lady.')),
@@ -289,6 +301,8 @@ describe('rulesets', () => {
     expect(params(NETFLIX_EN_US_ADULT, 'line-length')).toEqual({ max: 42 });
     expect(params(NETFLIX_EN_US_ADULT, 'min-duration')?.['minMs']).toBeCloseTo(833.33, 1);
     expect(params(NETFLIX_EN_US_ADULT, 'max-duration')).toEqual({ maxMs: 7000 });
+    expect(NETFLIX_EN_US_ADULT.rules['glyph-list']).toBeDefined();
+    expect(NETFLIX_TEMPLATE_EN.rules['glyph-list']).toBeDefined();
     expect(params(NETFLIX_EN_US_ADULT, 'frame-gaps')).toEqual({ frames: 2, closeBelowMs: 500 });
     expect(params(NETFLIX_TEMPLATE_EN, 'chars-per-second')).toEqual({ max: 17 });
     expect(params(NETFLIX_TEMPLATE_EN_CHILDREN, 'chars-per-second')).toEqual({ max: 15 });

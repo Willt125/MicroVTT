@@ -50,6 +50,7 @@ cue fails them. "Check anyway" runs them regardless.
 | `okay-spelling`      | text          | "OK" or "Ok"                                                                                                                  | "okay" ("Okay" at a sentence start)              |
 | `lowercase-labels`   | text          | a bracketed label written in capitals                                                                                         | none (proper nouns may stay capitalised)         |
 | `lyrics-notes`       | text          | lyrics not enclosed in `♪ … ♪`                                                                                                | none                                             |
+| `glyph-list`         | text          | characters not in the Netflix Glyph List (version 2), e.g. emoji, or direction marks                                          | none                                             |
 | `bbc-characters`     | text          | characters outside the BBC's list (§9.3)                                                                                      | straight quotes and three dots                   |
 | `bbc-colours`        | accessibility | `::cue` colours other than the BBC's four, or a coloured background                                                           | none                                             |
 | `contrast`           | accessibility | `::cue` text and background contrast, at worst over a black or white picture                                                  | none                                             |
@@ -84,6 +85,7 @@ Sources:
 - [Timed Text Style Guide: General Requirements](https://partnerhelp.netflixstudios.com/hc/en-us/articles/215758617), revision of 2022-10-07.
 - [English (USA) Timed Text Style Guide](https://partnerhelp.netflixstudios.com/hc/en-us/articles/217350977), 2025-12-19.
 - Timed Text Style Guide: Subtitle Timing Guidelines, revision of 2025-07-04.
+- Netflix Glyph List, version 2 (NGL2), supplied as a spreadsheet export.
 
 | Rule                            | Setting                              | Section              |
 | ------------------------------- | ------------------------------------ | -------------------- |
@@ -99,6 +101,7 @@ Sources:
 | Ellipsis character              |                                      | English I.3 / II.5   |
 | Double spaces, en and em dashes |                                      | English I.12 / II.15 |
 | Speaker hyphens                 |                                      | English I.6 / II.8   |
+| Glyph list (version 2)          |                                      | General 3            |
 | "Okay"                          |                                      | English I.17 / II.21 |
 | Lowercase labels (SDH)          |                                      | English I.16         |
 | Lyrics notes (SDH)              |                                      | English I.15         |
@@ -107,7 +110,6 @@ Not checked:
 
 - Timing to the audio and to shot changes (timing guidelines 1, 2 and 4). These need the audio and
   the picture.
-- The Netflix glyph list, a separate document that wasn't supplied.
 - Anything that needs judgement or the audio.
 
 Frame gaps are counted at the video's frame rate when media is open (measured, or chosen in the
@@ -135,9 +137,15 @@ and the English (USA) guide.
 | Centred                        |                                      | Templates 21                     |
 | Double spaces, speaker hyphens |                                      | Templates 22, 11                 |
 | Ellipsis character, dashes     |                                      | English II.5, II.15              |
+| Glyph list (version 2)         |                                      | Templates 16                     |
 
-Not checked: coverage, annotations, forced narratives and segmentation (judgement), timing to the
-audio and to shot changes, and the glyph list (version 2).
+Not checked: coverage, annotations, forced narratives and segmentation (judgement), and timing to
+the audio and to shot changes.
+
+The glyph list is built into `packages/core/src/quality/netflix-glyphs.generated.ts` as code-point
+ranges (38,645 code points). To update it, export the spreadsheet's source sheet as CSV and run
+`pnpm gen:glyphs path/to/file.csv`; the CSV itself is not committed. The list has no emoji, no
+zero-width joiner and no left-to-right or right-to-left marks, so those are reported.
 
 ### BBC
 

@@ -493,7 +493,8 @@ in `docs/QUALITY-RULES.md`.
 - [x] Netflix's Subtitle Timing Guidelines (2025-07-04): frame gaps (exactly 2 frames, or at
       least half a second) at the video's frame rate; and English subtitle templates (17/15
       characters per second, one line whenever it fits).
-- [ ] Later: Netflix's glyph list, once supplied; shot-change timing (needs shot detection);
+- [x] The Netflix Glyph List (version 2), generated into core as code-point ranges.
+- [ ] Later: shot-change timing (needs shot detection);
       other Netflix languages; the DCMP Captioning Key and FCC caption-quality
       rules; per-script line-length presets (see "text in any language and script"); checks
       for speaker identification and sound descriptions.

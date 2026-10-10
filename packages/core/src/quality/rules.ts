@@ -7,6 +7,7 @@ import type { Cue, VttDocument } from '../document.ts';
 import { parseStylesheet } from '../css.ts';
 import { composite, contrastRatio, hexOf, parseColour, type Rgba } from './colour.ts';
 import { graphemeLength, wordCount } from './measure.ts';
+import { NETFLIX_GLYPH_RANGES } from './netflix-glyphs.generated.ts';
 import type { ParamSpec, QualityCategory, QualityFix, QualityRuleId } from './types.ts';
 
 /** A cue as the rules see it. */
@@ -127,6 +128,34 @@ const WHITE: Rgba = { r: 255, g: 255, b: 255, a: 1 };
 const BLACK: Rgba = { r: 0, g: 0, b: 0, a: 1 };
 /** The cue background WebVTT renderers draw by default (§7.4: rgba(0,0,0,0.8)). */
 const DEFAULT_BACKGROUND: Rgba = { r: 0, g: 0, b: 0, a: 0.8 };
+
+/** The Netflix Glyph List as sorted range starts and ends, built on first use. */
+let glyphRanges: { starts: Uint32Array; ends: Uint32Array } | null = null;
+
+/** Whether a code point is in the Netflix Glyph List (version 2). */
+export function inNetflixGlyphList(codePoint: number): boolean {
+  if (!glyphRanges) {
+    const parts = NETFLIX_GLYPH_RANGES.split(',');
+    const starts = new Uint32Array(parts.length);
+    const ends = new Uint32Array(parts.length);
+    parts.forEach((part, i) => {
+      const [a, b = a] = part.split('-') as [string, string?];
+      starts[i] = parseInt(a, 36);
+      ends[i] = parseInt(b, 36);
+    });
+    glyphRanges = { starts, ends };
+  }
+  const { starts, ends } = glyphRanges;
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (codePoint < (starts[mid] as number)) hi = mid - 1;
+    else if (codePoint > (ends[mid] as number)) lo = mid + 1;
+    else return true;
+  }
+  return false;
+}
 
 const RULE_LIST: RuleDefinition[] = [
   {
@@ -543,6 +572,35 @@ const RULE_LIST: RuleDefinition[] = [
       emit({
         index: info.index,
         message: 'Lyrics start with “♪ ” and end with “ ♪”.',
+      });
+    },
+  },
+  {
+    id: 'glyph-list',
+    category: 'text',
+    title: 'Netflix glyph list',
+    description: 'Characters that are not in the Netflix Glyph List (version 2), such as emoji.',
+    params: [],
+    defaults: {},
+    cue(info, _, emit) {
+      const text = plain(info);
+      if (/^[\n\x20-\x7e]*$/.test(text)) return; // Printable ASCII is all in the list.
+      const bad: string[] = [];
+      for (const ch of text) {
+        const cp = ch.codePointAt(0) as number;
+        if (!inNetflixGlyphList(cp) && !bad.includes(ch)) bad.push(ch);
+      }
+      if (bad.length === 0) return;
+      const shown = bad
+        .slice(0, 6)
+        .map(
+          (c) =>
+            `${/\p{C}|\p{Z}/u.test(c) ? '' : `${c} `}(U+${(c.codePointAt(0) as number).toString(16).toUpperCase().padStart(4, '0')})`,
+        )
+        .join(', ');
+      emit({
+        index: info.index,
+        message: `Not in the Netflix glyph list: ${shown}${bad.length > 6 ? ', …' : ''}.`,
       });
     },
   },

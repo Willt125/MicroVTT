@@ -30,6 +30,7 @@ export type QualityRuleId =
   | 'okay-spelling'
   | 'lowercase-labels'
   | 'lyrics-notes'
+  | 'glyph-list'
   | 'bbc-characters'
   | 'bbc-colours'
   | 'contrast';
