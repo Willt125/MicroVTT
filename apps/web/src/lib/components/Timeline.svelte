@@ -359,6 +359,8 @@
       panned = false;
       return;
     }
+    // No text selection or native drag while working on cues.
+    event.preventDefault();
     if (event.shiftKey) return editor.selectRange(hit.index);
     if (event.ctrlKey || event.metaKey) return editor.toggleSelected(hit.index);
     if (!editor.isSelected(hit.index)) editor.selected = hit.index;

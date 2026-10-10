@@ -76,29 +76,36 @@ test.describe('with media', () => {
   });
 
   test('moves every selected cue together', async ({ page }) => {
-    await rows(page).nth(0).click();
-    await rows(page)
-      .nth(2)
-      .click({ modifiers: ['ControlOrMeta'] });
-    await expect(cueList(page).locator('[aria-selected=true]')).toHaveCount(2);
+    await cueList(page).focus();
+    await page.keyboard.press('ControlOrMeta+a');
+    await expect(cueList(page).locator('[aria-selected=true]')).toHaveCount(3);
     await dragLane(page, 10_000, 12_000);
     const [one, two, three] = await starts(page);
-    expect(two).toBe('00:00:05.000');
-    expect(toMs(three) - 9000).toBe(toMs(one) - 1000);
     expect(toMs(one) - 1000).toBeGreaterThan(1500);
+    expect(toMs(two) - 5000).toBe(toMs(one) - 1000);
+    expect(toMs(three) - 9000).toBe(toMs(one) - 1000);
   });
 });
 
-test('selects ranges in the list and deletes them', async ({ page }) => {
+test('selects in the list with Shift and Ctrl/⌘, and deletes the selection', async ({ page }) => {
   await openThree(page);
+  const selected = cueList(page).locator('[aria-selected=true]');
   await rows(page).nth(0).click();
   await rows(page)
     .nth(1)
     .click({ modifiers: ['Shift'] });
-  await expect(cueList(page).locator('[aria-selected=true]')).toHaveCount(2);
+  await expect(selected).toHaveCount(2);
+  await rows(page)
+    .nth(2)
+    .click({ modifiers: ['ControlOrMeta'] });
+  await expect(selected).toHaveCount(3);
+  await rows(page)
+    .nth(0)
+    .click({ modifiers: ['ControlOrMeta'] });
+  await expect(selected).toHaveCount(2);
   await cueList(page).press('Delete');
   await expect(status(page)).toContainText('1 cue');
-  await expect(rows(page).first().locator('.text')).toHaveText('three');
+  await expect(rows(page).first().locator('.text')).toHaveText('one');
 });
 
 test('shifts and resyncs with the Timing dialog', async ({ page }) => {
