@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
   import type { AlignSetting, Cue, CueUpdate, DirectionSetting } from '@microvtt/core';
-  import { regionsOf, updateCue } from '@microvtt/core';
+  import { languageName, regionsOf, updateCue } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import { SEVERITY_LABEL } from '../display.ts';
   import { formatDuration, formatTime, parseTimeInput } from '../time.ts';
@@ -82,6 +82,29 @@
     update({ [field]: n }, field === 'position' ? 'Change position' : 'Change size');
   }
 
+  /** Languages offered in the language field (any BCP 47 tag can be typed). */
+  const LANGUAGES = (
+    'ar bn cs da de el en en-GB en-US es es-419 fa fi fr fr-CA he hi hu id it ja ko ms nb nl ' +
+    'pl pt pt-BR ro ru sv ta th tr uk ur vi zh-Hans zh-Hant'
+  ).split(' ');
+  const SOURCE_LABEL = {
+    header: 'from the file’s Language: line',
+    markup: 'from the <lang> tags',
+    'file-name': 'from the file name',
+    user: 'set by you',
+  } as const;
+
+  function commitLanguage(input: HTMLInputElement): void {
+    try {
+      editor.setLanguage(input.value);
+      input.removeAttribute('aria-invalid');
+      fieldError = null;
+    } catch (error) {
+      input.setAttribute('aria-invalid', 'true');
+      fieldError = (error as Error).message;
+    }
+  }
+
   const lineText = (c: Cue): string =>
     c.line === 'auto' ? 'auto' : c.snapToLines ? String(c.line) : `${c.line}%`;
   const posText = (c: Cue): string => (c.position === 'auto' ? 'auto' : `${c.position}%`);
@@ -128,15 +151,39 @@
         </p>
       {/if}
 
-      <label class="text-label" for="cue-text"
-        >Text <span class="muted">(WebVTT markup, e.g. &lt;i&gt;, &lt;v Name&gt;, &amp;amp;)</span
-        ></label
-      >
+      <div class="text-head">
+        <label class="text-label" for="cue-text"
+          >Text <span class="muted">(WebVTT markup, e.g. &lt;i&gt;, &lt;v Name&gt;, &amp;amp;)</span
+          ></label
+        >
+        <label
+          class="language"
+          title={editor.language && editor.languageSource
+            ? `${languageName(editor.language) ?? editor.language}, ${SOURCE_LABEL[editor.languageSource]}`
+            : 'The text’s language, for spelling and line breaking (a BCP 47 tag, e.g. fi)'}
+        >
+          Language
+          <input
+            value={editor.language ?? ''}
+            list="language-tags"
+            size="7"
+            placeholder="unknown"
+            autocomplete="off"
+            onchange={(e) => commitLanguage(e.currentTarget)}
+          />
+        </label>
+        <datalist id="language-tags">
+          {#each LANGUAGES as tag (tag)}<option value={tag}>{languageName(tag) ?? tag}</option
+            >{/each}
+        </datalist>
+      </div>
       <textarea
         id="cue-text"
         bind:this={textarea}
         value={cue.text}
         rows="3"
+        lang={editor.language ?? undefined}
+        dir="auto"
         spellcheck="true"
         oninput={(e) => update({ text: e.currentTarget.value }, 'Edit text', 'text')}></textarea>
 
@@ -256,8 +303,15 @@
     font-family: var(--mono);
     font-size: 0.9rem;
   }
-  .text-label {
-    display: block;
+  .text-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+  }
+  .language {
+    margin-left: auto;
+    font-size: 0.85rem;
   }
   .multiple {
     margin: 0;

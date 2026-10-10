@@ -131,7 +131,12 @@
             <span class="num muted">{first + i + 1}</span>
             <span class="time">{formatTime(cue.startMs)}</span>
             <span class="time">{formatTime(cue.endMs)}</span>
-            <span class="text" title={plainText(cue.text)}>{plainText(cue.text)}</span>
+            <span
+              class="text"
+              lang={editor.language ?? undefined}
+              dir="auto"
+              title={plainText(cue.text)}>{plainText(cue.text)}</span
+            >
             <span class="flag">
               {#if worst}
                 <span class="{worst}-text" title={problems.map((p) => p.message).join('\n')}>

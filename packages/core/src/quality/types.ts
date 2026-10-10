@@ -103,6 +103,8 @@ export interface Ruleset {
   id: string;
   name: string;
   description: string;
+  /** The language the ruleset is for (a primary language subtag); none for any language. */
+  language?: string;
   sources: GuideSource[];
   /** Requirements of the guides that cannot be checked from the file, for the record. */
   notChecked: string[];

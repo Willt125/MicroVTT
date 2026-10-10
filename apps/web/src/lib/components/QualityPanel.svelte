@@ -4,7 +4,13 @@
   fix where one is clear.
 -->
 <script lang="ts">
-  import { RULES, RULESETS, type QualityFinding, type QualityRuleId } from '@microvtt/core';
+  import {
+    RULES,
+    RULESETS,
+    languageName,
+    type QualityFinding,
+    type QualityRuleId,
+  } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import { SEVERITY_LABEL } from '../display.ts';
 
@@ -20,6 +26,22 @@
 
   const MAX_SHOWN = 200;
   const ruleset = $derived(RULESETS.find((r) => r.id === editor.qualitySettings.ruleset));
+
+  /**
+   * The text's primary language when the chosen ruleset is for another, and a ruleset for it if
+   * there is one. (Rulesets for any language never prompt.)
+   */
+  const textLanguage = $derived(editor.language?.split('-')[0]?.toLowerCase() ?? null);
+  const mismatch = $derived(
+    textLanguage !== null && ruleset?.language !== undefined && ruleset.language !== textLanguage,
+  );
+  const fitting = $derived(
+    mismatch ? RULESETS.find((r) => r.language === textLanguage) : undefined,
+  );
+  /** The language and ruleset the suggestion was dismissed for. */
+  let dismissed = $state('');
+  const suggestionKey = $derived(`${textLanguage}:${ruleset?.id}`);
+  const nameOf = (tag: string): string => languageName(tag) ?? tag;
 
   /** Findings by rule, in the ruleset's order. */
   const groups = $derived.by(() => {
@@ -69,6 +91,16 @@
       <option value="">Nothing</option>
     </select>
   </label>
+
+  {#if ruleset?.language && textLanguage && mismatch && dismissed !== suggestionKey}
+    <p class="language-note">
+      These rules are for {nameOf(ruleset.language)} text; this text is in {nameOf(textLanguage)}.
+      {#if fitting}
+        <button class="small" onclick={() => choose(fitting.id)}>Use {fitting.name}</button>
+      {/if}
+      <button class="small" onclick={() => (dismissed = suggestionKey)}>Dismiss</button>
+    </p>
+  {/if}
 
   {#if !ruleset}
     <p class="muted">Style checks are off.</p>
@@ -173,6 +205,11 @@
     font-size: 1rem;
     margin: 0 0 0.25rem;
   }
+  .language-note {
+    font-size: 0.9rem;
+    margin: 0 0 0.4rem;
+  }
+
   .choose {
     display: flex;
     align-items: center;

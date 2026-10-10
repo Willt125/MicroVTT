@@ -81,6 +81,7 @@ const netflix = (children: boolean): Ruleset => ({
   id: children ? 'netflix-en-us-children' : 'netflix-en-us',
   name: children ? 'Netflix English (USA), children’s' : 'Netflix English (USA)',
   description: `Netflix’s general requirements and English (USA) guide, ${children ? 'children’s programs (17 characters per second)' : 'adult programs (20 characters per second)'}. Rules marked SDH apply to subtitles for the deaf and hard of hearing.`,
+  language: 'en',
   sources: [NETFLIX_GENERAL, NETFLIX_EN_US, NETFLIX_TIMING, NETFLIX_GLYPHS],
   notChecked: [
     'Accuracy and completeness against the audio, italics use, numbers, punctuation style and quotations (judgement, or need the audio).',
@@ -189,6 +190,7 @@ const netflixTemplate = (children: boolean): Ruleset => ({
   id: children ? 'netflix-template-en-children' : 'netflix-template-en',
   name: children ? 'Netflix English template, children’s' : 'Netflix English template',
   description: `Netflix’s rules for English subtitle templates (the files translations are made from), with the timing guidelines: ${children ? 'children’s programs, 15' : 'adult programs, 17'} characters per second, and text kept on one line whenever it fits.`,
+  language: 'en',
   sources: [NETFLIX_TEMPLATES, NETFLIX_TIMING, NETFLIX_EN_US, NETFLIX_GLYPHS],
   notChecked: [
     'Coverage, annotations, forced narratives and segmentation (judgement).',
@@ -288,6 +290,7 @@ const netflixFinnish = (sdh: boolean, children: boolean): Ruleset => {
     id: `netflix-fi${sdh ? '-sdh' : ''}${children ? '-children' : ''}`,
     name: `Netflix Finnish${sdh ? ' SDH' : ''}${children ? ', children’s' : ''}`,
     description: `Netflix’s Finnish guide with the general requirements and timing guidelines, ${sdh ? 'for subtitles for the deaf and hard of hearing' : 'for subtitles'}: ${children ? 'children’s' : 'adult'} programs, ${cps} characters per second. Abbreviations and the names of state bodies follow Kotus, which the guide refers to.`,
+    language: 'fi',
     sources: [NETFLIX_FI, NETFLIX_GENERAL, NETFLIX_TIMING, NETFLIX_GLYPHS, KOTUS],
     notChecked: [
       'Condensing, merging and segmentation, italics, quotes and the rest of Kotus’s punctuation conventions (judgement).',
@@ -417,6 +420,7 @@ export const BBC_SUBTITLES: Ruleset = {
   name: 'BBC',
   description:
     'The BBC Subtitle Guidelines for landscape video. Line length uses the broadcast (Teletext) limit; online, lines are limited by width, which is about the same at the BBC’s font size.',
+  language: 'en',
   sources: [BBC],
   notChecked: [
     'Editing, synchronisation with speech and shot changes (need the audio and picture).',

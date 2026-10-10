@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { FILE_ENCODINGS } from '@microvtt/core';
+  import { FILE_ENCODINGS, languageName } from '@microvtt/core';
   import CleanupDialog from './lib/components/CleanupDialog.svelte';
   import CueEditor from './lib/components/CueEditor.svelte';
   import CueTable from './lib/components/CueTable.svelte';
@@ -374,6 +374,16 @@
       </select>{editor.encodingGuessed ? ' (a guess: check the accented letters)' : ''}. Export
       writes UTF-8.
       <button onclick={() => (encodingNoticeDismissed = true)}>Dismiss</button>
+    </p>
+  {/if}
+
+  {#if editor.hasDocument && editor.languageGuess}
+    {@const guess = editor.languageGuess}
+    <p class="banner offer" role="status">
+      The file names no language, but the text looks like {languageName(guess.tag) ?? guess.tag}.
+      Set it as the text's language (for spelling and line breaking)?
+      <button class="primary" onclick={() => editor.setLanguage(guess.tag)}>Set language</button>
+      <button onclick={() => (editor.languageGuess = null)}>No</button>
     </p>
   {/if}
 
