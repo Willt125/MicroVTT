@@ -170,12 +170,58 @@ const FUNCTION_WORDS: Record<string, string> = {
   hi: 'है के में की और से को नहीं यह कि हैं तो था पर भी',
   mr: 'आहे आणि नाही मी तू हे ते का तर पण होते आम्ही',
   ne: 'छ र मा हो छैन यो त्यो पनि गर्न थियो हुन्छ',
+  ru: 'и в не на я что с он а как это по но ты к у же вы за бы так мы то все она было мне',
+  uk: 'і в не на я що з він а як це по але ти до у й ви за так ми то все вона було мені',
+  be: 'і ў не на я што з ён а як гэта па але ты да у жа вы за так мы',
+  bg: 'и в не на аз че с той а как това по но ти за да се ще е от са така ние',
+  sr: 'и у не на ја да се је а као то по али ти за са смо сам ће шта',
+  mk: 'и во не на јас дека со тој а како ова по но ти за да се ќе е од',
+  kk: 'және бұл мен сен ол біз не да де үшін жоқ бар еді осы',
+  el: 'και το να η ο τα της του δεν θα με που είναι σε για τι στο από αυτό εγώ',
+  he: 'את של לא על זה אני מה הוא היא אתה גם עם כל יש אבל רק אם',
+  ar: 'في من على أن لا ما هذا إلى عن هو هي مع كان قد هل أنا أنت لم',
+  fa: 'و در به از که این را با است می آن برای هم یک من تو ما نه',
+  ur: 'کے میں کی ہے اور سے کو نہیں یہ کہ ہیں تو تھا پر بھی',
+};
+
+/**
+ * For languages written without spaces between words (or with particles attached to words),
+ * common characters and syllables, counted where they occur.
+ */
+const COMMON_PIECES: Record<string, string> = {
+  ja: 'の に は を た が で て と し です ます った ない',
+  zh: '的 是 不 了 在 我 你 他 这 這 们 們 有 个 個 吗 嗎 说 說 就 也 都 要 会 會 没 沒',
+  ko: '이 가 는 을 를 에 의 다 고 하 요 지 서',
+  th: 'ที่ ไม่ การ เป็น ครับ ค่ะ และ ใน ได้ มี จะ ของ ให้ นี้ คุณ ผม ว่า',
 };
 
 const DEVANAGARI = ['hi', 'mr', 'ne'];
+const LATIN = 'en es pt fr de it nl fi sv da nb pl cs hu ro tr id vi et sk ca tl sw'.split(' ');
 const WORDS = new Map(
   Object.entries(FUNCTION_WORDS).map(([tag, list]) => [tag, new Set(list.split(' '))]),
 );
+const PIECES = new Map(Object.entries(COMMON_PIECES).map(([tag, list]) => [tag, list.split(' ')]));
+
+const wordsOf = (text: string): string[] => text.toLowerCase().match(/[\p{L}\p{M}’']+/gu) ?? [];
+
+/**
+ * How much of `text` is the commonest words (or characters) of a language: near 0 for text in
+ * another language or garbled by a wrong encoding, typically 0.1–0.5 for the language itself.
+ */
+export function commonWordShare(text: string, tag: string): number {
+  const pieces = PIECES.get(tag);
+  if (pieces) {
+    const letters = text.match(/\p{L}/gu)?.length ?? 0;
+    if (letters === 0) return 0;
+    let hits = 0;
+    for (const p of pieces) hits += (text.split(p).length - 1) * [...p].length;
+    return hits / letters;
+  }
+  const set = WORDS.get(tag);
+  const words = wordsOf(text);
+  if (!set || words.length === 0) return 0;
+  return words.filter((w) => set.has(w)).length / words.length;
+}
 
 /** Simplified and traditional forms of common characters, both ways. */
 const SIMPLIFIED = /[们这说时个国来会对没吗为过还经么问题]/gu;
@@ -206,7 +252,7 @@ function scripts(text: string): Map<string, number> {
 
 /** The language a word list points to clearly, among those written in the text's script. */
 function byVocabulary(text: string, candidates: string[]): LanguageGuess | null {
-  const words = text.toLowerCase().match(/[\p{L}\p{M}’']+/gu) ?? [];
+  const words = wordsOf(text);
   if (words.length < 20) return null;
   const scored = candidates
     .map((tag) => {
@@ -259,8 +305,7 @@ export function guessLanguage(text: string): LanguageGuess | null {
     return null;
   }
   const words = (candidates: string[]) => byVocabulary(text, candidates);
-  if (share('Latin') > 0.8)
-    return words([...WORDS.keys()].filter((tag) => !DEVANAGARI.includes(tag)));
+  if (share('Latin') > 0.8) return words(LATIN);
   if (share('Devanagari') > 0.8) return words(DEVANAGARI);
   for (const [name, table] of Object.entries(DISTINCT_LETTERS)) {
     if (share(name) <= 0.8) continue;

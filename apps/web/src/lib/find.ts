@@ -2,7 +2,8 @@
  * Find and replace over cue text. Searches the raw text (markup included), so what is found is
  * exactly what gets replaced. With `acrossTimings`, a space in a plain-text query also matches
  * the word-timing tags around it, so "chat gpt" finds "chat <00:00:01.000>gpt"; replacing such a
- * match drops the timing tags inside it.
+ * match drops the timing tags inside it. A plain query also finds its letters however they are
+ * encoded: precomposed ("é", NFC) or as a letter and combining marks ("e" + U+0301, NFD).
  */
 import type { Cue, VttDocument } from '@microvtt/core';
 
@@ -27,6 +28,21 @@ export interface Match {
 
 const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
 
+let graphemes: Intl.Segmenter | undefined;
+/** `escape`, with each character matching both its composed and decomposed forms. */
+function escapeText(s: string): string {
+  const nfc = s.normalize('NFC');
+  if (nfc === s.normalize('NFD')) return escape(s);
+  graphemes ??= new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+  let out = '';
+  for (const { segment } of graphemes.segment(nfc)) {
+    const decomposed = segment.normalize('NFD');
+    out +=
+      decomposed === segment ? escape(segment) : `(?:${escape(segment)}|${escape(decomposed)})`;
+  }
+  return out;
+}
+
 /** Builds the search pattern, or returns an error message for an invalid expression. */
 export function buildPattern(options: FindOptions): RegExp | string | null {
   if (options.query === '') return null;
@@ -36,12 +52,14 @@ export function buildPattern(options: FindOptions): RegExp | string | null {
       ? options.query
           .trim()
           .split(/[ \t\n]+/)
-          .map(escape)
+          .map(escapeText)
           .join(ACROSS_TAGS)
-      : escape(options.query);
+      : escapeText(options.query);
   if (source === '') return null;
-  // \b only knows ASCII; words in other scripts need Unicode classes.
-  if (options.wholeWord) source = `(?<![\\p{L}\\p{N}_])(?:${source})(?![\\p{L}\\p{N}_])`;
+  // \b only knows ASCII; words in other scripts need Unicode classes. Combining marks (accents,
+  // Indic vowel signs) belong to the word too.
+  if (options.wholeWord)
+    source = `(?<![\\p{L}\\p{M}\\p{N}_])(?:${source})(?![\\p{L}\\p{M}\\p{N}_])`;
   try {
     return new RegExp(source, `gu${options.matchCase ? '' : 'i'}`);
   } catch (error) {
