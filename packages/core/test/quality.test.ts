@@ -27,6 +27,8 @@ import {
   parseColour,
   readableLines,
   wordCount,
+  breakUnits,
+  joinLines,
 } from '../src/index.ts';
 
 const doc = (...cues: Cue[]): VttDocument => ({ ...createDocument(), body: cues });
@@ -62,6 +64,7 @@ describe('measuring', () => {
     expect(graphemeLength('👍🏽ok')).toBe(3);
     expect(graphemeLength('é')).toBe(1); // e + combining acute
     expect(wordCount('Well -- I mean, it’s 3 a.m.!')).toBe(6);
+    expect(wordCount('我们今天去公园。')).toBeGreaterThan(2);
   });
 
   it('balances lines bottom-heavy', () => {
@@ -71,6 +74,21 @@ describe('measuring', () => {
       'you would agree with me',
     ]);
     expect(balanceLines(['supercalifragilistic'], 5)).toBeNull();
+  });
+
+  it('breaks and joins lines by script', () => {
+    const shown = (text: string) => breakUnits(text).map((u) => u.gap + u.text);
+    expect(shown('Hello there,\nfriend.')).toEqual(['Hello', ' there,', ' friend.']);
+    // Punctuation stays with its word; Japanese endings in hiragana stay with the word before.
+    expect(shown('「こんにちは」と言った。')).toEqual(['「こんにちは」と', '言った。']);
+    expect(shown('我们今天去公园，好吗？').join('')).toBe('我们今天去公园，好吗？');
+    expect(shown('我们今天去公园，好吗？').length).toBeGreaterThan(2);
+    expect(joinLines(['東京に', '行きます。'])).toBe('東京に行きます。');
+    expect(joinLines(['สวัสดีครับ', 'วันนี้'])).toBe('สวัสดีครับ วันนี้');
+    expect(joinLines(['Hello', 'there '])).toBe('Hello there');
+    const lines = balanceLines(breakUnits('我们今天去公园，你也一起来吗？'), 10);
+    expect(lines?.join('')).toBe('我们今天去公园，你也一起来吗？');
+    expect(lines?.every((l) => !l.includes(' ') && l.length <= 10)).toBe(true);
   });
 
   it('reads CSS colours and computes WCAG contrast', () => {
@@ -216,6 +234,22 @@ describe('rules', () => {
         only('single-line'),
       ),
     ).toEqual([]);
+  });
+
+  it('joins and rewraps Chinese and Japanese without spaces', () => {
+    const [joined] = checkQuality(
+      doc(createCue(0, 2000, '東京に\n行きます。')),
+      only('single-line'),
+    );
+    expect(joined?.fix?.change).toEqual({ kind: 'text', text: '東京に行きます。' });
+    const [wrapped] = checkQuality(
+      doc(createCue(0, 3000, '今日はいい天気ですね。散歩に行きましょう。')),
+      only('line-length', { max: 13 }),
+    );
+    expect(wrapped?.fix?.change).toEqual({
+      kind: 'text',
+      text: '今日はいい天気ですね。\n散歩に行きましょう。',
+    });
   });
 
   it('text: characters and conventions, with fixes', () => {

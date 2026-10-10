@@ -135,3 +135,5 @@ export type { LegacyTag } from './legacy-text.ts';
 export { applyQuickFix, findQuickFixes } from './quickfix.ts';
 export type { QuickFix, QuickFixKind } from './quickfix.ts';
 export * from './quality/index.ts';
+export { breakUnits, hasUnspaced, joinLines, joinsWithoutSpace } from './script.ts';
+export type { BreakUnit } from './script.ts';

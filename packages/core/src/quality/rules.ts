@@ -6,6 +6,7 @@
 import type { Cue, VttDocument } from '../document.ts';
 import { parseStylesheet } from '../css.ts';
 import { composite, contrastRatio, hexOf, parseColour, type Rgba } from './colour.ts';
+import { breakUnits, joinLines, type BreakUnit } from '../script.ts';
 import { graphemeLength, wordCount } from './measure.ts';
 import { NETFLIX_GLYPH_RANGES } from './netflix-glyphs.generated.ts';
 import { FINNISH_RULES } from './rules-fi.ts';
@@ -55,14 +56,20 @@ const isPlain = (text: string): boolean => !/[<&]/.test(text);
  * preferred, then one without just one or two words on top, then the most even. Null when it
  * cannot fit.
  */
-export function balanceLines(words: string[], max: number): string[] | null {
-  const all = words.join(' ');
+export function balanceLines(words: readonly (string | BreakUnit)[], max: number): string[] | null {
+  const units = words.map((w) => (typeof w === 'string' ? { text: w, gap: ' ' } : w));
+  const join = (from: number, to: number): string =>
+    units
+      .slice(from, to)
+      .map((u, i) => (i === 0 ? '' : u.gap) + u.text)
+      .join('');
+  const all = join(0, units.length);
   if (graphemeLength(all) <= max) return [all];
   let best: string[] | null = null;
   let bestScore = Infinity;
   for (let k = 1; k < words.length; k++) {
-    const top = words.slice(0, k).join(' ');
-    const bottom = words.slice(k).join(' ');
+    const top = join(0, k);
+    const bottom = join(k, units.length);
     const [a, b] = [graphemeLength(top), graphemeLength(bottom)];
     if (a > max || b > max) continue;
     const score = Math.abs(a - b) + (a > b ? 1000 : 0) + (k <= 2 && words.length - k > 2 ? 500 : 0);
@@ -76,8 +83,7 @@ export function balanceLines(words: string[], max: number): string[] | null {
 
 const rewrapFix = (info: CueInfo, max: number): QualityFix | undefined => {
   if (!isPlain(info.cue.text)) return undefined;
-  const words = info.lines.join(' ').split(/\s+/).filter(Boolean);
-  const lines = balanceLines(words, max);
+  const lines = balanceLines(breakUnits(info.lines.join('\n')), max);
   if (!lines) return undefined;
   const text = lines.join('\n');
   return text === info.cue.text ? undefined : { label: 'Rewrap', change: { kind: 'text', text } };
@@ -402,7 +408,7 @@ const RULE_LIST: RuleDefinition[] = [
     defaults: { maxChars: 42 },
     cue(info, { maxChars = 42 }, emit) {
       if (info.lines.length < 2 || info.lines.some((l) => /^\s*-/.test(l))) return;
-      const joined = info.lines.map((l) => l.trim()).join(' ');
+      const joined = joinLines(info.lines);
       if (graphemeLength(joined) > maxChars) return;
       emit({
         index: info.index,

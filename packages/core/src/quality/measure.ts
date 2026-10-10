@@ -4,6 +4,7 @@
  * character), so combining marks and emoji count once.
  */
 import { parseCueText, type CueNode } from '../cuetext.ts';
+import { hasUnspaced } from '../script.ts';
 
 const lineCache = new Map<string, string[]>();
 const lengthCache = new Map<string, number>();
@@ -53,7 +54,15 @@ export function graphemeLength(text: string): number {
   return n;
 }
 
-/** Words: runs of non-space text containing a letter or digit. */
+/**
+ * Words: runs of non-space text containing a letter or digit, or in scripts written without
+ * spaces, the words `Intl.Segmenter` finds.
+ */
 export function wordCount(text: string): number {
-  return text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+  if (!hasUnspaced(text)) return text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+  wordSegmenter ??= new Intl.Segmenter(undefined, { granularity: 'word' });
+  let n = 0;
+  for (const s of wordSegmenter.segment(text)) if (s.isWordLike) n++;
+  return n;
 }
+let wordSegmenter: Intl.Segmenter | undefined;
