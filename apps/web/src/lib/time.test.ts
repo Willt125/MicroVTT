@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDuration, parseTimeInput } from './time.ts';
+import { formatDuration, formatShift, parseSignedTime, parseTimeInput } from './time.ts';
 
 describe('parseTimeInput', () => {
   it.each([
@@ -20,4 +20,16 @@ describe('parseTimeInput', () => {
 
 describe('formatDuration', () => {
   it('shows seconds with milliseconds', () => expect(formatDuration(1234)).toBe('1.234 s'));
+});
+
+describe('parseSignedTime', () => {
+  it('reads an optional sign', () => {
+    expect(parseSignedTime('-1.5')).toBe(-1500);
+    expect(parseSignedTime('− 0:02.25')).toBe(-2250);
+    expect(parseSignedTime('+3')).toBe(3000);
+    expect(parseSignedTime('3')).toBe(3000);
+    expect(parseSignedTime('--3')).toBeNull();
+    expect(formatShift(-40)).toBe('−0.040 s');
+    expect(formatShift(1500)).toBe('+1.500 s');
+  });
 });

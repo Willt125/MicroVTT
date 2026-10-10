@@ -11,9 +11,11 @@
   import HelpDialog from './lib/components/HelpDialog.svelte';
   import MediaPanel from './lib/components/MediaPanel.svelte';
   import Timeline from './lib/components/Timeline.svelte';
+  import TimingDialog from './lib/components/TimingDialog.svelte';
   import Toolbar from './lib/components/Toolbar.svelte';
   import { Editor } from './lib/editor.svelte.ts';
   import { canSaveInPlace, droppedHandle, pickVttFile } from './lib/files.ts';
+  import { standardRate, stepFrame } from './lib/frames.ts';
   import { isMediaFile, splitOffset, splitTime } from './lib/media.ts';
   import { Player } from './lib/player.svelte.ts';
   import { actionFor, type Action } from './lib/shortcuts.ts';
@@ -33,7 +35,12 @@
   let findOpen = $state(false);
   let cleanupOpen = $state(false);
   let glossaryOpen = $state(false);
+  let timingOpen = $state(false);
   const waveform = new Waveform();
+  /** The frame rate frame stepping uses: chosen, or measured from the video. */
+  const fps = $derived(
+    player.fpsChoice === 'auto' ? standardRate(waveform.fps ?? Number.NaN) : player.fpsChoice,
+  );
   // The waveform follows the loaded media.
   $effect(() => {
     const file = player.file;
@@ -119,7 +126,15 @@
   }
 
   function onpaste(event: ClipboardEvent): void {
-    if (isTyping(event.target) || exportOpen || helpOpen || cleanupOpen || glossaryOpen) return;
+    if (
+      isTyping(event.target) ||
+      exportOpen ||
+      helpOpen ||
+      cleanupOpen ||
+      glossaryOpen ||
+      timingOpen
+    )
+      return;
     const text = event.clipboardData?.getData('text/plain') ?? '';
     if (!/^\uFEFF?WEBVTT(?:[ \t\r\n]|$)/.test(text)) {
       if (!editor.hasDocument && text.trim() !== '')
@@ -171,6 +186,13 @@
           player.skip(
             { back: -1000, forward: 1000, 'back-long': -5000, 'forward-long': 5000 }[action],
           );
+        return;
+      case 'frame-back':
+      case 'frame-forward':
+        if (media && fps) {
+          player.pause();
+          player.seek(stepFrame(player.currentMs, fps, action === 'frame-back' ? -1 : 1));
+        }
         return;
       case 'set-start':
         if (media) editor.setTime('startMs', player.currentMs);
@@ -224,7 +246,8 @@
         exportOpen ||
         helpOpen ||
         cleanupOpen ||
-        glossaryOpen
+        glossaryOpen ||
+        timingOpen
       )
         return;
       if (event.key === ' ' && ownsSpace(event.target)) return;
@@ -245,6 +268,9 @@
     } else if (key === 's') {
       event.preventDefault();
       openExport();
+    } else if (key === 'a' && editor.hasDocument && !isTyping(event.target)) {
+      event.preventDefault();
+      editor.selectAll();
     } else if (!isTyping(event.target) && (key === 'z' || key === 'y')) {
       // Inside text fields the browser's own undo applies.
       event.preventDefault();
@@ -312,6 +338,7 @@
     onexport={openExport}
     onsplit={split}
     onfind={() => (findOpen = true)}
+    ontiming={() => (timingOpen = true)}
     oncleanup={() => (cleanupOpen = true)}
     onglossary={() => (glossaryOpen = true)}
     onhelp={() => (helpOpen = true)}
@@ -359,7 +386,14 @@
       </section>
       <div class="side">
         {#if player.hasMedia}
-          <MediaPanel {editor} {player} isEditing={isEditingCue} />
+          <MediaPanel
+            {editor}
+            {player}
+            {fps}
+            measuredFps={waveform.fps}
+            isEditing={isEditingCue}
+            onframe={(delta) => run(delta < 0 ? 'frame-back' : 'frame-forward')}
+          />
         {/if}
         <DiagnosticsPanel {editor} onjump={jumpTo} />
       </div>
@@ -404,6 +438,7 @@
   <HelpDialog bind:open={helpOpen} {mod} />
   <CleanupDialog {editor} bind:open={cleanupOpen} />
   <GlossaryDialog {editor} bind:open={glossaryOpen} />
+  <TimingDialog {editor} {player} bind:open={timingOpen} />
 </div>
 
 <style>

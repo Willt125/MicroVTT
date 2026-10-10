@@ -122,6 +122,12 @@
         </label>
       </div>
 
+      {#if editor.multiple}
+        <p class="muted multiple" role="status">
+          {editor.selection.length} cues selected; this one is shown.
+        </p>
+      {/if}
+
       <label class="text-label" for="cue-text"
         >Text <span class="muted">(WebVTT markup, e.g. &lt;i&gt;, &lt;v Name&gt;, &amp;amp;)</span
         ></label
@@ -252,6 +258,10 @@
   }
   .text-label {
     display: block;
+  }
+  .multiple {
+    margin: 0;
+    font-size: 0.85rem;
   }
   .settings summary {
     cursor: pointer;

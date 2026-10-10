@@ -34,9 +34,24 @@ function reset(): void {
   completedBins = () => 0;
 }
 
+/** Reports the video's frame rate, measured from its first packets (for frame stepping). */
+async function probeVideo(file: File, mine: number): Promise<void> {
+  const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+  try {
+    const track = await input.getPrimaryVideoTrack().catch(() => null);
+    const stats = track ? await track.computePacketStats(120) : null;
+    if (mine === generation) post({ type: 'video', fps: stats?.averagePacketRate || null });
+  } catch {
+    if (mine === generation) post({ type: 'video', fps: null });
+  } finally {
+    input.dispose();
+  }
+}
+
 async function open(file: File): Promise<void> {
   reset();
   const mine = generation;
+  void probeVideo(file, mine);
   const opened = await openCache(file);
   if (mine !== generation) return opened.store.close();
   cache = opened;

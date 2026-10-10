@@ -1,6 +1,7 @@
 <!--
   Virtualized cue list: only the rows in view (plus a margin) are in the DOM, so 44k cues scroll
   as smoothly as 40. Rows have a fixed height; the selected cue is edited in CueEditor.
+  Ctrl/⌘-click adds or removes a cue from the selection, Shift-click selects a range.
 -->
 <script lang="ts">
   import type { Editor } from '../editor.svelte.ts';
@@ -76,6 +77,12 @@
   }
 
   const rowId = (bodyIndex: number): string => `cue-row-${bodyIndex}`;
+
+  function select(event: MouseEvent, bodyIndex: number): void {
+    if (event.shiftKey) editor.selectRange(bodyIndex);
+    else if (event.ctrlKey || event.metaKey) editor.toggleSelected(bodyIndex);
+    else editor.selected = bodyIndex;
+  }
 </script>
 
 <div class="table">
@@ -94,6 +101,7 @@
     role="listbox"
     tabindex="0"
     aria-label="Cues"
+    aria-multiselectable="true"
     aria-activedescendant={editor.selected >= 0 ? rowId(editor.selected) : undefined}
   >
     {#if rows.length === 0}
@@ -108,13 +116,14 @@
           <div
             id={rowId(bodyIndex)}
             class="row"
-            class:selected={bodyIndex === editor.selected}
+            class:selected={editor.isSelected(bodyIndex)}
+            class:current={editor.multiple && bodyIndex === editor.selected}
             style:transform="translateY({(first + i) * rowHeight}px)"
             role="option"
-            aria-selected={bodyIndex === editor.selected}
+            aria-selected={editor.isSelected(bodyIndex)}
             aria-posinset={first + i + 1}
             aria-setsize={rows.length}
-            onclick={() => (editor.selected = bodyIndex)}
+            onclick={(e) => select(e, bodyIndex)}
             ondblclick={onedit}
             onkeydown={() => {}}
             tabindex="-1"
@@ -184,6 +193,10 @@
   .row.selected {
     background: var(--selected);
     border-left-color: var(--accent);
+  }
+  /* In a multiple selection, the cue the editor shows. */
+  .row.current {
+    box-shadow: inset 0 0 0 1px var(--accent);
   }
   .num {
     text-align: right;

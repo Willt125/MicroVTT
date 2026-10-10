@@ -10,6 +10,8 @@ export type Action =
   | 'forward'
   | 'back-long'
   | 'forward-long'
+  | 'frame-back'
+  | 'frame-forward'
   | 'set-start'
   | 'set-end'
   | 'loop'
@@ -59,6 +61,20 @@ export const SHORTCUTS: readonly Shortcut[] = [
     description: 'Forward 5 seconds',
   },
   {
+    action: 'frame-back',
+    keys: [','],
+    code: 'Comma',
+    label: ',',
+    description: 'Back one frame (pauses)',
+  },
+  {
+    action: 'frame-forward',
+    keys: ['.'],
+    code: 'Period',
+    label: '.',
+    description: 'Forward one frame (pauses)',
+  },
+  {
     action: 'set-start',
     keys: ['['],
     code: 'BracketLeft',
@@ -92,7 +108,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
     keys: ['m'],
     code: 'KeyM',
     label: 'M',
-    description: 'Merge with the next cue',
+    description: 'Merge the selected cues, or the cue with the next one',
   },
   {
     action: 'previous',

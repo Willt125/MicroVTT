@@ -10,8 +10,12 @@ import {
   createDocument,
   findQuickFixes,
   mergeCues,
+  resyncCues,
+  shiftCues,
+  sortCuesMapped,
   splitCue,
   updateCue,
+  type SyncPoint,
 } from '@microvtt/core';
 import type {
   AutoCaptionInfo,
@@ -35,15 +39,36 @@ const NEW_CUE_MS = 2000;
 interface HistoryEntry {
   doc: VttDocument;
   selected: number;
+  also: ReadonlySet<number>;
   label: string;
 }
+
+/**
+ * A set of body indices that is never changed once made (selections are replaced whole, in
+ * `$state.raw`), so Svelte's reactive SvelteSet is not needed.
+ */
+const indexSet = (items: Iterable<number> = []): ReadonlySet<number> => new Set(items);
+
+const NONE = indexSet();
+
+/** Which cues a timing operation applies to. */
+export type Scope = 'all' | 'selected';
+
+/** A change of times from the timeline: one edge of one cue, or whole cues moved. */
+export type TimeChange =
+  | { kind: 'start' | 'end'; index: number; deltaMs: number }
+  | { kind: 'move'; indices: readonly number[]; deltaMs: number };
 
 export class Editor {
   doc = $state.raw<VttDocument>(createDocument());
   fileName = $state('untitled.vtt');
   fileType = $state<FileType>('captions');
-  /** Body index of the selected cue, or -1. */
-  selected = $state(-1);
+  /** Body index of the selected cue (the one being edited), or -1. */
+  #selected = $state(-1);
+  /** Other selected cues (body indices), for operations on several cues. */
+  #also = $state.raw<ReadonlySet<number>>(NONE);
+  /** Where a Shift-click range starts. */
+  #anchor = -1;
   /** Problems in the current document (validated in the background after each edit). */
   diagnostics = $state.raw<ItemDiagnostic[]>([]);
   /** Problems in the file as imported (cleared by "New"). */
@@ -117,6 +142,74 @@ export class Editor {
     this.worker = worker;
   }
 
+  /** The selected cue's body index. Setting it selects that cue alone. */
+  get selected(): number {
+    return this.#selected;
+  }
+
+  set selected(index: number) {
+    this.#selected = index;
+    this.#also = NONE;
+    this.#anchor = index;
+  }
+
+  /** Body indices of every selected cue, in order. */
+  selection = $derived.by(() => {
+    const all = this.#selected >= 0 ? [this.#selected, ...this.#also] : [...this.#also];
+    return all.sort((a, b) => a - b);
+  });
+
+  /** True when more than one cue is selected. */
+  get multiple(): boolean {
+    return this.#also.size > 0;
+  }
+
+  isSelected(index: number): boolean {
+    return index === this.#selected || this.#also.has(index);
+  }
+
+  /** Adds a cue to the selection, or removes it (Ctrl/⌘-click). It becomes the edited cue. */
+  toggleSelected(index: number): void {
+    let also = [...this.#also];
+    if (this.isSelected(index)) {
+      if (also.length === 0) return; // The last selected cue stays selected.
+      if (index === this.#selected) {
+        const next = Math.min(...also);
+        also = also.filter((i) => i !== next);
+        this.#selected = next;
+      } else {
+        also = also.filter((i) => i !== index);
+      }
+    } else {
+      if (this.#selected >= 0) also.push(this.#selected);
+      this.#selected = index;
+    }
+    this.#also = indexSet(also);
+    this.#anchor = index;
+  }
+
+  /** Selects the cues from the last clicked one to `index` (Shift-click). */
+  selectRange(index: number): void {
+    const rows = this.cueRows;
+    const from = rows.indexOf(this.#anchor === -1 ? this.#selected : this.#anchor);
+    const to = rows.indexOf(index);
+    if (from === -1 || to === -1) {
+      this.selected = index;
+      return;
+    }
+    const [a, b] = from < to ? [from, to] : [to, from];
+    this.#selected = index;
+    this.#also = indexSet(rows.slice(a, b + 1).filter((i) => i !== index));
+  }
+
+  selectAll(): void {
+    const rows = this.cueRows;
+    if (rows.length === 0) return;
+    const primary = this.#selected >= 0 ? this.#selected : (rows[0] as number);
+    this.#selected = primary;
+    this.#also = indexSet(rows.filter((i) => i !== primary));
+  }
+
   get selectedCue(): Cue | null {
     const item = this.doc.body[this.selected];
     return item?.type === 'cue' ? item : null;
@@ -126,7 +219,7 @@ export class Editor {
   apply(
     next: VttDocument,
     label: string,
-    options: { coalesce?: string; select?: number } = {},
+    options: { coalesce?: string; select?: number; also?: Iterable<number> } = {},
   ): void {
     const now = Date.now();
     const merge =
@@ -134,15 +227,19 @@ export class Editor {
       options.coalesce === this.lastKey &&
       now - this.lastTime < COALESCE_MS;
     if (!merge) {
-      this.past.push({ doc: this.doc, selected: this.selected, label });
+      this.past.push({ doc: this.doc, selected: this.#selected, also: this.#also, label });
       if (this.past.length > HISTORY_LIMIT) this.past.shift();
     }
     this.lastKey = options.coalesce ?? null;
     this.lastTime = now;
     this.future = [];
+    const sameShape = next.body.length === this.doc.body.length;
     this.doc = next;
+    const also = this.#also;
     if (options.select !== undefined) this.selected = options.select;
-    this.selected = Math.min(this.selected, next.body.length - 1);
+    if (options.also) this.#also = indexSet(options.also);
+    else if (options.select === undefined && sameShape) this.#also = also;
+    this.#selected = Math.min(this.#selected, next.body.length - 1);
     this.dirty = true;
     this.syncHistory();
     this.scheduleValidation();
@@ -165,20 +262,25 @@ export class Editor {
   undo(): void {
     const entry = this.past.pop();
     if (!entry) return;
-    this.future.push({ doc: this.doc, selected: this.selected, label: entry.label });
+    this.future.push(this.current(entry.label));
     this.restore(entry);
   }
 
   redo(): void {
     const entry = this.future.pop();
     if (!entry) return;
-    this.past.push({ doc: this.doc, selected: this.selected, label: entry.label });
+    this.past.push(this.current(entry.label));
     this.restore(entry);
+  }
+
+  private current(label: string): HistoryEntry {
+    return { doc: this.doc, selected: this.#selected, also: this.#also, label };
   }
 
   private restore(entry: HistoryEntry): void {
     this.doc = entry.doc;
     this.selected = Math.min(entry.selected, entry.doc.body.length - 1);
+    this.#also = entry.also;
     this.lastKey = null;
     this.dirty = true;
     this.syncHistory();
@@ -379,15 +481,34 @@ export class Editor {
     return row === -1 ? -1 : (this.cueRows[row + 1] ?? -1);
   }
 
-  /** Merges the selected cue with the next one (notes between them are kept after it). */
+  /**
+   * Merges the selected cues when several consecutive ones are selected, else the selected cue
+   * with the next one (notes between them are kept after the merged cue).
+   */
   mergeWithNext(): void {
-    const next = this.nextCueIndex();
-    if (!this.selectedCue || next === -1) return;
-    this.apply(mergeCues(this.doc, this.selected, next), 'Merge cues', { select: this.selected });
+    const range = this.mergeRange();
+    if (!range) return;
+    const [from, to] = range;
+    this.apply(mergeCues(this.doc, from, to), 'Merge cues', { select: from });
   }
 
   get canMerge(): boolean {
-    return this.selectedCue !== null && this.nextCueIndex() !== -1;
+    return this.mergeRange() !== null;
+  }
+
+  /** The body indices to merge, or null (a selection with gaps cannot be merged). */
+  private mergeRange(): [number, number] | null {
+    if (!this.selectedCue) return null;
+    if (!this.multiple) {
+      const next = this.nextCueIndex();
+      return next === -1 ? null : [this.#selected, next];
+    }
+    const rows = this.cueRows;
+    const selected = this.selection.map((i) => rows.indexOf(i));
+    const contiguous = selected.every(
+      (row, k) => k === 0 || row === (selected[k - 1] as number) + 1,
+    );
+    return contiguous ? [this.selection[0] as number, this.selection.at(-1) as number] : null;
   }
 
   /** Checks the current document for auto-caption structure (e.g. before offering cleanup). */
@@ -467,15 +588,85 @@ export class Editor {
     }
   }
 
+  /** Deletes the selected cues. */
   deleteSelected(): void {
-    if (!this.selectedCue) return;
-    const body = this.doc.body.filter((_, i) => i !== this.selected);
-    const next = body.findIndex((item, i) => i >= this.selected && item.type === 'cue');
+    const doomed = indexSet(this.selection);
+    if (doomed.size === 0 || !this.selectedCue) return;
+    const first = Math.min(...doomed);
+    const body = this.doc.body.filter((_, i) => !doomed.has(i));
+    const next = body.findIndex((item, i) => i >= first && item.type === 'cue');
     const prev = body
       .map((item, i) => (item.type === 'cue' ? i : -1))
-      .filter((i) => i >= 0 && i < this.selected)
+      .filter((i) => i >= 0 && i < first)
       .pop();
-    this.apply({ ...this.doc, body }, 'Delete cue', { select: next !== -1 ? next : (prev ?? -1) });
+    this.apply(
+      { ...this.doc, body },
+      doomed.size === 1 ? 'Delete cue' : `Delete ${doomed.size} cues`,
+      {
+        select: next !== -1 ? next : (prev ?? -1),
+      },
+    );
+  }
+
+  /** Applies a timing change, then keeps cues in start order, the selection following them. */
+  private applyTimes(next: VttDocument, label: string): void {
+    const { document, moved } = sortCuesMapped(next);
+    const at = (i: number): number => (i >= 0 ? (moved[i] as number) : i);
+    this.apply(document, label, {
+      select: at(this.#selected),
+      also: [...this.#also].map(at),
+    });
+  }
+
+  /** A change from dragging on the timeline, as one undo step. */
+  changeTimes(change: TimeChange): void {
+    if (change.deltaMs === 0) return;
+    if (change.kind === 'move') {
+      const moving = indexSet(change.indices);
+      if (moving.size === 0) return;
+      this.applyTimes(
+        shiftCues(this.doc, change.deltaMs, (_, i) => moving.has(i)),
+        moving.size === 1 ? 'Move cue' : `Move ${moving.size} cues`,
+      );
+      return;
+    }
+    const cue = this.doc.body[change.index];
+    if (cue?.type !== 'cue') return;
+    const field = change.kind === 'start' ? 'startMs' : 'endMs';
+    const body = [...this.doc.body];
+    body[change.index] = updateCue(cue, { [field]: Math.max(0, cue[field] + change.deltaMs) });
+    this.applyTimes(
+      { ...this.doc, body },
+      change.kind === 'start' ? 'Change start time' : 'Change end time',
+    );
+  }
+
+  /** Cues a scope covers. */
+  private inScope(scope: Scope): (cue: Cue, index: number) => boolean {
+    if (scope === 'all') return () => true;
+    const chosen = indexSet(this.selection);
+    return (_, i) => chosen.has(i);
+  }
+
+  /**
+   * Moves the cues in `scope` by `deltaMs`, as one undo step. A shift that would move a cue
+   * before 0 is reduced so the earliest one starts at 0. Returns the shift applied.
+   */
+  shift(deltaMs: number, scope: Scope): number {
+    const filter = this.inScope(scope);
+    let earliest = Infinity;
+    this.doc.body.forEach((item, i) => {
+      if (item.type === 'cue' && filter(item, i)) earliest = Math.min(earliest, item.startMs);
+    });
+    if (earliest === Infinity) return 0;
+    const delta = Math.round(Math.max(deltaMs, -earliest));
+    if (delta !== 0) this.applyTimes(shiftCues(this.doc, delta, filter), 'Shift times');
+    return delta;
+  }
+
+  /** Two-point resync of the cues in `scope` (see core's `resyncCues`), as one undo step. */
+  resync(a: SyncPoint, b: SyncPoint, scope: Scope): void {
+    this.applyTimes(resyncCues(this.doc, a, b, this.inScope(scope)), 'Resync times');
   }
 
   /** Moves the selection by `delta` cue rows. */

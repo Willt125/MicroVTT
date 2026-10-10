@@ -9,15 +9,24 @@
   import { cueAt, loopTarget } from '../media.ts';
   import { RATES, type Player } from '../player.svelte.ts';
   import { formatTime } from '../time.ts';
+  import { FRAME_RATES, rateLabel, standardRate } from '../frames.ts';
 
   interface Props {
     editor: Editor;
     player: Player;
+    /** The frame rate frame stepping uses, or null (none known). */
+    fps: number | null;
+    /** The video's frame rate as measured from the file, or null. */
+    measuredFps: number | null;
     /** True while focus is in the cue editor (playback must not change the selection then). */
     isEditing: () => boolean;
+    /** Steps one frame back (-1) or forward (1). */
+    onframe: (delta: number) => void;
   }
 
-  let { editor, player, isEditing }: Props = $props();
+  let { editor, player, fps, measuredFps, isEditing, onframe }: Props = $props();
+
+  const detected = $derived(measuredFps === null ? null : standardRate(measuredFps));
 
   const PREVIEW_DELAY_MS = 600;
   const SCAN_INTERVAL_MS = 100;
@@ -102,7 +111,12 @@
     if (player.loop && cue) {
       const target = loopTarget(cue, player.currentMs);
       if (target !== null) player.seek(target);
-    } else if (player.sync && now - lastScan >= SCAN_INTERVAL_MS && !isEditing()) {
+    } else if (
+      player.sync &&
+      !editor.multiple &&
+      now - lastScan >= SCAN_INTERVAL_MS &&
+      !isEditing()
+    ) {
       lastScan = now;
       const inSelected = cue && cue.startMs <= player.currentMs && player.currentMs < cue.endMs;
       if (!inSelected) {
@@ -193,6 +207,18 @@
       title="Forward 1 second (L)"
       aria-label="Forward 1 second">+1 s</button
     >
+    <button
+      onclick={() => onframe(-1)}
+      disabled={!fps}
+      title={fps ? 'Back one frame (,)' : 'Choose a frame rate to step by frames'}
+      aria-label="Back one frame">−1 f</button
+    >
+    <button
+      onclick={() => onframe(1)}
+      disabled={!fps}
+      title={fps ? 'Forward one frame (.)' : 'Choose a frame rate to step by frames'}
+      aria-label="Forward one frame">+1 f</button
+    >
     <span class="time" aria-label="Playhead">{formatTime(player.currentMs)}</span>
     <label class="rate">
       <span class="visually-hidden">Playback speed</span>
@@ -225,6 +251,27 @@
     <label title="Show the document as captions over the media"
       ><input type="checkbox" bind:checked={player.captions} /> Captions</label
     >
+  </div>
+  <div class="controls">
+    <label title="The frame rate frame stepping uses (measured from the video, or chosen)">
+      Frame rate
+      <select
+        value={String(player.fpsChoice)}
+        onchange={(e) => {
+          const v = e.currentTarget.value;
+          player.fpsChoice = v === 'auto' ? 'auto' : Number(v);
+        }}
+      >
+        <option value="auto"
+          >{detected
+            ? `Auto (${rateLabel(detected)})`
+            : player.isAudio
+              ? 'Auto (no video)'
+              : 'Auto'}</option
+        >
+        {#each FRAME_RATES as r (r.label)}<option value={String(r.fps)}>{r.label}</option>{/each}
+      </select>
+    </label>
   </div>
   <p class="name muted">
     <span title={player.name}>{player.name}</span>
