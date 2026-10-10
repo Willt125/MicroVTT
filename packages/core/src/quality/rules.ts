@@ -8,6 +8,7 @@ import { parseStylesheet } from '../css.ts';
 import { composite, contrastRatio, hexOf, parseColour, type Rgba } from './colour.ts';
 import { graphemeLength, wordCount } from './measure.ts';
 import { NETFLIX_GLYPH_RANGES } from './netflix-glyphs.generated.ts';
+import { FINNISH_RULES } from './rules-fi.ts';
 import type { ParamSpec, QualityCategory, QualityFix, QualityRuleId } from './types.ts';
 
 /** A cue as the rules see it. */
@@ -708,5 +709,5 @@ const RULE_LIST: RuleDefinition[] = [
 ];
 
 export const RULES: Readonly<Record<QualityRuleId, RuleDefinition>> = Object.fromEntries(
-  RULE_LIST.map((r) => [r.id, r]),
+  [...RULE_LIST, ...FINNISH_RULES].map((r) => [r.id, r]),
 ) as Record<QualityRuleId, RuleDefinition>;

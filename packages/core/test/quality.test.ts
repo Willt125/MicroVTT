@@ -6,6 +6,10 @@ import {
   LITE,
   NETFLIX_EN_US_ADULT,
   NETFLIX_EN_US_CHILDREN,
+  NETFLIX_FI_ADULT,
+  NETFLIX_FI_CHILDREN,
+  NETFLIX_FI_SDH,
+  NETFLIX_FI_SDH_CHILDREN,
   NETFLIX_TEMPLATE_EN,
   NETFLIX_TEMPLATE_EN_CHILDREN,
   RULES,
@@ -274,6 +278,67 @@ describe('rules', () => {
   });
 });
 
+describe('Finnish rules', () => {
+  const fix = (text: string, id: keyof Ruleset['rules'], next = false): string | undefined => {
+    const cues = [createCue(0, 3000, text), ...(next ? [createCue(3100, 5000, 'jatkuu')] : [])];
+    const change = checkQuality(doc(...cues), only(id))[0]?.fix?.change;
+    return change?.kind === 'text' ? change.text : undefined;
+  };
+  const flags = (text: string, id: keyof Ruleset['rules']): number =>
+    checkQuality(doc(createCue(0, 3000, text)), only(id)).length;
+
+  it('dual speakers: a hyphen on the second line only', () => {
+    expect(fix('-Se ei ole valmis.\n-Mikä?', 'dual-speaker-second-line')).toBe(
+      'Se ei ole valmis.\n-Mikä?',
+    );
+    expect(flags('Se ei ole valmis.\n-Mikä?', 'dual-speaker-second-line')).toBe(0);
+  });
+
+  it('a sentence continuing in the next cue ends with a hyphen', () => {
+    expect(fix('Hän opetti minulle', 'continuation-hyphen', true)).toBe('Hän opetti minulle -');
+    expect(fix('<i>Hän opetti minulle</i>', 'continuation-hyphen', true)).toBe(
+      '<i>Hän opetti minulle -</i>',
+    );
+    expect(fix('Odotin innolla,', 'continuation-hyphen', true)).toBeUndefined();
+    expect(fix('Hän opetti minulle -', 'continuation-hyphen', true)).toBeUndefined();
+    expect(fix('♪ Laulun sanat', 'continuation-hyphen', true)).toBeUndefined();
+    expect(fix('Viimeinen', 'continuation-hyphen')).toBeUndefined(); // No cue follows.
+  });
+
+  it('no space before punctuation (as in machine translations)', () => {
+    expect(fix('En tiedä .', 'space-before-punctuation')).toBe('En tiedä.');
+    expect(fix('Mitä ? Oikeasti !', 'space-before-punctuation')).toBe('Mitä? Oikeasti!');
+    expect(flags('Hän opetti minulle -', 'space-before-punctuation')).toBe(0);
+    expect(flags('…säilyttäminen on tärkeää.', 'space-before-punctuation')).toBe(0);
+    expect(flags('Onko hän… elossa?', 'space-before-punctuation')).toBe(0);
+  });
+
+  it('Finnish number formats', () => {
+    expect(fix('Se maksoi 10,000 euroa.', 'finnish-numbers')).toBe('Se maksoi 10 000 euroa.');
+    expect(fix('Tule kello 7:45.', 'finnish-numbers')).toBe('Tule kello 7.45.');
+    expect(fix('Se on 1.5 metriä.', 'finnish-numbers')).toBe('Se on 1,5 metriä.');
+    expect(flags('Tule kello 7.45.', 'finnish-numbers')).toBe(0); // A time, correctly written.
+    expect(flags('Se on 1,5 metriä ja 10 000 euroa.', 'finnish-numbers')).toBe(0);
+  });
+
+  it('acronyms without full stops, but initials left alone', () => {
+    expect(fix('Hän muutti U.S.A.:han.', 'acronym-periods')).toBe('Hän muutti USA:han.');
+    expect(flags('J.R.R. Tolkien kirjoitti sen.', 'acronym-periods')).toBe(0);
+    expect(flags('A. I. Virtanen', 'acronym-periods')).toBe(0);
+  });
+
+  it('Kotus abbreviations and state body names', () => {
+    expect(fix('Esim tämä, jne', 'finnish-abbreviations')).toBe('Esim. tämä, jne.');
+    expect(fix('Tule klo. 18.', 'finnish-abbreviations')).toBe('Tule klo 18.');
+    expect(flags('Esim. tämä, jne. ja vrt. tuo.', 'finnish-abbreviations')).toBe(0);
+    expect(flags('Pituus on 5 mm', 'finnish-abbreviations')).toBe(0); // A unit.
+    expect(fix('Soitin KELAan ja SYKEen.', 'agency-names')).toBe('Soitin Kelaan ja Sykeen.');
+    expect(fix('KELA:n päätös tuli.', 'agency-names')).toBe('Kelan päätös tuli.');
+    expect(flags('KELA', 'agency-names')).toBe(0); // An all-capital forced narrative.
+    expect(flags('Soitin Kelaan.', 'agency-names')).toBe(0);
+  });
+});
+
 describe('rulesets', () => {
   it('reference only known rules, with valid settings and cited sources', () => {
     for (const set of RULESETS) {
@@ -308,6 +373,14 @@ describe('rulesets', () => {
     expect(params(NETFLIX_TEMPLATE_EN_CHILDREN, 'chars-per-second')).toEqual({ max: 15 });
     expect(params(NETFLIX_TEMPLATE_EN, 'single-line')).toEqual({ maxChars: 42 });
     expect(params(NETFLIX_TEMPLATE_EN, 'min-duration')?.['minMs']).toBeCloseTo(833.33, 1);
+    expect(params(NETFLIX_FI_ADULT, 'chars-per-second')).toEqual({ max: 17 });
+    expect(params(NETFLIX_FI_CHILDREN, 'chars-per-second')).toEqual({ max: 13 });
+    expect(params(NETFLIX_FI_SDH, 'chars-per-second')).toEqual({ max: 20 });
+    expect(params(NETFLIX_FI_SDH_CHILDREN, 'chars-per-second')).toEqual({ max: 17 });
+    expect(params(NETFLIX_FI_ADULT, 'line-length')).toEqual({ max: 42 });
+    expect(NETFLIX_FI_ADULT.rules['single-line']).toBeUndefined(); // Two lines are allowed.
+    expect(NETFLIX_FI_ADULT.rules['lowercase-labels']).toBeUndefined();
+    expect(NETFLIX_FI_SDH.rules['lowercase-labels']).toBeDefined();
     expect(params(BBC_SUBTITLES, 'line-length')).toEqual({ max: 37 });
     expect(params(BBC_SUBTITLES, 'words-per-minute')).toEqual({ max: 180 });
     expect(params(BBC_SUBTITLES, 'min-gap')).toEqual({ minMs: 1000 });

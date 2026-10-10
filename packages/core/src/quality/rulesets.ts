@@ -28,6 +28,17 @@ const NETFLIX_TEMPLATES: GuideSource = {
   title: 'Netflix Timed Text Style Guide: Subtitle Templates',
   edition: 'as supplied 2026-10-10',
 };
+const NETFLIX_FI: GuideSource = {
+  id: 'netflix-fi',
+  title: 'Netflix Finnish Timed Text Style Guide',
+  edition: '2025-12-19',
+};
+const KOTUS: GuideSource = {
+  id: 'kotus',
+  title: 'Kotus: Lyhenneluettelo; Valtionhallinnon nimet ja niiden lyhenteet',
+  edition: 'as supplied 2026-10-10',
+  url: 'https://www.kotus.fi/',
+};
 const NETFLIX_GLYPHS: GuideSource = {
   id: 'netflix-glyphs',
   title: 'Netflix Glyph List (NGL2)',
@@ -270,6 +281,137 @@ const netflixTemplate = (children: boolean): Ruleset => ({
 export const NETFLIX_TEMPLATE_EN = netflixTemplate(false);
 export const NETFLIX_TEMPLATE_EN_CHILDREN = netflixTemplate(true);
 
+/** Finnish subtitles, and subtitles for the deaf and hard of hearing (SDH). */
+const netflixFinnish = (sdh: boolean, children: boolean): Ruleset => {
+  const cps = sdh ? (children ? 17 : 20) : children ? 13 : 17;
+  return {
+    id: `netflix-fi${sdh ? '-sdh' : ''}${children ? '-children' : ''}`,
+    name: `Netflix Finnish${sdh ? ' SDH' : ''}${children ? ', children’s' : ''}`,
+    description: `Netflix’s Finnish guide with the general requirements and timing guidelines, ${sdh ? 'for subtitles for the deaf and hard of hearing' : 'for subtitles'}: ${children ? 'children’s' : 'adult'} programs, ${cps} characters per second. Abbreviations and the names of state bodies follow Kotus, which the guide refers to.`,
+    sources: [NETFLIX_FI, NETFLIX_GENERAL, NETFLIX_TIMING, NETFLIX_GLYPHS, KOTUS],
+    notChecked: [
+      'Condensing, merging and segmentation, italics, quotes and the rest of Kotus’s punctuation conventions (judgement).',
+      'Spelled-out numbers (1–10, and at the start of a sentence).',
+      'Timing to the audio and to shot changes (need the audio and the picture).',
+    ],
+    rules: {
+      'empty-cue': { severity: 'warning' },
+      'min-duration': {
+        severity: 'warning',
+        params: { minMs: 5000 / 6 },
+        source: 'netflix-general',
+        section: '1. Duration (5/6 second)',
+      },
+      'max-duration': {
+        severity: 'warning',
+        params: { maxMs: 7000 },
+        source: 'netflix-general',
+        section: '1. Duration',
+      },
+      'frame-gaps': {
+        severity: 'warning',
+        params: { frames: 2, closeBelowMs: 500 },
+        source: 'netflix-timing',
+        section: '5: Gaps between subtitles',
+      },
+      'max-lines': {
+        severity: 'warning',
+        params: { max: 2 },
+        source: 'netflix-fi',
+        section: '11. Line Treatment',
+      },
+      'line-length': {
+        severity: 'warning',
+        params: { max: 42 },
+        source: 'netflix-fi',
+        section: '2. Character Limitation',
+      },
+      'chars-per-second': {
+        severity: 'warning',
+        params: { max: cps },
+        source: 'netflix-fi',
+        section: sdh ? '20. SDH Guidelines (reading speed)' : '15. Reading Speed Limits',
+      },
+      'line-shape': {
+        severity: 'info',
+        params: { maxChars: 42 },
+        source: 'netflix-fi',
+        section: '11. Line Treatment',
+      },
+      centred: { severity: 'info', source: 'netflix-general', section: '5. Positioning' },
+      'glyph-list': {
+        severity: 'warning',
+        source: 'netflix-glyphs',
+        section: 'General Requirements 3. Glyph List',
+      },
+      'ellipsis-character': {
+        severity: 'warning',
+        source: 'netflix-fi',
+        section: '4. Continuity',
+      },
+      'continuation-hyphen': {
+        severity: 'info',
+        source: 'netflix-fi',
+        section: '4. Continuity',
+      },
+      'speaker-hyphen': {
+        severity: 'warning',
+        source: 'netflix-fi',
+        section: '6. Dual Speakers',
+      },
+      'dual-speaker-second-line': {
+        severity: 'warning',
+        source: 'netflix-fi',
+        section: '6. Dual Speakers',
+      },
+      'finnish-numbers': {
+        severity: 'warning',
+        source: 'netflix-fi',
+        section: '12. Numbers',
+      },
+      'acronym-periods': {
+        severity: 'warning',
+        source: 'netflix-fi',
+        section: '1. Abbreviations and Acronyms',
+      },
+      'finnish-abbreviations': {
+        severity: 'info',
+        source: 'kotus',
+        section: 'Lyhenneluettelo (guide 1. Abbreviations and Acronyms)',
+      },
+      'agency-names': {
+        severity: 'info',
+        source: 'kotus',
+        section: 'Valtionhallinnon nimet ja niiden lyhenteet',
+      },
+      'space-before-punctuation': {
+        severity: 'warning',
+        source: 'netflix-fi',
+        section: '13. Punctuation (Kotus conventions)',
+      },
+      ...(sdh
+        ? {
+            'lowercase-labels': {
+              severity: 'info' as const,
+              source: 'netflix-fi',
+              section: '20. SDH Guidelines',
+            },
+            'lyrics-notes': {
+              severity: 'info' as const,
+              source: 'netflix-fi',
+              section: '20. SDH Guidelines',
+            },
+          }
+        : {}),
+    },
+  };
+};
+
+export const NETFLIX_FI_ADULT = netflixFinnish(false, false);
+export const NETFLIX_FI_CHILDREN = netflixFinnish(false, true);
+export const NETFLIX_FI_SDH = netflixFinnish(true, false);
+export const NETFLIX_FI_SDH_CHILDREN = netflixFinnish(true, true);
+
 export const BBC_SUBTITLES: Ruleset = {
   id: 'bbc',
   name: 'BBC',
@@ -349,6 +491,10 @@ export const RULESETS: readonly Ruleset[] = [
   NETFLIX_EN_US_CHILDREN,
   NETFLIX_TEMPLATE_EN,
   NETFLIX_TEMPLATE_EN_CHILDREN,
+  NETFLIX_FI_ADULT,
+  NETFLIX_FI_CHILDREN,
+  NETFLIX_FI_SDH,
+  NETFLIX_FI_SDH_CHILDREN,
   BBC_SUBTITLES,
   WCAG,
 ];
