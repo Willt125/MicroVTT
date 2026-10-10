@@ -11,6 +11,7 @@
     onexport: () => void;
     onsplit: () => void;
     onfind: () => void;
+    ontiming: () => void;
     oncleanup: () => void;
     onglossary: () => void;
     onhelp: () => void;
@@ -25,6 +26,7 @@
     onexport,
     onsplit,
     onfind,
+    ontiming,
     oncleanup,
     onglossary,
     onhelp,
@@ -76,7 +78,7 @@
     <button
       onclick={() => editor.deleteSelected()}
       disabled={!editor.selectedCue}
-      title="Delete the selected cue (Delete)">Delete</button
+      title="Delete the selected cues (Delete)">Delete</button
     >
     <button onclick={onsplit} disabled={!editor.selectedCue} title="Split the selected cue (S)"
       >Split</button
@@ -84,10 +86,15 @@
     <button
       onclick={() => editor.mergeWithNext()}
       disabled={!editor.canMerge}
-      title="Merge the selected cue with the next one (M)">Merge</button
+      title="Merge the selected cues, or the selected cue with the next one (M)">Merge</button
     >
     <button onclick={onfind} disabled={!editor.hasDocument} title="Find and replace ({mod}F)"
       >Find</button
+    >
+    <button
+      onclick={ontiming}
+      disabled={editor.cueRows.length === 0}
+      title="Shift, resync or change the frame rate of all or the selected cues">Timing…</button
     >
   </div>
   <div class="group" aria-label="Auto-captions">

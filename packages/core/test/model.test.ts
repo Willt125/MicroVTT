@@ -19,11 +19,14 @@ import {
   renumberCues,
   repair,
   repairStylesheet,
+  resyncCues,
   scaleCues,
   serialize,
   shiftCues,
+  sortCuesMapped,
   sortDocumentCues,
   splitCue,
+  syncMap,
   updateCue,
 } from '../src/index.ts';
 
@@ -241,6 +244,62 @@ describe('editing', () => {
     expect(scaled).toMatchObject({ startMs: 1000, endMs: 5000 });
     expect(scaled?.text).toContain('<00:00:02.000>');
     expect(() => scaleCues(doc(words), 0)).toThrow(RangeError);
+  });
+
+  it('resyncs through two points, word timings included', () => {
+    const later = createCue(11_000, 13_000, 'b');
+    // Both points 1 s later: a plain shift.
+    const [a, b] = cuesOf(
+      resyncCues(doc(words, later), { fromMs: 1000, toMs: 2000 }, { fromMs: 11_000, toMs: 12_000 }),
+    );
+    expect(a).toMatchObject({ startMs: 2000, endMs: 4000 });
+    expect(a?.text).toBe('so<00:00:02.500><c> it</c><00:00:03.000><c> goes</c>');
+    expect(b).toMatchObject({ startMs: 12_000, endMs: 14_000 });
+    const scaled = cuesOf(
+      resyncCues(doc(words), { fromMs: 0, toMs: 0 }, { fromMs: 1000, toMs: 2000 }),
+    );
+    expect(scaled[0]).toMatchObject({ startMs: 2000, endMs: 6000 });
+    expect(syncMap({ fromMs: 0, toMs: 100 }, { fromMs: 1000, toMs: 1100 }).factor).toBe(1);
+    expect(() => syncMap({ fromMs: 5, toMs: 0 }, { fromMs: 5, toMs: 10 })).toThrow(RangeError);
+    expect(() => syncMap({ fromMs: 0, toMs: 10 }, { fromMs: 5, toMs: 0 })).toThrow(RangeError);
+  });
+
+  it('resyncs only the cues a filter picks', () => {
+    const second = createCue(5000, 6000, 'b');
+    const [a, b] = cuesOf(
+      resyncCues(
+        doc(words, second),
+        { fromMs: 0, toMs: 500 },
+        { fromMs: 1000, toMs: 1500 },
+        (_, i) => i === 1,
+      ),
+    );
+    expect(a).toBe(words);
+    expect(b).toMatchObject({ startMs: 5500, endMs: 6500 });
+  });
+
+  it('sorts cues and reports where each item went', () => {
+    const note = { type: 'note' as const, text: 'about b' };
+    const d: VttDocument = {
+      ...createDocument(),
+      body: [
+        createCue(5000, 6000, 'a'),
+        note,
+        createCue(1000, 2000, 'b'),
+        createCue(7000, 8000, 'c'),
+      ],
+    };
+    const { document, moved } = sortCuesMapped(d);
+    expect(document.body.map((i) => (i.type === 'cue' ? i.text : 'note'))).toEqual([
+      'note',
+      'b',
+      'a',
+      'c',
+    ]);
+    expect(moved).toEqual([2, 0, 1, 3]);
+    const inOrder = sortCuesMapped(document);
+    expect(inOrder.document).toBe(document);
+    expect(inOrder.moved).toEqual([0, 1, 2, 3]);
   });
 
   it('splits a cue, dropping word timings that leave their cue', () => {

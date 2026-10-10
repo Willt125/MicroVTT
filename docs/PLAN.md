@@ -454,9 +454,20 @@ Split into three PRs:
 - [x] **Accepted:** browser memory grows by about 220 MB whether the media is 1 h or 12 h
       (12 h computes in about 3 minutes); `BENCHMARKS.md`, and an opt-in test to repeat it.
 
-**5b: timing tools**: drag cue edges and whole cues on the timeline, snapping (word timings,
-cue edges, the playhead), frame stepping, global shift and two-point scale (resync),
-multi-selection and bulk operations.
+**5b: timing tools (done)**
+
+- [x] Drag a cue's edges, or whole cues, on the timeline; the selected cues move together, as
+      one undo step, and cues are kept in start order afterwards (the selection follows them).
+- [x] Snapping to the edges of other cues, word timings and the playhead, within 8 px, with a
+      guide where it snapped; Alt drags without snapping.
+- [x] Frame stepping (`,` and `.`, or the buttons) at the video's frame rate, measured from the
+      file by Mediabunny (its first 120 packets, rounded to a common rate within 0.5%) or
+      chosen by the user; frame starts are rounded up to whole ms, so seeking shows that frame.
+- [x] Multiple selection in the list (Ctrl/⌘-click, Shift-click, Ctrl/⌘+A) and on the
+      timeline; delete and merge (consecutive cues) work on it.
+- [x] Timing dialog for all or the selected cues: shift (or move the first cue to the
+      playhead), two-point resync, and frame-rate change (for example 25 to 23.976 fps). Word
+      timings move with their cues. Core: `resyncCues`, `syncMap`, `sortCuesMapped`.
 
 **5c: quality checks (style and accessibility rules)**: rules from subtitle style guides
 and accessibility guidance, kept apart from the format's errors and warnings: their own
@@ -690,6 +701,10 @@ gaps (2026-10-08):
   natively. ASS/SSA gets lossless round-trip support (everything not edited is kept as found);
   a styles editor, typesetting tools and a libass preview are left to a dedicated ASS editor.
 
+- **2026-10-10 (Phase 5b):** Timeline drags keep the document in start order (sorting after
+  each move, the selection following the cues), since an out-of-order cue is a conformance
+  error. A shift that would put a cue before 0 is reduced, not clamped per cue, so cues keep
+  their lengths and spacing.
 - **2026-10-10 (owner):** The 5c profiles target WCAG 2.2, the Netflix Timed Text Style Guide
   of 2025-12-19 and the BBC Subtitle Guidelines of March 2026, each limited to what the editor
   can reasonably detect.

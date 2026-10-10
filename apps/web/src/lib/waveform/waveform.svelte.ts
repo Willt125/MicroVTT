@@ -35,6 +35,8 @@ export class Waveform {
   doneMs = $state(0);
   /** Why there is no waveform, when there is none. */
   reason = $state<string | null>(null);
+  /** The video's measured frame rate, or null (no video, or not known yet). */
+  fps = $state<number | null>(null);
   /** Bumped whenever more peaks are available, so views redraw. */
   version = $state(0);
 
@@ -75,6 +77,7 @@ export class Waveform {
     this.durationMs = 0;
     this.doneMs = 0;
     this.reason = null;
+    this.fps = null;
   }
 
   /** Min/max peak pairs for `columns` slices of [fromMs, toMs), and the file's loudest point. */
@@ -110,6 +113,9 @@ export class Waveform {
         this.doneMs = message.durationMs;
         this.state = 'ready';
         this.version++;
+        break;
+      case 'video':
+        this.fps = message.fps;
         break;
       case 'range':
         this.pending.get(message.id)?.({ peaks: message.peaks, peak: message.peak });

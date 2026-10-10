@@ -1,12 +1,14 @@
 <!--
   The timeline under the editor: the media's waveform, the cues as blocks, and the playhead.
   Scroll to move through time, Ctrl/⌘ + scroll (or the buttons) to zoom; click to seek, click a
-  cue to select it. Peaks for the visible range are read from the waveform worker, so a
-  12-hour file draws as cheaply as a short one.
+  cue to select it (Ctrl/⌘ and Shift add to the selection). Drag a cue's edge to retime it, or
+  the cue to move it with the rest of the selection; edges snap to other cues' edges, word
+  timings and the playhead (hold Alt not to snap). Peaks for the visible range are read from
+  the waveform worker, so a 12-hour file draws as cheaply as a short one.
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
-  import type { Cue } from '@microvtt/core';
+  import { mapTextTimestamps, type Cue } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import type { Player } from '../player.svelte.ts';
   import {
@@ -14,9 +16,12 @@
     clampView,
     follow,
     maxMsPerPx,
+    resolveDrag,
     rulerLabel,
     rulerStep,
     zoomAt,
+    type DragKind,
+    type DragResult,
     type View,
   } from '../timeline.ts';
   import type { Waveform } from '../waveform/waveform.svelte.ts';
@@ -32,6 +37,10 @@
 
   const RULER_PX = 18;
   const CUE_LANE_PX = 26;
+  /** How near (in px) a cue's edge the pointer must be to drag the edge. */
+  const EDGE_PX = 6;
+  /** How near (in px) an edge snaps to a target. */
+  const SNAP_PX = 8;
 
   let canvas: HTMLCanvasElement | undefined = $state();
   let width = $state(0);
@@ -99,7 +108,7 @@
 
   // Redraw whenever anything drawn changes.
   $effect(() => {
-    void [view, width, height, editor.doc, editor.selected, player.currentMs, waveform.state];
+    void [view, width, height, editor.doc, editor.selection, player.currentMs, waveform.state];
     schedule();
   });
 
@@ -190,11 +199,11 @@
     const laneTop = height - CUE_LANE_PX;
     ctx.font = '12px system-ui, sans-serif';
     for (const i of editor.cueRows) {
-      const cue = editor.doc.body[i] as Cue;
+      const cue = shown(i, editor.doc.body[i] as Cue);
       if (cue.endMs < view.startMs || cue.startMs > endMs) continue;
       const x1 = Math.max(-1, x(cue.startMs));
       const x2 = Math.min(width + 1, x(cue.endMs));
-      const selected = i === editor.selected;
+      const selected = editor.isSelected(i);
       ctx.fillStyle = selected ? c.accent : c.cue;
       ctx.globalAlpha = selected ? 0.35 : 1;
       ctx.fillRect(x1, laneTop + 2, Math.max(1, x2 - x1), CUE_LANE_PX - 4);
@@ -210,6 +219,18 @@
         ctx.fillText(plainText(cue.text).replace(/\n/g, ' '), x1 + 4, laneTop + 17);
         ctx.restore();
       }
+    }
+
+    // The time a drag has snapped to.
+    if (drag?.result?.snappedTo != null) {
+      const sx = Math.round(x(drag.result.snappedTo)) + 0.5;
+      ctx.strokeStyle = c.accent;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(sx, RULER_PX);
+      ctx.lineTo(sx, height);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
 
     // Playhead.
@@ -255,44 +276,167 @@
     }
   }
 
-  /** The cue drawn at a point in the cue lane (the last drawn wins, as it is on top). */
-  function cueAtPoint(px: number, py: number): number {
-    if (py < height - CUE_LANE_PX) return -1;
-    const ms = view.startMs + px * view.msPerPx;
-    let found = -1;
+  interface Hit {
+    index: number;
+    kind: DragKind;
+  }
+
+  /**
+   * The cue at a point in the cue lane, and which part: an edge (within a few pixels; on a
+   * narrow cue, its outer thirds) or the body. Of overlapping cues, the last drawn (on top) wins.
+   */
+  function hitAt(px: number, py: number): Hit | null {
+    if (py < height - CUE_LANE_PX) return null;
+    const x = (ms: number): number => (ms - view.startMs) / view.msPerPx;
+    let found: Hit | null = null;
     for (const i of editor.cueRows) {
       const cue = editor.doc.body[i] as Cue;
-      if (cue.startMs <= ms && ms <= cue.endMs) found = i;
+      const x1 = x(cue.startMs);
+      const x2 = x(cue.endMs);
+      if (px < x1 - EDGE_PX || px > x2 + EDGE_PX) continue;
+      const edge = Math.min(EDGE_PX, (x2 - x1) / 3);
+      if (px <= x1 + edge) found = { index: i, kind: 'start' };
+      else if (px >= x2 - edge) found = { index: i, kind: 'end' };
+      else found = { index: i, kind: 'move' };
     }
     return found;
   }
 
-  let dragFrom: { px: number; startMs: number } | null = null;
-  let dragged = false;
+  interface Drag {
+    pointerX: number;
+    hit: Hit;
+    /** Body indices of the cues that move (for a move; else just the dragged one). */
+    moving: Set<number>;
+    span: { startMs: number; endMs: number };
+    targets: number[];
+    result: DragResult | null;
+  }
+
+  /** Panning the view (a drag outside the cues), or a click to seek. */
+  let pan: { px: number; startMs: number } | null = null;
+  let panned = false;
+  let drag: Drag | null = null;
+
+  /** A cue's times as drawn: moved by the drag in progress, if it takes part. */
+  function shown(i: number, cue: Cue): Cue {
+    if (!drag?.result || !drag.moving.has(i)) return cue;
+    const d = drag.result.deltaMs;
+    if (drag.hit.kind === 'move') return { ...cue, startMs: cue.startMs + d, endMs: cue.endMs + d };
+    return drag.hit.kind === 'start'
+      ? { ...cue, startMs: cue.startMs + d }
+      : { ...cue, endMs: cue.endMs + d };
+  }
+
+  /**
+   * What edges can snap to: edges of the cues that stay put, word timings, and the playhead.
+   * Only cues near the view are looked at, as a drag does not go much further.
+   */
+  function snapTargets(moving: Set<number>, kind: DragKind, dragged: number): number[] {
+    const span = view.msPerPx * width;
+    const from = view.startMs - span;
+    const to = view.startMs + 2 * span;
+    const targets = [player.currentMs];
+    for (const i of editor.cueRows) {
+      const cue = editor.doc.body[i] as Cue;
+      if (cue.endMs < from || cue.startMs > to) continue;
+      const moves = moving.has(i);
+      if (!moves) targets.push(cue.startMs, cue.endMs);
+      // A cue's own word timings stay put while one of its edges is dragged.
+      if (!moves || (kind !== 'move' && i === dragged))
+        mapTextTimestamps(cue.text, (ms) => (targets.push(ms), ms));
+    }
+    return targets;
+  }
 
   function onpointerdown(event: PointerEvent): void {
     if (event.button !== 0) return;
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-    dragFrom = { px: event.clientX, startMs: view.startMs };
-    dragged = false;
+    const target = event.currentTarget as HTMLElement;
+    target.setPointerCapture(event.pointerId);
+    const rect = target.getBoundingClientRect();
+    const hit = hitAt(event.clientX - rect.left, event.clientY - rect.top);
+    if (!hit) {
+      pan = { px: event.clientX, startMs: view.startMs };
+      panned = false;
+      return;
+    }
+    if (event.shiftKey) return editor.selectRange(hit.index);
+    if (event.ctrlKey || event.metaKey) return editor.toggleSelected(hit.index);
+    if (!editor.isSelected(hit.index)) editor.selected = hit.index;
+    const moving = new Set(
+      hit.kind === 'move' && editor.isSelected(hit.index) ? editor.selection : [hit.index],
+    );
+    let startMs = Infinity;
+    let endMs = 0;
+    for (const i of moving) {
+      const cue = editor.doc.body[i] as Cue;
+      startMs = Math.min(startMs, cue.startMs);
+      endMs = Math.max(endMs, cue.endMs);
+    }
+    drag = {
+      pointerX: event.clientX,
+      hit,
+      moving,
+      span: { startMs, endMs },
+      targets: snapTargets(moving, hit.kind, hit.index),
+      result: null,
+    };
   }
 
   function onpointermove(event: PointerEvent): void {
-    if (!dragFrom) return;
-    const dx = event.clientX - dragFrom.px;
-    if (Math.abs(dx) > 3) dragged = true;
-    if (dragged) setView({ ...view, startMs: dragFrom.startMs - dx * view.msPerPx });
+    const target = event.currentTarget as HTMLElement;
+    if (drag) {
+      const dx = event.clientX - drag.pointerX;
+      if (!drag.result && Math.abs(dx) <= 3) return;
+      const cue = editor.doc.body[drag.hit.index] as Cue;
+      drag.result = resolveDrag(
+        drag.hit.kind,
+        cue,
+        drag.span,
+        dx * view.msPerPx,
+        event.altKey ? [] : drag.targets,
+        SNAP_PX * view.msPerPx,
+      );
+      schedule();
+      return;
+    }
+    if (pan) {
+      const dx = event.clientX - pan.px;
+      if (Math.abs(dx) > 3) panned = true;
+      if (panned) setView({ ...view, startMs: pan.startMs - dx * view.msPerPx });
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    const hit = hitAt(event.clientX - rect.left, event.clientY - rect.top);
+    target.style.cursor = !hit ? '' : hit.kind === 'move' ? 'grab' : 'ew-resize';
   }
 
   function onpointerup(event: PointerEvent): void {
-    const from = dragFrom;
-    dragFrom = null;
-    if (!from || dragged) return;
+    const d = drag;
+    drag = null;
+    if (d) {
+      if (d.result) {
+        const { deltaMs } = d.result;
+        if (d.hit.kind === 'move')
+          editor.changeTimes({ kind: 'move', indices: [...d.moving], deltaMs });
+        else editor.changeTimes({ kind: d.hit.kind, index: d.hit.index, deltaMs });
+      } else if (editor.multiple) {
+        // A plain click on one of several selected cues selects it alone.
+        editor.selected = d.hit.index;
+      }
+      schedule();
+      return;
+    }
+    const from = pan;
+    pan = null;
+    if (!from || panned) return;
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const px = event.clientX - rect.left;
-    const cue = cueAtPoint(px, event.clientY - rect.top);
-    if (cue !== -1) editor.selected = cue;
-    else player.seek(view.startMs + px * view.msPerPx);
+    player.seek(view.startMs + (event.clientX - rect.left) * view.msPerPx);
+  }
+
+  function onpointercancel(): void {
+    drag = null;
+    pan = null;
+    schedule();
   }
 
   function zoom(factor: number): void {
@@ -339,11 +483,12 @@
   </div>
   <canvas
     bind:this={canvas}
-    aria-label="Waveform and cues; click to seek or select a cue"
+    aria-label="Waveform and cues; click to seek or select a cue, drag a cue or its edges to retime it"
     {onwheel}
     {onpointerdown}
     {onpointermove}
     {onpointerup}
+    {onpointercancel}
   ></canvas>
 </section>
 

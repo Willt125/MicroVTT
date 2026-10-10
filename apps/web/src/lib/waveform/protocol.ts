@@ -21,6 +21,8 @@ export type WaveformResponse =
   | { type: 'unavailable'; reason: string; fallback: boolean }
   | { type: 'progress'; doneMs: number }
   | { type: 'done'; durationMs: number }
+  /** The video track's average frame rate (frames per second), or null without video. */
+  | { type: 'video'; fps: number | null }
   /** `peak`: the loudest point so far (0–128), for drawing at a readable scale. */
   | { type: 'range'; id: number; peaks: Int8Array; peak: number }
   | { type: 'error'; message: string };

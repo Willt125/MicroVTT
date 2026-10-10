@@ -248,3 +248,86 @@ describe('locating diagnostics', () => {
     expect(new Set(located.map((d) => `${d.list}:${d.index}`))).toEqual(new Set(['body:2']));
   });
 });
+
+describe('selection and timing', () => {
+  const FOUR =
+    'WEBVTT\n\n00:01.000 --> 00:02.000\na\n\n00:03.000 --> 00:04.000\nb\n\nNOTE c is next\n\n' +
+    '00:05.000 --> 00:06.000\nc\n\n00:07.000 --> 00:08.000\nd\n';
+  const texts = (editor: Editor): string[] =>
+    editor.cueRows.map((i) => (editor.doc.body[i] as { text: string }).text);
+  const selectedTexts = (editor: Editor): string[] =>
+    editor.selection.map((i) => (editor.doc.body[i] as { text: string }).text);
+
+  async function open(): Promise<Editor> {
+    const editor = new Editor(fakeWorker());
+    await editor.open(file(FOUR));
+    return editor;
+  }
+
+  it('selects with toggles and ranges; a plain selection replaces them', async () => {
+    const editor = await open();
+    editor.toggleSelected(3);
+    expect(selectedTexts(editor)).toEqual(['a', 'c']);
+    expect(editor.selected).toBe(3);
+    editor.selectRange(4);
+    expect(selectedTexts(editor)).toEqual(['c', 'd']);
+    editor.toggleSelected(4);
+    expect(selectedTexts(editor)).toEqual(['c']);
+    editor.toggleSelected(3); // The last one stays.
+    expect(selectedTexts(editor)).toEqual(['c']);
+    editor.selectAll();
+    expect(selectedTexts(editor)).toEqual(['a', 'b', 'c', 'd']);
+    editor.selected = 1;
+    expect(selectedTexts(editor)).toEqual(['b']);
+  });
+
+  it('deletes and merges the selection, and undo brings the selection back', async () => {
+    const editor = await open();
+    editor.selected = 1;
+    editor.selectRange(3);
+    expect(editor.canMerge).toBe(true);
+    editor.mergeWithNext();
+    expect(texts(editor)).toEqual(['a', 'b\n<00:00:05.000>c', 'd']);
+    editor.undo();
+    expect(selectedTexts(editor)).toEqual(['b', 'c']);
+    editor.toggleSelected(0);
+    editor.toggleSelected(1); // a and c: not consecutive.
+    expect(editor.canMerge).toBe(false);
+    editor.deleteSelected();
+    expect(texts(editor)).toEqual(['b', 'd']);
+    expect(editor.doc.body.some((i) => i.type === 'note')).toBe(true);
+  });
+
+  it('moves cues from the timeline, keeping start order and the selection', async () => {
+    const editor = await open();
+    editor.selected = 0;
+    editor.toggleSelected(1);
+    editor.changeTimes({ kind: 'move', indices: editor.selection, deltaMs: 5500 });
+    // a and b now start at 6.5 s and 8.5 s: after c (5 s), around d (7 s).
+    expect(texts(editor)).toEqual(['c', 'a', 'd', 'b']);
+    expect(selectedTexts(editor)).toEqual(['a', 'b']);
+    expect(editor.selectedCue?.text).toBe('b');
+    editor.undo();
+    expect(texts(editor)).toEqual(['a', 'b', 'c', 'd']);
+    editor.selected = 4;
+    editor.changeTimes({ kind: 'start', index: 4, deltaMs: -500 });
+    expect(editor.selectedCue).toMatchObject({ text: 'd', startMs: 6500, endMs: 8000 });
+  });
+
+  it('shifts and resyncs a scope as one undo step each', async () => {
+    const editor = await open();
+    editor.selected = 3;
+    editor.toggleSelected(4);
+    expect(editor.shift(-10_000, 'selected')).toBe(-5000); // c reaches 0, no further.
+    expect(editor.cueRows.map((i) => (editor.doc.body[i] as { startMs: number }).startMs)).toEqual([
+      0, 1000, 2000, 3000,
+    ]);
+    editor.undo();
+    editor.resync({ fromMs: 1000, toMs: 2000 }, { fromMs: 7000, toMs: 14_000 }, 'all');
+    expect(editor.cueRows.map((i) => (editor.doc.body[i] as { startMs: number }).startMs)).toEqual([
+      2000, 6000, 10_000, 14_000,
+    ]);
+    editor.undo();
+    expect(editor.canUndo).toBe(false);
+  });
+});

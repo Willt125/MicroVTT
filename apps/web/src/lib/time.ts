@@ -26,3 +26,16 @@ export const formatTime = (ms: number): string => formatTimestamp(ms);
 export function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(3)} s`;
 }
+
+/** A time with an optional sign ("-1.5", "+0:02.250"), for shifting; whole ms or null. */
+export function parseSignedTime(input: string): number | null {
+  const m = /^\s*([+−-]?)\s*(.*)$/.exec(input) as RegExpExecArray;
+  const ms = parseTimeInput(m[2] as string);
+  if (ms === null) return null;
+  return m[1] === '-' || m[1] === '−' ? -ms : ms;
+}
+
+/** "+1.500 s" or "−0.040 s": a signed duration. */
+export function formatShift(ms: number): string {
+  return `${ms < 0 ? '−' : '+'}${formatDuration(Math.abs(ms))}`;
+}

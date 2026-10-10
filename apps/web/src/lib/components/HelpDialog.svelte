@@ -22,7 +22,11 @@
     [`${mod}F`, 'Find and replace'],
     [`${mod}Z, ${mod}Shift+Z`, 'Undo, redo (outside text fields)'],
     ['Enter (in the list)', 'Edit the cue’s text'],
-    ['Delete (in the list)', 'Delete the cue'],
+    ['Delete (in the list)', 'Delete the selected cues'],
+    [`${mod}click, Shift+click`, 'Add a cue to the selection, select a range'],
+    [`${mod}A`, 'Select all cues (outside text fields)'],
+    ['Drag on the timeline', 'Move a cue (and the others selected), or drag its edge'],
+    ['Alt while dragging', 'Do not snap to cue edges, word timings or the playhead'],
     ['↑ ↓ (in a time field)', 'Nudge by 0.1 s (with Shift: 1 s)'],
   ]);
 </script>

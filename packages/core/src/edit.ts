@@ -55,33 +55,12 @@ function mapCues(
 
 const toTime = (ms: number): number => Math.max(0, Math.round(ms));
 
-/** Moves cues (all, or those matching `filter`) by `deltaMs`, clamping at zero. */
-export function shiftCues(doc: VttDocument, deltaMs: number, filter?: CueFilter): VttDocument {
-  return mapCues(
-    doc,
-    (cue) => ({
-      ...cue,
-      startMs: toTime(cue.startMs + deltaMs),
-      endMs: toTime(cue.endMs + deltaMs),
-      text: mapTextTimestamps(cue.text, (ms) => ms + deltaMs),
-    }),
-    filter,
-  );
-}
-
-/**
- * Rescales times around `anchorMs`: t' = anchor + (t - anchor) × factor. Two-point resync is
- * `scaleCues` then `shiftCues`.
- */
-export function scaleCues(
+/** Applies `map` to the times of cues (all, or those matching `filter`), word timings included. */
+function retimeCues(
   doc: VttDocument,
-  factor: number,
-  anchorMs = 0,
+  map: (ms: number) => number,
   filter?: CueFilter,
 ): VttDocument {
-  if (!Number.isFinite(factor) || factor <= 0)
-    throw new RangeError(`Invalid scale factor: ${factor}`);
-  const map = (ms: number): number => anchorMs + (ms - anchorMs) * factor;
   return mapCues(
     doc,
     (cue) => ({
@@ -92,6 +71,62 @@ export function scaleCues(
     }),
     filter,
   );
+}
+
+/** Moves cues (all, or those matching `filter`) by `deltaMs`, clamping at zero. */
+export function shiftCues(doc: VttDocument, deltaMs: number, filter?: CueFilter): VttDocument {
+  return retimeCues(doc, (ms) => ms + deltaMs, filter);
+}
+
+/**
+ * Rescales times around `anchorMs`: t' = anchor + (t - anchor) × factor. Two-point resync is
+ * `scaleCues` then `shiftCues` (see `resyncCues`).
+ */
+export function scaleCues(
+  doc: VttDocument,
+  factor: number,
+  anchorMs = 0,
+  filter?: CueFilter,
+): VttDocument {
+  if (!Number.isFinite(factor) || factor <= 0)
+    throw new RangeError(`Invalid scale factor: ${factor}`);
+  return retimeCues(doc, (ms) => anchorMs + (ms - anchorMs) * factor, filter);
+}
+
+/** A correction for resync: what is at `fromMs` now should be at `toMs`. */
+export interface SyncPoint {
+  fromMs: number;
+  toMs: number;
+}
+
+/**
+ * The linear map through two sync points (t' = a.to + (t - a.from) × factor), as used by
+ * `resyncCues`. Throws a RangeError when the points are at the same time or would run time
+ * backwards.
+ */
+export function syncMap(
+  a: SyncPoint,
+  b: SyncPoint,
+): { factor: number; map: (ms: number) => number } {
+  if (a.fromMs === b.fromMs) throw new RangeError('The two sync points must be at different times');
+  const factor = (b.toMs - a.toMs) / (b.fromMs - a.fromMs);
+  if (!Number.isFinite(factor) || factor <= 0)
+    throw new RangeError('The sync points must keep their order (the later one stays later)');
+  return { factor, map: (ms) => a.toMs + (ms - a.fromMs) * factor };
+}
+
+/**
+ * Two-point resync: moves and stretches cues (all, or those matching `filter`) so that time
+ * `a.fromMs` lands on `a.toMs` and `b.fromMs` on `b.toMs`, everything else in proportion. Fixes
+ * subtitles timed for another cut or frame rate. Word timings move with their cues.
+ */
+export function resyncCues(
+  doc: VttDocument,
+  a: SyncPoint,
+  b: SyncPoint,
+  filter?: CueFilter,
+): VttDocument {
+  return retimeCues(doc, syncMap(a, b).map, filter);
 }
 
 /** Elements that can be open across a split point (the cue text parser's element names). */
@@ -230,18 +265,32 @@ export function mergeCues(doc: VttDocument, from: number, to: number): VttDocume
 
 /** Sorts cues by start time (stable); each note stays attached to the cue after it. */
 export function sortCues(doc: VttDocument): VttDocument {
-  const units: BodyItem[][] = [];
-  let pending: BodyItem[] = [];
-  for (const item of doc.body) {
-    pending.push(item);
+  return sortCuesMapped(doc).document;
+}
+
+/**
+ * `sortCues`, also returning where each item went: `moved[i]` is the new body index of the item
+ * at body index `i` (for keeping a selection across the sort). The document is returned as it
+ * is when it is already in order.
+ */
+export function sortCuesMapped(doc: VttDocument): { document: VttDocument; moved: number[] } {
+  const units: number[][] = [];
+  let pending: number[] = [];
+  doc.body.forEach((item, i) => {
+    pending.push(i);
     if (item.type === 'cue') {
       units.push(pending);
       pending = [];
     }
-  }
-  const startOf = (unit: BodyItem[]): number => (unit[unit.length - 1] as Cue).startMs;
+  });
+  const startOf = (unit: number[]): number =>
+    (doc.body[unit[unit.length - 1] as number] as Cue).startMs;
   const sorted = [...units].sort((a, b) => startOf(a) - startOf(b));
-  return { ...doc, body: [...sorted.flat(), ...pending] };
+  const order = [...sorted.flat(), ...pending];
+  const moved = new Array<number>(order.length);
+  order.forEach((from, to) => (moved[from] = to));
+  if (order.every((from, to) => from === to)) return { document: doc, moved };
+  return { document: { ...doc, body: order.map((i) => doc.body[i] as BodyItem) }, moved };
 }
 
 /** Sets every cue id to `format(n)` for n = 1, 2, … in body order. */

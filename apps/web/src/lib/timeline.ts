@@ -60,3 +60,86 @@ export function rulerLabel(ms: number, stepMs: number): string {
       : `${m}:${String(s).padStart(2, '0')}`;
   return stepMs < 1000 ? `${base}.${tenths}` : base;
 }
+
+/** The shortest cue a drag can make. */
+export const MIN_CUE_MS = 10;
+
+/** How a cue drag changes times: one edge of one cue, or whole cues. */
+export type DragKind = 'start' | 'end' | 'move';
+
+/** The nearest of `targets` within `maxDistanceMs` of `ms`, or null. */
+export function nearest(
+  ms: number,
+  targets: readonly number[],
+  maxDistanceMs: number,
+): number | null {
+  let best: number | null = null;
+  let bestDistance = maxDistanceMs;
+  for (const t of targets) {
+    const d = Math.abs(t - ms);
+    if (d <= bestDistance) {
+      best = t;
+      bestDistance = d;
+    }
+  }
+  return best;
+}
+
+export interface DragResult {
+  /** The change to apply: to the dragged edge, or to every moved cue. */
+  deltaMs: number;
+  /** The time snapped to, for drawing a guide, or null. */
+  snappedTo: number | null;
+}
+
+/**
+ * Resolves a drag of `deltaMs` (from the pointer) into the change to apply. `cue` is the dragged
+ * cue; for a move, `span` is the earliest start and latest end of all the cues moving. The edge
+ * (or, for a move, whichever of the block's edges is nearer a target) snaps to the nearest
+ * target within `snapMs`, and the result keeps times at or after 0 and cues at least
+ * `MIN_CUE_MS` long.
+ */
+export function resolveDrag(
+  kind: DragKind,
+  cue: { startMs: number; endMs: number },
+  span: { startMs: number; endMs: number },
+  deltaMs: number,
+  targets: readonly number[],
+  snapMs: number,
+): DragResult {
+  let delta = deltaMs;
+  let snappedTo: number | null = null;
+  if (kind === 'move') {
+    const start = nearest(span.startMs + delta, targets, snapMs);
+    const end = nearest(span.endMs + delta, targets, snapMs);
+    const ds = start === null ? Infinity : Math.abs(start - (span.startMs + delta));
+    const de = end === null ? Infinity : Math.abs(end - (span.endMs + delta));
+    if (start !== null && ds <= de) {
+      delta = start - span.startMs;
+      snappedTo = start;
+    } else if (end !== null) {
+      delta = end - span.endMs;
+      snappedTo = end;
+    }
+    if (span.startMs + delta < 0) {
+      delta = -span.startMs;
+      snappedTo = null;
+    }
+    return { deltaMs: Math.round(delta), snappedTo };
+  }
+  const edge = kind === 'start' ? cue.startMs : cue.endMs;
+  const snapped = nearest(edge + delta, targets, snapMs);
+  if (snapped !== null) {
+    delta = snapped - edge;
+    snappedTo = snapped;
+  }
+  const [min, max] =
+    kind === 'start'
+      ? [-cue.startMs, cue.endMs - MIN_CUE_MS - cue.startMs]
+      : [cue.startMs + MIN_CUE_MS - cue.endMs, Infinity];
+  if (delta < min || delta > max) {
+    delta = Math.min(max, Math.max(min, delta));
+    snappedTo = null;
+  }
+  return { deltaMs: Math.round(delta), snappedTo };
+}

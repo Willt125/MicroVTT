@@ -112,6 +112,11 @@
           />
         </label>
         <span class="muted duration">Duration {formatDuration(cue.endMs - cue.startMs)}</span>
+        {#if editor.multiple}
+          <span class="muted duration" role="status"
+            >{editor.selection.length} cues selected; this one is shown</span
+          >
+        {/if}
         <label class="id">
           ID
           <input

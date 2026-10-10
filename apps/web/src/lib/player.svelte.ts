@@ -21,6 +21,8 @@ export class Player {
   sync = $state(true);
   /** Show the document as captions over the media. */
   captions = $state(true);
+  /** The frame rate for frame stepping: 'auto' (measured from the file) or a chosen rate. */
+  fpsChoice = $state<number | 'auto'>('auto');
   /** True when the file has no video track. */
   isAudio = $state(false);
   error = $state<string | null>(null);
@@ -34,6 +36,7 @@ export class Player {
     this.url = URL.createObjectURL(file);
     this.file = file;
     this.name = file.name;
+    this.fpsChoice = 'auto';
   }
 
   unload(): void {
@@ -76,6 +79,10 @@ export class Player {
 
   skip(deltaMs: number): void {
     this.seek(this.currentMs + deltaMs);
+  }
+
+  pause(): void {
+    this.element?.pause();
   }
 
   setRate(rate: number): void {

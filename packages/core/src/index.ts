@@ -73,13 +73,16 @@ export {
   mapTextTimestamps,
   mergeCues,
   renumberCues,
+  resyncCues,
   scaleCues,
   shiftCues,
   sortCues as sortDocumentCues,
+  sortCuesMapped,
   splitCue,
+  syncMap,
   updateCue,
 } from './edit.ts';
-export type { CueUpdate } from './edit.ts';
+export type { CueUpdate, SyncPoint } from './edit.ts';
 export {
   DEFAULT_SEGMENT_OPTIONS,
   cleanupAutoCaptions,
