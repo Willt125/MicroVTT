@@ -3,6 +3,7 @@
  * blocks typing or scrolling.
  */
 import {
+  checkQuality,
   cleanupAutoCaptions,
   decodeFile,
   hasHeaderLines,
@@ -11,6 +12,7 @@ import {
   exportDocument,
   findReviewMarkers,
   importDocument,
+  rulesetById,
   validate,
   validateImport,
   youtubeCheck,
@@ -64,9 +66,18 @@ async function handle(request: WorkerRequest): Promise<unknown> {
       current = request.document;
       const { text, spans } = serializeWithSpans(request.document);
       const result = validate(text, { fileType: request.fileType });
+      const ruleset = request.quality && rulesetById(request.quality.ruleset);
       return {
         diagnostics: locateInSerialized(result.diagnostics, spans),
         review: findReviewMarkers(request.document),
+        quality: ruleset
+          ? checkQuality(
+              request.document,
+              ruleset,
+              request.quality?.overrides,
+              request.quality?.fps ? { fps: request.quality.fps } : {},
+            )
+          : [],
       } satisfies Checked;
     }
     case 'detect':

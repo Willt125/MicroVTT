@@ -8,6 +8,7 @@ import type {
   CleanupOptions,
   CleanupResult,
   ExportedFile,
+  QualityRequest,
   ImportedFile,
   WorkerRequest,
   WorkerResponse,
@@ -51,8 +52,12 @@ export class VttWorker {
     );
   }
 
-  validate(document: VttDocument, fileType: FileType): Promise<Checked> {
-    return this.request({ type: 'validate', document, fileType });
+  validate(
+    document: VttDocument,
+    fileType: FileType,
+    quality: QualityRequest | null = null,
+  ): Promise<Checked> {
+    return this.request({ type: 'validate', document, fileType, quality });
   }
 
   detect(document: VttDocument): Promise<AutoCaptionInfo> {

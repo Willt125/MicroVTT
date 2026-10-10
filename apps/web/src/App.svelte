@@ -10,6 +10,8 @@
   import GlossaryDialog from './lib/components/GlossaryDialog.svelte';
   import HelpDialog from './lib/components/HelpDialog.svelte';
   import MediaPanel from './lib/components/MediaPanel.svelte';
+  import QualityPanel from './lib/components/QualityPanel.svelte';
+  import RulesDialog from './lib/components/RulesDialog.svelte';
   import Timeline from './lib/components/Timeline.svelte';
   import TimingDialog from './lib/components/TimingDialog.svelte';
   import Toolbar from './lib/components/Toolbar.svelte';
@@ -36,11 +38,16 @@
   let cleanupOpen = $state(false);
   let glossaryOpen = $state(false);
   let timingOpen = $state(false);
+  let rulesOpen = $state(false);
   const waveform = new Waveform();
   /** The frame rate frame stepping uses: chosen, or measured from the video. */
   const fps = $derived(
     player.fpsChoice === 'auto' ? standardRate(waveform.fps ?? Number.NaN) : player.fpsChoice,
   );
+  // Frame-based style rules (Netflix's frame gaps) use the video's rate.
+  $effect(() => {
+    editor.mediaFps = player.hasMedia ? fps : null;
+  });
   // The waveform follows the loaded media.
   $effect(() => {
     const file = player.file;
@@ -132,7 +139,8 @@
       helpOpen ||
       cleanupOpen ||
       glossaryOpen ||
-      timingOpen
+      timingOpen ||
+      rulesOpen
     )
       return;
     const text = event.clipboardData?.getData('text/plain') ?? '';
@@ -247,7 +255,8 @@
         helpOpen ||
         cleanupOpen ||
         glossaryOpen ||
-        timingOpen
+        timingOpen ||
+        rulesOpen
       )
         return;
       if (event.key === ' ' && ownsSpace(event.target)) return;
@@ -396,6 +405,7 @@
           />
         {/if}
         <DiagnosticsPanel {editor} onjump={jumpTo} />
+        <QualityPanel {editor} onjump={jumpTo} onrules={() => (rulesOpen = true)} />
       </div>
     </main>
     {#if player.hasMedia}
@@ -439,6 +449,7 @@
   <CleanupDialog {editor} bind:open={cleanupOpen} />
   <GlossaryDialog {editor} bind:open={glossaryOpen} />
   <TimingDialog {editor} {player} bind:open={timingOpen} />
+  <RulesDialog {editor} bind:open={rulesOpen} />
 </div>
 
 <style>

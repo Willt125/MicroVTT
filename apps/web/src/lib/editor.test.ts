@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { VttDocument } from '@microvtt/core';
 import { readFileSync } from 'node:fs';
 import {
+  checkQuality,
   cleanupAutoCaptions,
   createCue,
   createDocument,
@@ -9,6 +10,7 @@ import {
   exportDocument,
   findReviewMarkers,
   importDocument,
+  rulesetById,
   validate,
 } from '@microvtt/core';
 import { Editor } from './editor.svelte.ts';
@@ -38,12 +40,20 @@ function fakeWorker(store: { save: Autosave | null } = { save: null }): VttWorke
         autoCaptions: detectAutoCaptions(imported.document),
       };
     },
-    validate: async (doc: VttDocument) => {
+    validate: async (
+      doc: VttDocument,
+      _fileType: unknown,
+      quality: { ruleset: string; overrides: object; fps?: number } | null = null,
+    ) => {
       validated = doc;
       const { text, spans } = serializeWithSpans(doc);
+      const ruleset = quality && rulesetById(quality.ruleset);
       return {
         diagnostics: locateInSerialized(validate(text).diagnostics, spans),
         review: findReviewMarkers(doc),
+        quality: ruleset
+          ? checkQuality(doc, ruleset, quality.overrides, quality.fps ? { fps: quality.fps } : {})
+          : [],
       };
     },
     detect: async (doc: VttDocument) => detectAutoCaptions(doc),
@@ -329,5 +339,70 @@ describe('selection and timing', () => {
     ]);
     editor.undo();
     expect(editor.canUndo).toBe(false);
+  });
+});
+
+describe('style and accessibility checks', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+  it('checks with the chosen ruleset and applies fixes as undo steps', async () => {
+    const editor = new Editor(fakeWorker());
+    editor.setQualitySettings({ ruleset: 'netflix-en-us', overrides: {} });
+    await editor.open(file('WEBVTT\n\n00:00.000 --> 00:03.000\nWait...  what?\n'));
+    await vi.waitFor(() => expect(editor.validating).toBe(false));
+    expect(editor.quality.map((f) => f.rule)).toEqual(['ellipsis-character', 'double-space']);
+    editor.applyQualityFix(editor.quality[0]!);
+    expect(editor.selectedCue?.text).toBe('Wait…  what?');
+    await vi.waitFor(() => expect(editor.quality.map((f) => f.rule)).toEqual(['double-space']));
+    editor.applyRuleFixes('double-space');
+    expect(editor.selectedCue?.text).toBe('Wait… what?');
+    editor.undo();
+    expect(editor.selectedCue?.text).toBe('Wait…  what?');
+  });
+
+  it('counts frame gaps at the video’s frame rate', async () => {
+    const editor = new Editor(fakeWorker());
+    editor.setQualitySettings({ ruleset: 'netflix-en-us', overrides: {} });
+    // An 80 ms gap: two frames at 25 fps, not at 24.
+    await editor.open(
+      file('WEBVTT\n\n00:00.000 --> 00:02.000\nOne.\n\n00:02.080 --> 00:04.000\nTwo.\n'),
+    );
+    await vi.waitFor(() => expect(editor.quality.map((f) => f.rule)).toEqual(['frame-gaps']));
+    editor.mediaFps = 25;
+    await vi.waitFor(() => expect(editor.quality).toEqual([]));
+  });
+
+  it('ignores a fix found in a document that has since changed', async () => {
+    const editor = new Editor(fakeWorker());
+    editor.setQualitySettings({ ruleset: 'netflix-en-us', overrides: {} });
+    await editor.open(file('WEBVTT\n\n00:00.000 --> 00:03.000\nWait...\n'));
+    await vi.waitFor(() => expect(editor.quality).toHaveLength(1));
+    const stale = editor.quality[0]!;
+    editor.updateSelected((c) => ({ ...c, text: 'Something else' }), 'Edit');
+    editor.applyQualityFix(stale);
+    expect(editor.selectedCue?.text).toBe('Something else');
+    await settle();
+  });
+
+  it('waits for auto-captions to be cleaned up, unless asked', async () => {
+    const editor = new Editor(fakeWorker());
+    editor.setQualitySettings({ ruleset: 'lite', overrides: {} });
+    await editor.open(
+      file(
+        readFileSync(
+          new URL(
+            '../../../../packages/core/test/fixtures/autocaption-sample.vtt',
+            import.meta.url,
+          ),
+          'utf8',
+        ),
+      ),
+    );
+    await vi.waitFor(() => expect(editor.validating).toBe(false));
+    expect(editor.qualityPaused).toBe(true);
+    expect(editor.quality).toEqual([]);
+    editor.checkQualityAnyway();
+    await vi.waitFor(() => expect(editor.quality.length).toBeGreaterThan(0));
+    expect(editor.qualityPaused).toBe(false);
   });
 });
