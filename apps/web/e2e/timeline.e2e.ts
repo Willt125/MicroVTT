@@ -1,7 +1,7 @@
 /** The timeline: waveform peaks from the worker, cue blocks, seeking and selecting. */
 import { writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { mediaInput, mediaTime, openSample, selectedCells, wav } from './support.ts';
+import { mediaInput, mediaTime, openSample, selectedCells, vttInput, wav } from './support.ts';
 
 const timeline = (page: Page) => page.getByRole('region', { name: 'Timeline' });
 
@@ -112,4 +112,48 @@ test('streams compressed audio (Opus) where the browser can decode it', async ({
     expect([state, method]).toEqual(['ready', 'stream']);
     await expect.poll(() => inkedFraction(page)).toBeGreaterThan(0.1);
   }
+});
+
+test('fits the whole media once its duration is known, even when that comes late', async ({
+  page,
+}) => {
+  // Hold back the media's metadata, as a slow browser or a large file may: the first view is
+  // then laid out before the media's length is known.
+  await page.addInitScript(() => {
+    const add = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function (
+      this: EventTarget,
+      type: string,
+      listener: EventListenerOrEventListenerObject | null,
+      options?: boolean | AddEventListenerOptions,
+    ) {
+      if (type === 'loadedmetadata' && this instanceof HTMLMediaElement && listener) {
+        const late = (event: Event): void => {
+          setTimeout(() => {
+            if (typeof listener === 'function') listener.call(this, event);
+            else listener.handleEvent(event);
+          }, 1500);
+        };
+        return add.call(this, type, late, options);
+      }
+      return add.call(this, type, listener, options);
+    };
+  });
+  await page.goto('/');
+  await vttInput(page).setInputFiles({
+    name: 'short.vtt',
+    mimeType: 'text/vtt',
+    buffer: Buffer.from('WEBVTT\n\n00:01.000 --> 00:03.000\none\n\n00:09.000 --> 00:11.000\ntwo\n'),
+  });
+  await mediaInput(page).setInputFiles({
+    name: 'long.wav',
+    mimeType: 'audio/wav',
+    buffer: wav(40),
+  });
+  await expect(timeline(page)).toHaveAttribute('data-waveform', 'ready', { timeout: 15_000 });
+  const width = (await page.locator('.timeline canvas').boundingBox())?.width ?? 0;
+  // The default view is 30 s: shown whole, not cut to the 11 s the cues reach.
+  await expect
+    .poll(async () => Number(await timeline(page).getAttribute('data-ms-per-px')) * width)
+    .toBeGreaterThan(29_000);
 });
