@@ -330,8 +330,9 @@ Split into three PRs:
       characters per second, or starting with punctuation alone. A whole sound-tag line
       (`[Music]`) gets a cue of its own. The last word before a pause is held for at most 2 s
       (a word otherwise lasts until the next one, so music or silence stretched cues to 14 s).
-      Lines are balanced, preferring punctuation. Translated tracks break only between YouTube's lines by default (their word
-      times are guesses); breaking between words is an option.
+      Lines are balanced, preferring punctuation. Translated tracks break only between YouTube's
+      lines and at sentence ends within them by default (their word times are guesses); breaking
+      between words is an option.
 - [x] Output: word timings kept as timestamp tags (default for speech recognition, off for
       translations), cue settings reset to defaults (YouTube's `align:start position:0%` kept
       on request), notes kept in place, head unchanged. Optional whitespace cleanup: collapse
@@ -548,8 +549,16 @@ Done (2026-10-10):
 
 Still open:
 
-- [ ] Confirm the cleanup on a real YouTube Japanese or Chinese auto-caption file (the tests use
-      synthetic roll-ups).
+- [x] Checked the cleanup on real YouTube Japanese and Korean machine translations (private
+      fixtures). Fixed what they showed: lines held over for seconds above an empty line were read
+      as new lines (doubled text); a line starting with the previous sentence's punctuation got a
+      space before it; spaces after `。` and between Japanese characters were kept; lines and cues
+      broke inside words split over timed pieces (`わから` + `ない`, Korean `헤드` + `라인`), and a
+      pause in the source's timing could part them; untimed Japanese lines could not be wrapped.
+      Translated tracks now also break at sentence ends inside YouTube's lines, which helped the
+      Finnish translations too (no more first word of the next sentence left at a cue's end).
+- [ ] Confirm the cleanup on a Chinese auto-caption file, and on a speech-recognition (not
+      translated) Japanese one.
 - [ ] Line-length and reading-speed presets per script (CJK lines are about 13–16 full-width
       characters). Needs Netflix's Japanese, Chinese and Korean guides.
 - [ ] Case-insensitive find follows JavaScript's simple case folding: Turkish `İ`/`ı` and German

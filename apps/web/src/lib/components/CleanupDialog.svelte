@@ -190,7 +190,9 @@
       <label
         ><input type="checkbox" bind:checked={keepCueSettings} /> Keep YouTube's left-aligned positioning</label
       >
-      <label><input type="checkbox" bind:checked={collapseSpaces} /> Collapse repeated spaces</label
+      <label
+        title="Repeated spaces become one; spaces between Chinese or Japanese characters (which machine translation adds after 。 and 、) are removed"
+        ><input type="checkbox" bind:checked={collapseSpaces} /> Tidy spaces</label
       >
       <label
         title="A single U+200B separates words in some scripts (Thai, Khmer…) and is kept; doubled ones, and ones next to a space, are artifacts of machine translation"

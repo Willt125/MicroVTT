@@ -100,3 +100,20 @@ export function breakUnits(text: string): BreakUnit[] {
   }
   return units;
 }
+
+/**
+ * Whether two pieces of text with nothing between them are one word, so a line or cue must not
+ * break between them: letters of a spaced script on both sides (Korean "헤드" + "라인"), or a
+ * Japanese ending in hiragana after the word it belongs to ("わから" + "ない").
+ */
+export function continuesWord(before: string, after: string): boolean {
+  const prev = [...visible(before)].at(-1);
+  const next = visible(after);
+  const first = [...next][0];
+  if (prev === undefined || first === undefined) return false;
+  const letter = /[\p{L}\p{M}\p{N}]/u;
+  if (letter.test(prev) && letter.test(first) && !isUnspaced(prev) && !isUnspaced(first))
+    return true;
+  const word = next.replace(/\p{P}+$/u, '');
+  return word !== '' && KANA_ONLY.test(word) && JAPANESE_END.test(prev);
+}
