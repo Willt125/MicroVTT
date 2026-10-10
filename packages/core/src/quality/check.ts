@@ -5,10 +5,17 @@ import { RULES, type CueInfo } from './rules.ts';
 import { RULESETS } from './rulesets.ts';
 import type { QualityFinding, QualityFix, QualityRuleId, RuleOverrides, Ruleset } from './types.ts';
 
+/** What is known about the media, for rules that depend on it. */
+export interface QualityContext {
+  /** The video's frame rate, used by rules with an `fps` setting unless the user set one. */
+  fps?: number;
+}
+
 /** A ruleset's rules after the user's changes: enabled ones, with their settings. */
 export function effectiveRules(
   ruleset: Ruleset,
   overrides: RuleOverrides = {},
+  context: QualityContext = {},
 ): { id: QualityRuleId; severity: 'warning' | 'info'; params: Record<string, number> }[] {
   return (
     Object.entries(ruleset.rules) as [QualityRuleId, NonNullable<Ruleset['rules'][QualityRuleId]>][]
@@ -17,7 +24,12 @@ export function effectiveRules(
     .map(([id, entry]) => ({
       id,
       severity: entry.severity,
-      params: { ...RULES[id].defaults, ...entry.params, ...overrides[id]?.params },
+      params: {
+        ...RULES[id].defaults,
+        ...entry.params,
+        ...(context.fps && 'fps' in RULES[id].defaults ? { fps: context.fps } : {}),
+        ...overrides[id]?.params,
+      },
     }));
 }
 
@@ -30,8 +42,9 @@ export function checkQuality(
   doc: VttDocument,
   ruleset: Ruleset,
   overrides: RuleOverrides = {},
+  context: QualityContext = {},
 ): QualityFinding[] {
-  const rules = effectiveRules(ruleset, overrides);
+  const rules = effectiveRules(ruleset, overrides, context);
   const findings: QualityFinding[] = [];
   const emitFor =
     (id: QualityRuleId, severity: 'warning' | 'info') =>

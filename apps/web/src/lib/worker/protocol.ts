@@ -53,6 +53,8 @@ export interface Checked {
 export interface QualityRequest {
   ruleset: string;
   overrides: RuleOverrides;
+  /** The video's frame rate, for frame-based rules, when known. */
+  fps?: number;
 }
 
 export type { AutoCaptionInfo, CleanupOptions, CleanupResult, ReviewMarker };

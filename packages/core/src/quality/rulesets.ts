@@ -18,6 +18,16 @@ const NETFLIX_EN_US: GuideSource = {
   edition: '2025-12-19',
   url: 'https://partnerhelp.netflixstudios.com/hc/en-us/articles/217350977',
 };
+const NETFLIX_TIMING: GuideSource = {
+  id: 'netflix-timing',
+  title: 'Netflix Timed Text Style Guide: Subtitle Timing Guidelines',
+  edition: 'revised 2025-07-04',
+};
+const NETFLIX_TEMPLATES: GuideSource = {
+  id: 'netflix-templates',
+  title: 'Netflix Timed Text Style Guide: Subtitle Templates',
+  edition: 'as supplied 2026-10-10',
+};
 const BBC: GuideSource = {
   id: 'bbc',
   title: 'BBC Subtitle Guidelines',
@@ -55,10 +65,10 @@ const netflix = (children: boolean): Ruleset => ({
   id: children ? 'netflix-en-us-children' : 'netflix-en-us',
   name: children ? 'Netflix English (USA), children’s' : 'Netflix English (USA)',
   description: `Netflix’s general requirements and English (USA) guide, ${children ? 'children’s programs (17 characters per second)' : 'adult programs (20 characters per second)'}. Rules marked SDH apply to subtitles for the deaf and hard of hearing.`,
-  sources: [NETFLIX_GENERAL, NETFLIX_EN_US],
+  sources: [NETFLIX_GENERAL, NETFLIX_EN_US, NETFLIX_TIMING],
   notChecked: [
     'Accuracy and completeness against the audio, italics use, numbers, punctuation style and quotations (judgement, or need the audio).',
-    'Frame gaps and shot changes: in Netflix’s separate timing guidelines, which were not supplied.',
+    'Timing to the audio and to shot changes (need the audio and the picture).',
     'The Netflix glyph list: a separate document, not supplied.',
   ],
   rules: {
@@ -74,6 +84,12 @@ const netflix = (children: boolean): Ruleset => ({
       params: { maxMs: 7000 },
       source: 'netflix-general',
       section: '1. Duration',
+    },
+    'frame-gaps': {
+      severity: 'warning',
+      params: { frames: 2, closeBelowMs: 500 },
+      source: 'netflix-timing',
+      section: '5: Gaps between subtitles',
     },
     'max-lines': {
       severity: 'warning',
@@ -94,6 +110,12 @@ const netflix = (children: boolean): Ruleset => ({
       section: 'I.14 / II.17 Reading Speed Limits',
     },
     'line-shape': {
+      severity: 'info',
+      params: { maxChars: 42 },
+      source: 'netflix-en-us',
+      section: 'I.10 / II.13 Line Treatment',
+    },
+    'single-line': {
       severity: 'info',
       params: { maxChars: 42 },
       source: 'netflix-en-us',
@@ -141,6 +163,99 @@ const netflix = (children: boolean): Ruleset => ({
 
 export const NETFLIX_EN_US_ADULT = netflix(false);
 export const NETFLIX_EN_US_CHILDREN = netflix(true);
+
+/** English subtitle templates: the master files translators work from. */
+const netflixTemplate = (children: boolean): Ruleset => ({
+  id: children ? 'netflix-template-en-children' : 'netflix-template-en',
+  name: children ? 'Netflix English template, children’s' : 'Netflix English template',
+  description: `Netflix’s rules for English subtitle templates (the files translations are made from), with the timing guidelines: ${children ? 'children’s programs, 15' : 'adult programs, 17'} characters per second, and text kept on one line whenever it fits.`,
+  sources: [NETFLIX_TEMPLATES, NETFLIX_TIMING, NETFLIX_EN_US],
+  notChecked: [
+    'Coverage, annotations, forced narratives and segmentation (judgement).',
+    'Timing to the audio and to shot changes (need the audio and the picture).',
+    'The Netflix glyph list (version 2): a separate document, not supplied.',
+  ],
+  rules: {
+    'empty-cue': { severity: 'warning' },
+    'min-duration': {
+      severity: 'warning',
+      params: { minMs: 5000 / 6 },
+      source: 'netflix-templates',
+      section: '12. Duration (5/6 second)',
+    },
+    'max-duration': {
+      severity: 'warning',
+      params: { maxMs: 7000 },
+      source: 'netflix-templates',
+      section: '12. Duration',
+    },
+    'frame-gaps': {
+      severity: 'warning',
+      params: { frames: 2, closeBelowMs: 500 },
+      source: 'netflix-timing',
+      section: '5: Gaps between subtitles',
+    },
+    'max-lines': {
+      severity: 'warning',
+      params: { max: 2 },
+      source: 'netflix-templates',
+      section: '17. Line Treatment',
+    },
+    'line-length': {
+      severity: 'warning',
+      params: { max: 42 },
+      source: 'netflix-templates',
+      section: '5. Character Limitation',
+    },
+    'single-line': {
+      severity: 'warning',
+      params: { maxChars: 42 },
+      source: 'netflix-templates',
+      section: '17. Line Treatment (always one line unless over the limit)',
+    },
+    'chars-per-second': {
+      severity: 'warning',
+      params: { max: children ? 15 : 17 },
+      source: 'netflix-templates',
+      section: '23. Reading Speed Limits (English templates)',
+    },
+    'line-shape': {
+      severity: 'info',
+      params: { maxChars: 42 },
+      source: 'netflix-templates',
+      section: '17. Line Treatment (bottom-heavy)',
+    },
+    'line-break-words': {
+      severity: 'info',
+      source: 'netflix-templates',
+      section: '17. Line Treatment',
+    },
+    centred: { severity: 'info', source: 'netflix-templates', section: '21. Positioning' },
+    'double-space': {
+      severity: 'warning',
+      source: 'netflix-templates',
+      section: '22. Punctuation',
+    },
+    'speaker-hyphen': {
+      severity: 'warning',
+      source: 'netflix-templates',
+      section: '11. Dual Speaker Subtitles',
+    },
+    'ellipsis-character': {
+      severity: 'warning',
+      source: 'netflix-en-us',
+      section: 'II.5 Continuity (the English guide applies to English templates)',
+    },
+    'dash-characters': {
+      severity: 'warning',
+      source: 'netflix-en-us',
+      section: 'II.15 Punctuation',
+    },
+  },
+});
+
+export const NETFLIX_TEMPLATE_EN = netflixTemplate(false);
+export const NETFLIX_TEMPLATE_EN_CHILDREN = netflixTemplate(true);
 
 export const BBC_SUBTITLES: Ruleset = {
   id: 'bbc',
@@ -219,6 +334,8 @@ export const RULESETS: readonly Ruleset[] = [
   LITE,
   NETFLIX_EN_US_ADULT,
   NETFLIX_EN_US_CHILDREN,
+  NETFLIX_TEMPLATE_EN,
+  NETFLIX_TEMPLATE_EN_CHILDREN,
   BBC_SUBTITLES,
   WCAG,
 ];

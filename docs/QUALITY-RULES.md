@@ -27,30 +27,32 @@ cue fails them. "Check anyway" runs them regardless.
 
 ## Rules
 
-| Rule                 | Category      | Checks                                                                       | Fix                                              |
-| -------------------- | ------------- | ---------------------------------------------------------------------------- | ------------------------------------------------ |
-| `empty-cue`          | text          | a cue with no text to read                                                   | delete                                           |
-| `min-duration`       | timing        | duration under the minimum                                                   | lengthen, when the next cue leaves room          |
-| `max-duration`       | timing        | duration over the maximum                                                    | none                                             |
-| `min-gap`            | timing        | a gap between cues that is more than 0 and less than the minimum             | close the gap                                    |
-| `overlap`            | timing        | a cue still showing when the next starts                                     | end where the next starts                        |
-| `chars-per-second`   | reading speed | characters per second over the maximum                                       | none                                             |
-| `words-per-minute`   | reading speed | words per minute over the maximum                                            | none                                             |
-| `max-lines`          | layout        | more lines than the maximum                                                  | none                                             |
-| `line-length`        | layout        | a line longer than the maximum                                               | rewrap (plain text only, into at most two lines) |
-| `line-shape`         | layout        | two lines where the top is longer, or holds only one or two words            | rewrap (plain text only)                         |
-| `line-break-words`   | layout        | a line ending in an article or preposition (English)                         | none                                             |
-| `centred`            | layout        | a cue not centred (`align` other than center, or a position set)             | centre                                           |
-| `ellipsis-character` | text          | three dots instead of `…`                                                    | use `…`                                          |
-| `double-space`       | text          | two spaces in a row                                                          | single spaces                                    |
-| `dash-characters`    | text          | an en or em dash                                                             | none                                             |
-| `speaker-hyphen`     | text          | a line starting with a hyphen and a space                                    | remove the space                                 |
-| `okay-spelling`      | text          | "OK" or "Ok"                                                                 | "okay" ("Okay" at a sentence start)              |
-| `lowercase-labels`   | text          | a bracketed label written in capitals                                        | none (proper nouns may stay capitalised)         |
-| `lyrics-notes`       | text          | lyrics not enclosed in `♪ … ♪`                                               | none                                             |
-| `bbc-characters`     | text          | characters outside the BBC's list (§9.3)                                     | straight quotes and three dots                   |
-| `bbc-colours`        | accessibility | `::cue` colours other than the BBC's four, or a coloured background          | none                                             |
-| `contrast`           | accessibility | `::cue` text and background contrast, at worst over a black or white picture | none                                             |
+| Rule                 | Category      | Checks                                                                                                                        | Fix                                              |
+| -------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `empty-cue`          | text          | a cue with no text to read                                                                                                    | delete                                           |
+| `min-duration`       | timing        | duration under the minimum                                                                                                    | lengthen, when the next cue leaves room          |
+| `max-duration`       | timing        | duration over the maximum                                                                                                     | none                                             |
+| `min-gap`            | timing        | a gap between cues that is more than 0 and less than the minimum                                                              | close the gap                                    |
+| `frame-gaps`         | timing        | a gap other than exactly the minimum frames (2) that is under half a second, at the video's frame rate (24 fps without media) | leave exactly the minimum frames                 |
+| `overlap`            | timing        | a cue still showing when the next starts                                                                                      | end where the next starts                        |
+| `chars-per-second`   | reading speed | characters per second over the maximum                                                                                        | none                                             |
+| `words-per-minute`   | reading speed | words per minute over the maximum                                                                                             | none                                             |
+| `max-lines`          | layout        | more lines than the maximum                                                                                                   | none                                             |
+| `line-length`        | layout        | a line longer than the maximum                                                                                                | rewrap (plain text only, into at most two lines) |
+| `line-shape`         | layout        | two lines where the top is longer, or holds only one or two words                                                             | rewrap (plain text only)                         |
+| `single-line`        | layout        | two lines that would fit on one (dual-speaker cues aside)                                                                     | join (plain text only)                           |
+| `line-break-words`   | layout        | a line ending in an article or preposition (English)                                                                          | none                                             |
+| `centred`            | layout        | a cue not centred (`align` other than center, or a position set)                                                              | centre                                           |
+| `ellipsis-character` | text          | three dots instead of `…`                                                                                                     | use `…`                                          |
+| `double-space`       | text          | two spaces in a row                                                                                                           | single spaces                                    |
+| `dash-characters`    | text          | an en or em dash                                                                                                              | none                                             |
+| `speaker-hyphen`     | text          | a line starting with a hyphen and a space                                                                                     | remove the space                                 |
+| `okay-spelling`      | text          | "OK" or "Ok"                                                                                                                  | "okay" ("Okay" at a sentence start)              |
+| `lowercase-labels`   | text          | a bracketed label written in capitals                                                                                         | none (proper nouns may stay capitalised)         |
+| `lyrics-notes`       | text          | lyrics not enclosed in `♪ … ♪`                                                                                                | none                                             |
+| `bbc-characters`     | text          | characters outside the BBC's list (§9.3)                                                                                      | straight quotes and three dots                   |
+| `bbc-colours`        | accessibility | `::cue` colours other than the BBC's four, or a coloured background                                                           | none                                             |
+| `contrast`           | accessibility | `::cue` text and background contrast, at worst over a black or white picture                                                  | none                                             |
 
 Fixes are offered only where the right change is clear. Each fix is one undo step, and "Fix all"
 applies one rule's fixes together.
@@ -81,14 +83,17 @@ Sources:
 
 - [Timed Text Style Guide: General Requirements](https://partnerhelp.netflixstudios.com/hc/en-us/articles/215758617), revision of 2022-10-07.
 - [English (USA) Timed Text Style Guide](https://partnerhelp.netflixstudios.com/hc/en-us/articles/217350977), 2025-12-19.
+- Timed Text Style Guide: Subtitle Timing Guidelines, revision of 2025-07-04.
 
 | Rule                            | Setting                              | Section              |
 | ------------------------------- | ------------------------------------ | -------------------- |
 | Duration                        | 5/6 s to 7 s                         | General 1            |
+| Frame gaps                      | exactly 2 frames, or at least 0.5 s  | Timing 5             |
 | Lines                           | 2                                    | General 4            |
 | Line length                     | 42                                   | English I.2 / II.3   |
 | Reading speed                   | 20 characters/s adult, 17 children's | English I.14 / II.17 |
 | Line shape (bottom-heavy)       |                                      | English I.10 / II.13 |
+| One line when it fits           |                                      | English I.10 / II.13 |
 | Line breaks                     |                                      | General 4            |
 | Centred                         |                                      | General 5            |
 | Ellipsis character              |                                      | English I.3 / II.5   |
@@ -100,10 +105,39 @@ Sources:
 
 Not checked:
 
-- Frame gaps and shot changes. These are in Netflix's separate _Subtitle Timing Guidelines_, which
-  were not supplied.
-- The Netflix glyph list, also a separate document.
+- Timing to the audio and to shot changes (timing guidelines 1, 2 and 4). These need the audio and
+  the picture.
+- The Netflix glyph list, a separate document that wasn't supplied.
 - Anything that needs judgement or the audio.
+
+Frame gaps are counted at the video's frame rate when media is open (measured, or chosen in the
+media panel), and at 24 fps otherwise, the rate the timing guidelines are written for. Changing
+the frame rate in the Rules dialog overrides both.
+
+The timing guidelines put the minimum duration at "20 frames (or 4/5 sec)". The General
+Requirements and the templates guide say 5/6 s ("20 frames for 24fps; 25 frames for 29.97fps"),
+which is what is checked: 20 frames is 5/6 s at 24 fps, and 4/5 s only at 25 fps.
+
+### Netflix English template, and the children's variant
+
+Templates are the edited, timed English master files that translations are made from. Sources:
+Timed Text Style Guide: Subtitle Templates (copy supplied 2026-10-10), with the timing guidelines
+and the English (USA) guide.
+
+| Rule                           | Setting                              | Section                          |
+| ------------------------------ | ------------------------------------ | -------------------------------- |
+| Duration                       | 5/6 s to 7 s                         | Templates 12                     |
+| Frame gaps                     | exactly 2 frames, or at least 0.5 s  | Timing 5                         |
+| Lines, line length             | 2 lines of 42                        | Templates 17, 5                  |
+| One line when it fits          | (a warning: "always" one line)       | Templates 17                     |
+| Reading speed                  | 17 characters/s adult, 15 children's | Templates 23 (English templates) |
+| Line shape, line breaks        |                                      | Templates 17                     |
+| Centred                        |                                      | Templates 21                     |
+| Double spaces, speaker hyphens |                                      | Templates 22, 11                 |
+| Ellipsis character, dashes     |                                      | English II.5, II.15              |
+
+Not checked: coverage, annotations, forced narratives and segmentation (judgement), timing to the
+audio and to shot changes, and the glyph list (version 2).
 
 ### BBC
 
@@ -143,8 +177,8 @@ already covered by the format checks on `<lang>`.
 - **Ellipses:** Netflix wants `…`, and the BBC's character list has only `.` (three dots).
 - **Labels:** Netflix writes labels in lowercase brackets. The BBC writes sound effects in capitals
   without brackets.
-- **Gaps:** the BBC asks for no gap or at least a second. Netflix's frame-gap rules are in a
-  document that wasn't supplied.
+- **Gaps:** the BBC asks for no gap or at least a second. Netflix asks for exactly 2 frames, or at
+  least half a second.
 
 Only one ruleset is active at a time, so these never conflict in use.
 

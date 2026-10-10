@@ -6,6 +6,8 @@ import {
   LITE,
   NETFLIX_EN_US_ADULT,
   NETFLIX_EN_US_CHILDREN,
+  NETFLIX_TEMPLATE_EN,
+  NETFLIX_TEMPLATE_EN_CHILDREN,
   RULES,
   RULESETS,
   WCAG,
@@ -104,6 +106,31 @@ describe('rules', () => {
     expect(overlap[0]?.fix?.change).toEqual({ kind: 'times', startMs: 0, endMs: 1500 });
   });
 
+  it('frame gaps: exactly two frames, or at least half a second', () => {
+    const pair = (gap: number) => doc(createCue(0, 2000, 'a'), createCue(2000 + gap, 4000, 'b'));
+    const gaps = (gap: number, fps?: number) =>
+      checkQuality(pair(gap), only('frame-gaps'), {}, fps ? { fps } : {});
+    // Two frames at 24 fps is 83.3 ms; times are whole ms.
+    expect(gaps(83)).toEqual([]);
+    expect(gaps(84)).toEqual([]);
+    expect(gaps(500)).toEqual([]);
+    expect(gaps(0)[0]?.message).toMatch(/Only 0 frames/);
+    const close = gaps(200)[0];
+    expect(close?.message).toMatch(/close it to 2 frames/);
+    expect(close?.fix?.change).toEqual({ kind: 'times', startMs: 0, endMs: 2117 });
+    // At 25 fps two frames are 80 ms; the video's rate is used unless the user set one.
+    expect(gaps(80, 25)).toEqual([]);
+    expect(gaps(83, 25)).toHaveLength(1);
+    expect(
+      checkQuality(
+        pair(80),
+        only('frame-gaps'),
+        { 'frame-gaps': { params: { fps: 24 } } },
+        { fps: 25 },
+      ),
+    ).toHaveLength(1);
+  });
+
   it('reading speed in characters and words', () => {
     // 21 characters in 1 s.
     const fast = doc(createCue(0, 1000, 'abcdefghij klmnopqrst'));
@@ -154,6 +181,25 @@ describe('rules', () => {
     ).toEqual([]);
     const left = { ...createCue(0, 1000, 'x'), align: 'start' as const };
     expect(checkQuality(doc(left), only('centred'))[0]?.fix?.change).toEqual({ kind: 'centre' });
+  });
+
+  it('one line when the text fits', () => {
+    const [f] = checkQuality(
+      doc(createCue(0, 2000, 'I might become\nthe first lady.')),
+      only('single-line'),
+    );
+    expect(f?.fix?.change).toEqual({ kind: 'text', text: 'I might become the first lady.' });
+    expect(
+      checkQuality(doc(createCue(0, 2000, '-Are you coming?\n-In a minute.')), only('single-line')),
+    ).toEqual([]);
+    expect(
+      checkQuality(
+        doc(
+          createCue(0, 2000, 'I might become the first lady\nof this church, or so they tell me.'),
+        ),
+        only('single-line'),
+      ),
+    ).toEqual([]);
   });
 
   it('text: characters and conventions, with fixes', () => {
@@ -243,6 +289,11 @@ describe('rulesets', () => {
     expect(params(NETFLIX_EN_US_ADULT, 'line-length')).toEqual({ max: 42 });
     expect(params(NETFLIX_EN_US_ADULT, 'min-duration')?.['minMs']).toBeCloseTo(833.33, 1);
     expect(params(NETFLIX_EN_US_ADULT, 'max-duration')).toEqual({ maxMs: 7000 });
+    expect(params(NETFLIX_EN_US_ADULT, 'frame-gaps')).toEqual({ frames: 2, closeBelowMs: 500 });
+    expect(params(NETFLIX_TEMPLATE_EN, 'chars-per-second')).toEqual({ max: 17 });
+    expect(params(NETFLIX_TEMPLATE_EN_CHILDREN, 'chars-per-second')).toEqual({ max: 15 });
+    expect(params(NETFLIX_TEMPLATE_EN, 'single-line')).toEqual({ maxChars: 42 });
+    expect(params(NETFLIX_TEMPLATE_EN, 'min-duration')?.['minMs']).toBeCloseTo(833.33, 1);
     expect(params(BBC_SUBTITLES, 'line-length')).toEqual({ max: 37 });
     expect(params(BBC_SUBTITLES, 'words-per-minute')).toEqual({ max: 180 });
     expect(params(BBC_SUBTITLES, 'min-gap')).toEqual({ minMs: 1000 });

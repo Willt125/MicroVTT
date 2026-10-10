@@ -207,6 +207,43 @@ const RULE_LIST: RuleDefinition[] = [
     },
   },
   {
+    id: 'frame-gaps',
+    category: 'timing',
+    title: 'Frame gaps',
+    description:
+      'Gaps between cues of exactly the minimum number of frames, or at least the given time: shorter gaps are closed to the minimum.',
+    params: [
+      { key: 'frames', label: 'Gap', unit: 'frames', min: 0, max: 24, step: 1 },
+      { key: 'closeBelowMs', label: 'Close gaps under', unit: 'ms', min: 0, max: 5000, step: 10 },
+      { key: 'fps', label: 'Frame rate', unit: 'fps', min: 1, max: 120, step: 0.001 },
+    ],
+    defaults: { frames: 2, closeBelowMs: 500, fps: 24 },
+    cue({ cue, index, next }, { frames = 2, closeBelowMs = 500, fps = 24 }, emit) {
+      if (!next) return;
+      const gap = next.cue.startMs - cue.endMs;
+      const minGap = (frames * 1000) / fps;
+      // Times are whole ms: a gap within a millisecond of the frames counts as that many frames.
+      if (Math.abs(gap - minGap) <= 1 || gap >= closeBelowMs) return;
+      const end = next.cue.startMs - Math.round(minGap);
+      const framesOf = (ms: number): string => `${Math.round((ms * fps) / 1000)} frames`;
+      emit({
+        index,
+        message:
+          gap < minGap
+            ? `${gap < 0 ? 'Overlaps the next cue' : `Only ${framesOf(gap)} before the next cue`}; leave ${frames} frames.`
+            : `A gap of ${framesOf(gap)} (${gap} ms) before the next cue; close it to ${frames} frames, or leave at least ${seconds(closeBelowMs)}.`,
+        ...(end > cue.startMs
+          ? {
+              fix: {
+                label: `Leave ${frames} frames`,
+                change: { kind: 'times', startMs: cue.startMs, endMs: end },
+              },
+            }
+          : {}),
+      });
+    },
+  },
+  {
     id: 'overlap',
     category: 'timing',
     title: 'Overlapping cues',
@@ -322,6 +359,27 @@ const RULE_LIST: RuleDefinition[] = [
           ? 'Only one or two words on the top line.'
           : 'The top line is longer than the bottom one; prefer a bottom-heavy shape.',
         ...(fix ? { fix } : {}),
+      });
+    },
+  },
+  {
+    id: 'single-line',
+    category: 'layout',
+    title: 'One line when it fits',
+    description:
+      'Text broken over two lines that would fit on one (dual-speaker cues, one speaker per line, are left alone).',
+    params: [{ key: 'maxChars', label: 'Longest line', unit: 'chars', min: 10, max: 120, step: 1 }],
+    defaults: { maxChars: 42 },
+    cue(info, { maxChars = 42 }, emit) {
+      if (info.lines.length < 2 || info.lines.some((l) => /^\s*-/.test(l))) return;
+      const joined = info.lines.map((l) => l.trim()).join(' ');
+      if (graphemeLength(joined) > maxChars) return;
+      emit({
+        index: info.index,
+        message: `Fits on one line (${graphemeLength(joined)} characters).`,
+        ...(isPlain(info.cue.text)
+          ? { fix: { label: 'Join', change: { kind: 'text', text: joined } } }
+          : {}),
       });
     },
   },

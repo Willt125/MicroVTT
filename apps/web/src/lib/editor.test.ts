@@ -43,7 +43,7 @@ function fakeWorker(store: { save: Autosave | null } = { save: null }): VttWorke
     validate: async (
       doc: VttDocument,
       _fileType: unknown,
-      quality: { ruleset: string; overrides: object } | null = null,
+      quality: { ruleset: string; overrides: object; fps?: number } | null = null,
     ) => {
       validated = doc;
       const { text, spans } = serializeWithSpans(doc);
@@ -51,7 +51,9 @@ function fakeWorker(store: { save: Autosave | null } = { save: null }): VttWorke
       return {
         diagnostics: locateInSerialized(validate(text).diagnostics, spans),
         review: findReviewMarkers(doc),
-        quality: ruleset ? checkQuality(doc, ruleset, quality.overrides) : [],
+        quality: ruleset
+          ? checkQuality(doc, ruleset, quality.overrides, quality.fps ? { fps: quality.fps } : {})
+          : [],
       };
     },
     detect: async (doc: VttDocument) => detectAutoCaptions(doc),
@@ -356,6 +358,18 @@ describe('style and accessibility checks', () => {
     expect(editor.selectedCue?.text).toBe('Wait… what?');
     editor.undo();
     expect(editor.selectedCue?.text).toBe('Wait…  what?');
+  });
+
+  it('counts frame gaps at the video’s frame rate', async () => {
+    const editor = new Editor(fakeWorker());
+    editor.setQualitySettings({ ruleset: 'netflix-en-us', overrides: {} });
+    // An 80 ms gap: two frames at 25 fps, not at 24.
+    await editor.open(
+      file('WEBVTT\n\n00:00.000 --> 00:02.000\nOne.\n\n00:02.080 --> 00:04.000\nTwo.\n'),
+    );
+    await vi.waitFor(() => expect(editor.quality.map((f) => f.rule)).toEqual(['frame-gaps']));
+    editor.mediaFps = 25;
+    await vi.waitFor(() => expect(editor.quality).toEqual([]));
   });
 
   it('ignores a fix found in a document that has since changed', async () => {

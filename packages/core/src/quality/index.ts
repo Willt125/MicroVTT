@@ -5,6 +5,7 @@ export {
   effectiveRules,
   rulesetById,
 } from './check.ts';
+export type { QualityContext } from './check.ts';
 export { composite, contrastRatio, hexOf, parseColour } from './colour.ts';
 export type { Rgba } from './colour.ts';
 export { graphemeLength, readableLines, wordCount } from './measure.ts';
@@ -15,6 +16,8 @@ export {
   LITE,
   NETFLIX_EN_US_ADULT,
   NETFLIX_EN_US_CHILDREN,
+  NETFLIX_TEMPLATE_EN,
+  NETFLIX_TEMPLATE_EN_CHILDREN,
   RULESETS,
   WCAG,
 } from './rulesets.ts';

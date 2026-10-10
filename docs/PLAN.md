@@ -483,14 +483,18 @@ in `docs/QUALITY-RULES.md`.
       counted in graphemes of the text a viewer reads. Checks wait until auto-captions are
       cleaned up ("Check anyway" runs them).
 - [x] Rulesets: Netflix English (USA), adult and children's (General Requirements of
-      2022-10-07, English guide of 2025-12-19); BBC (March 2026); WCAG 2.2 (W3C Recommendation
+      2022-10-07, English guide of 2025-12-19, timing guidelines of 2025-07-04); Netflix English
+      templates, adult and children's; BBC (March 2026); WCAG 2.2 (W3C Recommendation
       of 2024-12-12), limited to what a caption file can show. Each threshold was read from the
       supplied copies, and a test pins them.
 - [x] Users can switch rules off and change settings per ruleset (Rules… dialog), kept in the
       browser, with a reset to the guide's values. New guides are added as rulesets (see
       `QUALITY-RULES.md`).
-- [ ] Later: Netflix's Subtitle Timing Guidelines (frame gaps, shot changes) and glyph list,
-      once supplied; other Netflix languages; the DCMP Captioning Key and FCC caption-quality
+- [x] Netflix's Subtitle Timing Guidelines (2025-07-04): frame gaps (exactly 2 frames, or at
+      least half a second) at the video's frame rate; and English subtitle templates (17/15
+      characters per second, one line whenever it fits).
+- [ ] Later: Netflix's glyph list, once supplied; shot-change timing (needs shot detection);
+      other Netflix languages; the DCMP Captioning Key and FCC caption-quality
       rules; per-script line-length presets (see "text in any language and script"); checks
       for speaker identification and sound descriptions.
 - **Note on WCAG:** WCAG requires captions (1.2.2, 1.2.4) but sets few measurable values for

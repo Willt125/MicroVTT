@@ -44,6 +44,10 @@
   const fps = $derived(
     player.fpsChoice === 'auto' ? standardRate(waveform.fps ?? Number.NaN) : player.fpsChoice,
   );
+  // Frame-based style rules (Netflix's frame gaps) use the video's rate.
+  $effect(() => {
+    editor.mediaFps = player.hasMedia ? fps : null;
+  });
   // The waveform follows the loaded media.
   $effect(() => {
     const file = player.file;

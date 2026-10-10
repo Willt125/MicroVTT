@@ -70,7 +70,14 @@ async function handle(request: WorkerRequest): Promise<unknown> {
       return {
         diagnostics: locateInSerialized(result.diagnostics, spans),
         review: findReviewMarkers(request.document),
-        quality: ruleset ? checkQuality(request.document, ruleset, request.quality?.overrides) : [],
+        quality: ruleset
+          ? checkQuality(
+              request.document,
+              ruleset,
+              request.quality?.overrides,
+              request.quality?.fps ? { fps: request.quality.fps } : {},
+            )
+          : [],
       } satisfies Checked;
     }
     case 'detect':

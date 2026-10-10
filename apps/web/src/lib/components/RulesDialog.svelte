@@ -51,10 +51,15 @@
   function value(id: QualityRuleId, key: string): number {
     return (
       overrides[id]?.params?.[key] ??
+      (key === 'fps' ? editor.mediaFps : null) ??
       ruleset?.rules[id]?.params?.[key] ??
       (RULES[id].defaults[key] as number)
     );
   }
+
+  /** True when a frame-rate setting shows the video's rate. */
+  const fromVideo = (id: QualityRuleId, key: string): boolean =>
+    key === 'fps' && editor.mediaFps !== null && overrides[id]?.params?.[key] === undefined;
 
   function reset(): void {
     if (!ruleset) return;
@@ -117,7 +122,7 @@
                     change(id, (o) => ({ ...o, params: { ...o.params, [p.key]: n } }));
                   }}
                 />
-                <span class="muted">{p.unit}</span>
+                <span class="muted">{p.unit}{fromVideo(id, p.key) ? ' (the video’s)' : ''}</span>
               </label>
             {/each}
           </td>

@@ -117,6 +117,8 @@ export class Editor {
   quality = $state.raw<QualityFinding[]>([]);
   /** The ruleset and the user's changes to it, kept in this browser. */
   qualitySettings = $state.raw<QualitySettings>(loadQualitySettings());
+  /** The open video's frame rate (measured or chosen), for frame-based rules; null if none. */
+  #mediaFps = $state<number | null>(null);
   /** Set to check uncleaned auto-captions anyway (they fail most rules until cleaned up). */
   qualityAnyway = $state(false);
   /** The document `quality` was found in; its fixes apply only to that one. */
@@ -132,6 +134,17 @@ export class Editor {
     this.qualitySettings = settings;
     saveQualitySettings(settings);
     this.scheduleValidation(0);
+  }
+
+  get mediaFps(): number | null {
+    return this.#mediaFps;
+  }
+
+  /** Sets the video's frame rate; frame-based rules are checked again. */
+  set mediaFps(fps: number | null) {
+    if (fps === this.#mediaFps) return;
+    this.#mediaFps = fps;
+    if (this.hasDocument) this.scheduleValidation(0);
   }
 
   /** Checks uncleaned auto-captions anyway. */
@@ -751,7 +764,11 @@ export class Editor {
       const quality =
         ruleset === '' || this.qualityPaused
           ? null
-          : { ruleset, overrides: overrides[ruleset] ?? {} };
+          : {
+              ruleset,
+              overrides: overrides[ruleset] ?? {},
+              ...(this.#mediaFps ? { fps: this.#mediaFps } : {}),
+            };
       const checked = await this.worker.validate(doc, this.fileType, quality);
       // Ignore results for documents that have since changed.
       if (version === this.validateVersion) {
