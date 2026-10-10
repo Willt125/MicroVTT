@@ -458,8 +458,67 @@ Split into three PRs:
 cue edges, the playhead), frame stepping, global shift and two-point scale (resync),
 multi-selection and bulk operations.
 
-**5c: quality checks**: reading speed, line length, minimum and maximum duration, gaps and
-overlaps; configurable, listed apart from conformance problems, with fixes where one is clear.
+**5c: quality checks (style and accessibility rules)**: rules from subtitle style guides
+and accessibility guidance, kept apart from the format's errors and warnings: their own
+category, list and severity, never shown as conformance problems, and never blocking export.
+
+- [ ] A rule engine in `packages/core`: each rule has an id, a category (timing, reading speed,
+      layout, text, accessibility), a severity, adjustable thresholds and a source it cites
+      (guide, section, the version or date it was read). Fixes where one is clear.
+- [ ] A lite default set, on unless switched off: reading speed, line length, at most two lines,
+      minimum and maximum duration, overlapping cues, too-small gaps between cues, and empty
+      cues. Thresholds loose enough not to flag ordinary YouTube captions; lengths counted in
+      graphemes, with per-script presets (see "text in any language and script").
+- [ ] Profiles that switch on stricter sets: Netflix timed-text style guide (general and
+      per-language), BBC subtitle guidelines, and WCAG. Others to consider: the DCMP Captioning
+      Key and the FCC's caption-quality rules (accuracy, synchronicity, completeness, placement).
+      Users can edit thresholds and save their own profile.
+- [ ] Rules that need judgement are limited to what text can show: speaker identification on a
+      change of speaker, sound descriptions present, line breaks that split a name or article
+      from its noun. Anything that needs the audio (accuracy, sync against speech) is out of
+      scope until the timeline can compare against speech.
+- [ ] Every threshold in a profile is checked against the published guide before it ships, and
+      the guide's version is recorded; values from memory are not good enough.
+- **Note on WCAG:** WCAG requires captions (1.2.2, 1.2.4) but sets few measurable values for
+  them. Its checkable parts are contrast of colours set in STYLE blocks (1.4.3; the themes
+  already have a contrast test to reuse) and three flashes or below (2.3.1; not checkable from
+  the file). A WCAG profile is therefore small, and should say so rather than imply that
+  passing it makes captions accessible.
+
+### Ongoing: text in any language and script
+
+The editor should handle non-English and non-Latin text well: pick up language hints on import,
+and process and render each script correctly. Done alongside the phases, not as one PR. Known
+gaps (2026-10-08):
+
+- [ ] Auto-caption cleanup inserts spaces between timed words that had none (`gapText`), which
+      breaks Japanese, Chinese, Thai and other unspaced scripts. Keep empty gaps empty, and join
+      lines without a space in those scripts. Confirm on a real YouTube Japanese auto-caption file.
+- [ ] Lengths in graphemes (`Intl.Segmenter`), not UTF-16 units, so combining marks (Devanagari,
+      Thai, decomposed Vietnamese) and astral characters (emoji, rare Han) count once. Line-length
+      and reading-speed presets per script (CJK lines are about 13–16 full-width characters);
+      belongs with 5c.
+- [ ] Line-break preferences that know non-Latin punctuation (`。、！？`, `؟ ،`, `।`, `¿¡`), and
+      never start a line with closing punctuation of any script.
+- [ ] `dir="auto"` on cue text in the editor and the table, so right-to-left cues (Arabic,
+      Hebrew, Persian, Urdu) display and edit with the right base direction. Make direction marks
+      (U+200E, U+200F and the isolates) visible and insertable.
+- [ ] Language hints on import: YouTube's `Language:` header, a language code in the file name
+      (`video.ja.vtt`, as yt-dlp writes), and `<lang>` spans. An explicit hint sets the `lang`
+      of the text fields (spell check, and the right Han glyphs for Japanese against Chinese);
+      without one, the text fields keep the page language.
+- [ ] Without an explicit hint, guess the language and, only when the guess is confident, ask
+      whether to use it. Script alone settles some (kana: Japanese; Hangul: Korean; Thai); letters
+      distinguish others (Ukrainian `ії є`, Persian `پ چ ژ گ`, Urdu `ے ٹ`); Latin-script languages
+      need a small n-gram model. Never switch silently.
+- [ ] Find: optional Unicode normalization (NFC against NFD), and note the limits of
+      case-insensitive matching (Turkish `İ`/`ı`, `ß`).
+- [ ] More fallback encodings: Windows-1258 (Vietnamese), Windows-1257 (Baltic), KOI8-R, EUC-JP.
+- [ ] Test fixtures in CJK, Arabic, Hebrew, Devanagari and Thai, through import, cleanup, split,
+      find and export.
+- [ ] Optional, may be dropped: spell check beyond the browser's own. The browser checks
+      with the dictionaries the user has, guided by `lang`; anything more means dictionaries
+      fetched on demand (never bundled) and a license check per dictionary.
 
 ### Phase 6: Spec renderer and full feature coverage
 
@@ -478,15 +537,32 @@ overlaps; configurable, listed apart from conformance problems, with fixes where
 
 ### Phase 8: Converters
 
-- **SRT** (next): import with encoding detection (SRT is often Windows-1252 or similar, unlike `.vtt`)
-  and its common quirks (comma decimal separator, `<font>` tags, numbering); export with the
-  WebVTT-only features flattened and a report of what was lost.
+- **Format seam** (with SRT): split `packages/core` into what is common to every format (cue
+  list, timing, undo, find, timeline, the 5c quality rules) and what each format supplies: its
+  text dialect (parse markup, plain text, visible length, split at a position, tags skipped by
+  find), its settings, its validator or linter, its serializer, and the cue editor's settings
+  panel. Each format is then edited natively, not converted to WebVTT and back. Auto-caption
+  cleanup and the export compatibility options stay WebVTT-only.
+- **SRT** (next): native editing on the seam, keeping SRT's own conventions (numbering, `<font>`,
+  `{\an8}`). Import with encoding detection (SRT is often Windows-1252 or similar, unlike `.vtt`)
+  and its common quirks (comma decimal separator); conversion to and from WebVTT with the features
+  the other lacks flattened and a report of what was lost.
+- **ASS/SSA** (after SRT): lossless round-trip. Opening a file, editing timing and text, and
+  saving changes nothing else: `[Script Info]`, styles, `[Fonts]`, `[Graphics]`, unknown
+  sections, comment lines and field order are kept as found, and `{\...}` override blocks are
+  kept byte for byte as opaque tokens (skipped by find and length, carried correctly by split and
+  merge). Conversion to WebVTT maps what maps (`\i` `\b` `\u`, `\N`, actor to `<v>`, `\k` to
+  timestamp tags, `\an` to settings, styles to `::cue` classes) and reports typesetting it drops.
+  Out of scope: a styles editor, per-line layer/margin/effect editing beyond plain fields, an
+  override-tag helper, and a libass preview; those belong in a dedicated ASS editor.
 - **SCC** (long-term): Scenarist files carry CEA-608 byte pairs with 29.97 fps (drop-frame)
   timecode. Import needs a 608 decoder (pop-on, roll-up and paint-on modes, the 608 character
   set, 15 rows × 32 columns). Export is _constrained_: line breaking to 32 columns, character
   mapping, and timing that accounts for 608's two-bytes-per-frame bandwidth, so long captions have
   to be loaded early. The CTA-608 standard is paywalled, so the work will lean on open references and
-  sample files. Expect this to be the largest converter.
+  sample files: the owner suggests McPoodle's SCC format notes
+  (<https://theneitherworld.com/mcpoodle/SCC_TOOLS/DOCS/SCC_FORMAT.HTML>), to be read and checked
+  against sample files when the work starts. Expect this to be the largest converter.
 
 ## Decisions log
 
@@ -598,6 +674,20 @@ overlaps; configurable, listed apart from conformance problems, with fixes where
 - **2026-10-07 (Phase 5a):** The `decodeAudioData` fallback is capped at 10 minutes, set by
   measurement: it decodes at the codec's own rate whatever rate is asked for (1.39 GB for an hour
   of mono Opus in Chromium).
+
+- **2026-10-08 (owner):** The editor should handle arbitrary non-English and non-Latin scripts:
+  pick up language hints on import, and process and render them correctly. The text fields'
+  language changes only on an explicit marker; a confident guess without one leads to a
+  question, never a silent switch. Spell check beyond the browser's own is welcome if it stays
+  small and unintrusive, but may be dropped.
+
+- **2026-10-10 (owner):** Style and accessibility rules (Netflix, BBC, WCAG and the like) are
+  their own category, independent of the format's errors and warnings, with a lite default set
+  and stricter profiles to switch on. Planned as Phase 5c.
+
+- **2026-10-10 (owner):** Phase 8 builds a format seam with SRT, so each format is edited
+  natively. ASS/SSA gets lossless round-trip support (everything not edited is kept as found);
+  a styles editor, typesetting tools and a libass preview are left to a dedicated ASS editor.
 
 ## Open questions for the owner
 
