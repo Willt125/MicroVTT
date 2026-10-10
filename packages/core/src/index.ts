@@ -137,3 +137,5 @@ export type { QuickFix, QuickFixKind } from './quickfix.ts';
 export * from './quality/index.ts';
 export { breakUnits, hasUnspaced, joinLines, joinsWithoutSpace } from './script.ts';
 export type { BreakUnit } from './script.ts';
+export { guessLanguage, languageHint, languageName, sampleText } from './language.ts';
+export type { LanguageGuess, LanguageHint, LanguageHintSource } from './language.ts';
