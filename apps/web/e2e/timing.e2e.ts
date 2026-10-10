@@ -79,9 +79,34 @@ test.describe('with media', () => {
     await cueList(page).focus();
     await page.keyboard.press('ControlOrMeta+a');
     await expect(cueList(page).locator('[aria-selected=true]')).toHaveCount(3);
+    // Records what the canvas receives, to explain a failure (Firefox, PR 17).
+    await page.locator('.timeline canvas').evaluate((canvas) => {
+      const log: string[] = [];
+      (window as unknown as { dragLog: string[] }).dragLog = log;
+      for (const type of [
+        'pointerdown',
+        'pointermove',
+        'pointerup',
+        'pointercancel',
+        'lostpointercapture',
+      ])
+        canvas.addEventListener(type, (e) => {
+          const p = e as PointerEvent;
+          log.push(
+            `${type}:${Math.round(p.clientX)}:${p.buttons}:${p.ctrlKey ? 'c' : ''}${p.shiftKey ? 's' : ''}:${(canvas as HTMLElement).style.cursor}`,
+          );
+        });
+    });
     await dragLane(page, 10_000, 12_000);
     const [one, two, three] = await starts(page);
-    expect(toMs(one) - 1000).toBeGreaterThan(1500);
+    const log = await page.evaluate(() =>
+      (window as unknown as { dragLog: string[] }).dragLog.join(' '),
+    );
+    const selected = await cueList(page).locator('[aria-selected=true]').count();
+    expect(
+      toMs(one) - 1000,
+      `selected ${selected}; times ${one} ${two} ${three}; events ${log}`,
+    ).toBeGreaterThan(1500);
     expect(toMs(two) - 5000).toBe(toMs(one) - 1000);
     expect(toMs(three) - 9000).toBe(toMs(one) - 1000);
   });
