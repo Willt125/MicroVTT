@@ -31,8 +31,8 @@
   let wordBreaks = $state(false);
   let keepWordTimings = $state(true);
   let keepCueSettings = $state(false);
-  let collapseSpaces = $state(false);
-  let removeDoubledZeroWidthSpaces = $state(false);
+  let collapseSpaces = $state(true);
+  let removeDoubledZeroWidthSpaces = $state(true);
 
   const info = $derived(editor.autoCaptions);
   const approximate = $derived(info?.approximateTimings ?? false);
@@ -193,7 +193,7 @@
       <label><input type="checkbox" bind:checked={collapseSpaces} /> Collapse repeated spaces</label
       >
       <label
-        title="U+200B is real word separation in some scripts (Thai, Khmer…); pairs of them are an artifact of machine translation"
+        title="A single U+200B separates words in some scripts (Thai, Khmer…) and is kept; doubled ones, and ones next to a space, are artifacts of machine translation"
         ><input type="checkbox" bind:checked={removeDoubledZeroWidthSpaces} /> Remove doubled zero-width
         spaces</label
       >

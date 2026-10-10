@@ -16,6 +16,8 @@
  * Detection is structural (roll-up repetition, hand-off cues, timestamp spacing), not tied to
  * exact header strings, because YouTube has changed the format before.
  */
+import { graphemeLength } from './quality/measure.ts';
+import { joinsWithoutSpace } from './script.ts';
 import type { BodyItem, Cue, Note, VttDocument } from './document.ts';
 import { createCue } from './document.ts';
 import { formatTimestamp, parseTimestamp } from './timestamp.ts';
@@ -116,7 +118,7 @@ function parseLine(raw: string, startMs: number, endMs: number): WordGroup[] {
     if (prev && (at <= prev.startMs || at >= endMs)) prev.words.push(...words);
     else groups.push({ startMs: at, endMs, words });
   }
-  if (groups[0]) (groups[0].words[0] as CaptionWord).gap = '';
+  if (groups[0]) (groups[0].words[0] as CaptionWord).gap = LINE_START;
   for (let i = 0; i < groups.length - 1; i++)
     (groups[i] as WordGroup).endMs = (groups[i + 1] as WordGroup).startMs;
   return groups;
@@ -217,11 +219,12 @@ export interface SegmentOptions {
    * approximate timings, where word times are guesses). Default: 'line' when approximate.
    */
   unit: 'word' | 'line';
-  /** Collapse runs of spaces between words to one (default false). */
+  /** Collapse runs of spaces between words to one (default true). */
   collapseSpaces: boolean;
   /**
-   * Remove doubled U+200B ZERO WIDTH SPACEs (seen in machine translations). Default false:
-   * U+200B is legitimate word separation in some scripts.
+   * Remove the doubled U+200B ZERO WIDTH SPACEs machine translations leave (default true). As
+   * U+200B is real word separation in some scripts (Thai, Khmer…), one is kept where nothing
+   * else separates the words.
    */
   removeDoubledZeroWidthSpaces: boolean;
 }
@@ -236,8 +239,8 @@ export const DEFAULT_SEGMENT_OPTIONS: SegmentOptions = {
   maxGapMs: 1500,
   maxWordHoldMs: 2000,
   unit: 'word',
-  collapseSpaces: false,
-  removeDoubledZeroWidthSpaces: false,
+  collapseSpaces: true,
+  removeDoubledZeroWidthSpaces: true,
 };
 
 type GapOptions = Pick<SegmentOptions, 'collapseSpaces' | 'removeDoubledZeroWidthSpaces'>;
@@ -248,12 +251,23 @@ const isSoundTag = (raw: string): boolean => {
   return /^\[[^\]]*\]$/.test(text) && !text.includes('__');
 };
 
-/** The separator written before a word (one space where the source had none). */
-export function gapText(gap: string, o: GapOptions): string {
+/**
+ * The gap before the first word of a caption line. When lines are joined into one cue line, it
+ * becomes a space, or nothing between scripts written without spaces (Chinese, Japanese, Thai…).
+ */
+const LINE_START = '\n';
+
+/**
+ * The separator written before a word: its gap in the source, tidied. `before` and `after` are
+ * the words on either side, which decide how lines join.
+ */
+export function gapText(gap: string, o: GapOptions, before?: string, after?: string): string {
+  if (gap === LINE_START) return after !== undefined && joinsWithoutSpace(before, after) ? '' : ' ';
   let g = gap;
-  if (o.removeDoubledZeroWidthSpaces) g = g.replace(/\u200b{2,}/g, '');
+  if (o.removeDoubledZeroWidthSpaces)
+    g = /[ \t]/.test(g) ? g.replace(/\u200b+/g, '') : g.replace(/\u200b{2,}/g, '\u200b');
   if (o.collapseSpaces) g = g.replace(/[ \t]{2,}/g, ' ');
-  return g === '' ? ' ' : g;
+  return g;
 }
 
 /** A cue to be: consecutive word groups, wrapped into lines. */
@@ -288,9 +302,11 @@ interface Unit {
  * one character.
  */
 export function visibleLength(raw: string): number {
-  return raw
-    .replace(/<[^>]*>|\u200b/g, '')
-    .replace(/&(?:#[0-9]+|#[xX][0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);/g, 'x').length;
+  return graphemeLength(
+    raw
+      .replace(/<[^>]*>|\u200b/g, '')
+      .replace(/&(?:#[0-9]+|#[xX][0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);/g, 'x'),
+  );
 }
 
 const wordsOf = (groups: WordGroup[]): CaptionWord[] => groups.flatMap((g) => g.words);
@@ -314,10 +330,15 @@ function toUnits(
       groups,
       source,
       chars: words.reduce(
-        (n, w, i) => n + visibleLength(w.text) + (i > 0 ? visibleLength(gapText(w.gap, o)) : 0),
+        (n, w, i) =>
+          n +
+          visibleLength(w.text) +
+          (i > 0 ? visibleLength(gapText(w.gap, o, words[i - 1]?.text, w.text)) : 0),
         0,
       ),
-      gapBefore: visibleLength(gapText((words[0] as CaptionWord).gap, o)),
+      gapBefore: visibleLength(
+        gapText((words[0] as CaptionWord).gap, o, undefined, (words[0] as CaptionWord).text),
+      ),
       speakerChange: (words[0] as CaptionWord).text.startsWith('&gt;&gt;'),
       attached: isPunctuation((words[0] as CaptionWord).text),
       soundOnly: soundLine,
@@ -339,14 +360,17 @@ const wordLength = (w: CaptionWord): number => {
   if (l === undefined) wordLengths.set(w, (l = visibleLength(w.text)));
   return l;
 };
-const gapLength = (gap: string, o: GapOptions): number =>
-  gap === ' ' ? 1 : visibleLength(gapText(gap, o));
+const gapLength = (gap: string, o: GapOptions, before?: string, after?: string): number =>
+  gap === ' ' ? 1 : visibleLength(gapText(gap, o, before, after));
 
 /** A word that is only punctuation, which must stay on the line of the word before it. */
-const isPunctuation = (text: string): boolean => /^[.,!?…;:)\]"'”’]+$/.test(text);
+const isPunctuation = (text: string): boolean =>
+  /^[\p{Pe}\p{Pf}.,!?…;:"'。、！？，；：؟،।॥]+$/u.test(text);
 
-const SENTENCE_END = /[.!?…]["'”’)\]]*$/;
-const CLAUSE_END = /[,;:–—]["'”’)\]]*$/;
+/** Closing quotes and brackets that may follow the end of a sentence or clause. */
+const CLOSERS = `["'”’»)\\]」』）】》〉]*`;
+const SENTENCE_END = new RegExp(`[.!?…。！？؟।॥]${CLOSERS}$`, 'u');
+const CLAUSE_END = new RegExp(`[,;:–—、，；：،]${CLOSERS}$`, 'u');
 
 /** Splits words into at most `maxLines` lines of at most `maxLineLength`, balanced; or null. */
 export function wrapWords(
@@ -355,7 +379,7 @@ export function wrapWords(
   maxLines: number,
   o: GapOptions = DEFAULT_SEGMENT_OPTIONS,
 ): CaptionWord[][] | null {
-  const gaps = words.map((w) => gapLength(w.gap, o));
+  const gaps = words.map((w, k) => gapLength(w.gap, o, words[k - 1]?.text, w.text));
   // prefix[k]: visible length of words[0..k) with the separators between them.
   const prefix = [0];
   words.forEach((w, k) =>
@@ -515,7 +539,7 @@ function cueText(seg: Segment, o: CleanupOptions): string {
             tag = `<${formatTimestamp(at)}>`;
             last = at;
           }
-          return (k === 0 ? '' : gapText(w.gap, o)) + tag + w.text;
+          return (k === 0 ? '' : gapText(w.gap, o, line[k - 1]?.text, w.text)) + tag + w.text;
         })
         .join(''),
     )

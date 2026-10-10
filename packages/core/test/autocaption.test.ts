@@ -8,6 +8,7 @@ import {
   detectAutoCaptions,
   extractLines,
   findReviewMarkers,
+  formatTimestamp,
   importDocument,
   parseTimestamp,
   segment,
@@ -248,24 +249,99 @@ describe('cleanup', () => {
     expect(kept[0]).toMatchObject({ align: 'start', position: 0 });
   });
 
-  it('changes whitespace only when asked', () => {
+  it('tidies whitespace by default, and keeps it when asked', () => {
     const all = (doc: VttDocument) =>
       cuesOf(doc)
         .map((c) => c.text)
         .join('\n');
     const wide = { maxLineLength: 100 }; // One line per cue, so the separators stay inline.
-    const kept = all(cleanupAutoCaptions(translated(), wide).document);
-    expect(kept).toContain('pajaan.  Tänään');
-    expect(kept).toContain('\u200b\u200b');
-    const cleaned = all(
+    const kept = all(
       cleanupAutoCaptions(translated(), {
         ...wide,
-        collapseSpaces: true,
-        removeDoubledZeroWidthSpaces: true,
+        collapseSpaces: false,
+        removeDoubledZeroWidthSpaces: false,
       }).document,
     );
+    expect(kept).toContain('pajaan.  Tänään');
+    expect(kept).toContain('\u200b\u200b');
+    const cleaned = all(cleanupAutoCaptions(translated(), wide).document);
     expect(cleaned).toContain('pajaan. Tänään');
     expect(cleaned).not.toContain('\u200b');
+  });
+
+  /**
+   * YouTube-style roll-up captions from lines of words, each word with its own separator
+   * ("word " in spaced scripts, nothing in Chinese or Japanese, U+200B in Thai machine output).
+   */
+  function rollUp(lines: string[][], stepMs = 500): VttDocument {
+    const parts = ['WEBVTT\nKind: captions\n'];
+    let t = 0;
+    let shown = ' ';
+    for (const ws of lines) {
+      const end = t + ws.length * stepMs;
+      const timed = ws
+        .map((w, i) => (i === 0 ? w : `<${formatTimestamp(t + i * stepMs)}><c>${w}</c>`))
+        .join('');
+      const cue = (from: number, to: number, text: string) =>
+        `${formatTimestamp(from)} --> ${formatTimestamp(to)} align:start position:0%\n${text}\n`;
+      parts.push(cue(t, end, `${shown}\n${timed}`));
+      shown = ws.join('');
+      parts.push(cue(end, end + 10, `${shown}\n `));
+      t = end + 10;
+    }
+    return docOf(parts.join('\n'));
+  }
+  const textOf = (doc: VttDocument, options = {}) =>
+    cuesOf(cleanupAutoCaptions(doc, { keepWordTimings: false, ...options }).document)
+      .map((c) => c.text)
+      .join('\n');
+
+  it('adds no spaces to scripts written without them', () => {
+    const ja = rollUp([
+      ['今日は', 'いい', '天気', 'ですね。'],
+      ['散歩に', '行きましょう。'],
+    ]);
+    expect(detectAutoCaptions(ja).detected).toBe(true);
+    expect(textOf(ja, { maxLineLength: 100 }).replace(/\n/g, '')).toBe(
+      '今日はいい天気ですね。散歩に行きましょう。',
+    );
+    expect(textOf(ja, { maxLineLength: 100 })).not.toMatch(/ /);
+    const zh = rollUp([['我们', '今天', '去', '公园，'], ['好吗？']]);
+    expect(textOf(zh, { maxLineLength: 100 })).toBe('我们今天去公园，好吗？');
+  });
+
+  it('keeps a single zero-width space between Thai words and drops doubled ones', () => {
+    const th = rollUp([['สวัสดี\u200b\u200b', 'ครับ\u200b', 'วันนี้']]);
+    expect(textOf(th, { maxLineLength: 100 })).toBe('สวัสดี\u200bครับ\u200bวันนี้');
+  });
+
+  it('joins lines with a space in spaced scripts, Arabic and Hindi included', () => {
+    const ar = rollUp([
+      ['مرحبا ', 'بكم'],
+      ['في ', 'البرنامج.'],
+    ]);
+    expect(textOf(ar, { maxLineLength: 100 })).toBe('مرحبا بكم في البرنامج.');
+    const hi = rollUp([
+      ['नमस्ते ', 'दोस्तों।'],
+      ['आज ', 'हम'],
+    ]);
+    expect(textOf(hi, { maxLineLength: 100 })).toBe('नमस्ते दोस्तों। आज हम');
+  });
+
+  it('breaks at non-Latin sentence ends and counts graphemes', () => {
+    expect(visibleLength('नमस्ते')).toBe(3);
+    expect(visibleLength('👩‍👩‍👧')).toBe(1);
+    const ja = rollUp([
+      ['これは', '最初の', '文です。'],
+      ['これは', '二番目の', '文です。'],
+    ]);
+    const cues = cuesOf(
+      cleanupAutoCaptions(ja, { maxLineLength: 10, keepWordTimings: false }).document,
+    );
+    expect(cues.map((c) => c.text.replace(/\n/g, ''))).toEqual([
+      'これは最初の文です。',
+      'これは二番目の文です。',
+    ]);
   });
 
   it('keeps notes in place and the head unchanged', () => {
