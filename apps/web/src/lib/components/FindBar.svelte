@@ -149,6 +149,8 @@
         bind:value={query}
         {onkeydown}
         placeholder="Find in cue text"
+        dir="auto"
+        lang={editor.language ?? undefined}
         aria-label="Find"
         aria-invalid={typeof pattern === 'string'}
       />
@@ -156,6 +158,8 @@
         bind:value={replacement}
         onkeydown={(e) => e.key === 'Escape' && (open = false)}
         placeholder={regex ? 'Replace ($1 for groups)' : 'Replace with'}
+        dir="auto"
+        lang={editor.language ?? undefined}
         aria-label="Replace with"
       />
       <label title="Match case"><input type="checkbox" bind:checked={matchCase} /> Aa</label>

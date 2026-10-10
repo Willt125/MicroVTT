@@ -218,7 +218,9 @@
           {#each sample as cue, i (i)}
             <li>
               <span class="time">{formatTime(cue.startMs)}</span>
-              <span class="text">{plainText(cue.text)}</span>
+              <span class="text" dir="auto" lang={editor.language ?? undefined}
+                >{plainText(cue.text)}</span
+              >
             </li>
           {/each}
         </ol>
