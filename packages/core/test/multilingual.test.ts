@@ -70,12 +70,14 @@ describe.each(files)('%s', (name) => {
     expect(visible(halves.join(''))).toBe(visible(cue.text));
   });
 
-  // Thai, which separates phrases with spaces, joins lines with one.
-  it('runs every ruleset, and its fixes add no spaces to Chinese or Japanese', () => {
+  // Thai, which separates phrases with spaces, joins lines with one. (Punctuation fixes may add
+  // spaces: the Simplified Chinese guide puts one where a comma would be.)
+  it('runs every ruleset, and its line fixes add no spaces to Chinese or Japanese', () => {
     for (const ruleset of RULESETS) {
       for (const finding of checkQuality(doc, ruleset)) {
         const change = finding.fix?.change;
-        if (change?.kind !== 'text' || !/^(ja|talk\.zh)/.test(name)) continue;
+        if (finding.category !== 'layout' || change?.kind !== 'text') continue;
+        if (!/^(ja|talk\.zh)/.test(name)) continue;
         expect(change.text.replace(/\n/g, '')).not.toMatch(/[^\x20-\x7e] [^\x20-\x7e]/);
       }
     }

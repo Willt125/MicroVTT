@@ -72,3 +72,21 @@ test('finds letters however they are encoded', async ({ page }) => {
   const bar = page.getByRole('region', { name: 'Find and replace' });
   await expect(bar.locator('.status')).toHaveText(/^\s*2\s+matches\s*$/);
 });
+
+test('tells Simplified from Traditional Chinese, and checks Japanese by its guide', async ({
+  page,
+}) => {
+  await open(page, 'talk.zh-TW.vtt', 'WEBVTT\n\n00:00.000 --> 00:03.000\n我們今天去公園嗎？\n');
+  const panel = page.getByRole('complementary', { name: 'Style and accessibility' });
+  await panel.getByLabel('Check against').selectOption('netflix-zh-hans');
+  await expect(panel.getByText(/These rules are for .*Chinese.* text/)).toBeVisible();
+  await panel.getByRole('button', { name: 'Use Netflix Chinese (Traditional)' }).click();
+  await expect(panel.getByLabel('Check against')).toHaveValue('netflix-zh-hant');
+
+  await open(page, 'talk.ja.vtt', 'WEBVTT\n\n00:00.000 --> 00:05.000\nBBCの記者が来た。\n');
+  await panel.getByLabel('Check against').selectOption('netflix-ja');
+  await panel.getByText('Punctuation (Japanese) (1)').click();
+  await panel.getByRole('button', { name: 'Fix the punctuation' }).click();
+  await rows(page).first().click();
+  await expect(cueText(page)).toHaveValue('BBCの記者が来た');
+});

@@ -415,6 +415,351 @@ export const NETFLIX_FI_CHILDREN = netflixFinnish(false, true);
 export const NETFLIX_FI_SDH = netflixFinnish(true, false);
 export const NETFLIX_FI_SDH_CHILDREN = netflixFinnish(true, true);
 
+const NETFLIX_ZH_HANS: GuideSource = {
+  id: 'netflix-zh-hans',
+  title: 'Netflix Chinese (Simplified) Timed Text Style Guide',
+  edition: '2025-07-04',
+};
+const NETFLIX_ZH_HANT: GuideSource = {
+  id: 'netflix-zh-hant',
+  title: 'Netflix Chinese (Traditional) Timed Text Style Guide',
+  edition: '2025-12-19',
+};
+const NETFLIX_KO: GuideSource = {
+  id: 'netflix-ko',
+  title: 'Netflix Korean Timed Text Style Guide',
+  edition: '2025-07-07',
+};
+const NETFLIX_JA: GuideSource = {
+  id: 'netflix-ja',
+  title: 'Netflix Japanese Timed Text Style Guide',
+  edition: '2025-12-19',
+};
+const NETFLIX_JA_IMSC: GuideSource = {
+  id: 'netflix-ja-imsc',
+  title: 'Netflix Japanese IMSC 1.1 Creation Guide',
+  edition: 'as supplied 2026-10-10',
+};
+
+/** Netflix's general timing requirements, which every language's guide builds on. */
+const netflixTiming = (
+  minMs = 5000 / 6,
+  minSource = 'netflix-general',
+  minSection = '1. Duration (5/6 second)',
+): Ruleset['rules'] => ({
+  'empty-cue': { severity: 'warning' },
+  'min-duration': {
+    severity: 'warning',
+    params: { minMs },
+    source: minSource,
+    section: minSection,
+  },
+  'max-duration': {
+    severity: 'warning',
+    params: { maxMs: 7000 },
+    source: 'netflix-general',
+    section: '1. Duration',
+  },
+  'frame-gaps': {
+    severity: 'warning',
+    params: { frames: 2, closeBelowMs: 500 },
+    source: 'netflix-timing',
+    section: '5: Gaps between subtitles',
+  },
+});
+
+const variantName = (sdh: boolean, children: boolean): string =>
+  `${sdh ? ' SDH' : ''}${children ? ', children’s' : ''}`;
+const variantId = (sdh: boolean, children: boolean): string =>
+  `${sdh ? '-sdh' : ''}${children ? '-children' : ''}`;
+
+/** Chinese subtitles, Simplified (PRC) or Traditional, and SDH. */
+const netflixChinese = (traditional: boolean, sdh: boolean, children: boolean): Ruleset => {
+  const guide = traditional ? 'netflix-zh-hant' : 'netflix-zh-hans';
+  const cps = sdh ? (children ? 9 : 11) : children ? 7 : 9;
+  const chars = sdh ? 18 : 16;
+  const sec = (hans: string, hant: string): string => (traditional ? hant : hans);
+  const sdhSec = (hans: string, hant: string): string => (traditional ? hant : `${hans} (SDH)`);
+  return {
+    id: `netflix-zh-${traditional ? 'hant' : 'hans'}${variantId(sdh, children)}`,
+    name: `Netflix Chinese (${traditional ? 'Traditional' : 'Simplified'})${variantName(sdh, children)}`,
+    description: `Netflix’s ${traditional ? 'Traditional' : 'Simplified'} Chinese guide with the general requirements and timing guidelines, ${sdh ? 'for subtitles for the deaf and hard of hearing' : 'for subtitles'}: ${children ? 'children’s' : 'adult'} programs, ${chars} characters per line and ${cps} characters per second.`,
+    language: traditional ? 'zh-Hant' : 'zh-Hans',
+    sources: [
+      traditional ? NETFLIX_ZH_HANT : NETFLIX_ZH_HANS,
+      NETFLIX_GENERAL,
+      NETFLIX_TIMING,
+      NETFLIX_GLYPHS,
+    ],
+    notChecked: [
+      'Names, nicknames and interpuncts in foreign names; titles in 《》 (judgement, and the approved translations).',
+      'Ellipses for pauses and interruptions, and the rest of continuity (judgement).',
+      'Spelled-out numbers 1–10, money, times and dates (judgement).',
+      'Forced narratives in parentheses, positioning, and timing to the audio and to shot changes (need the picture and the audio).',
+    ],
+    rules: {
+      ...netflixTiming(),
+      'max-lines': {
+        severity: 'warning',
+        params: { max: sdh ? 3 : 2 },
+        source: guide,
+        section: sdh
+          ? sdhSec('19. SDH Guidelines', 'II.4. Line Treatment')
+          : sec('10. Line Treatment', 'I.10. Line Treatment'),
+      },
+      'line-length': {
+        severity: 'warning',
+        params: { max: chars },
+        source: guide,
+        section: sdh
+          ? sdhSec('19. SDH Guidelines', 'II.2. Character Limit')
+          : sec('1. Character Limitation', 'I.1. Character Limitation'),
+      },
+      'chars-per-second': {
+        severity: 'warning',
+        params: { max: cps },
+        source: guide,
+        section: sdh
+          ? sdhSec('19. SDH Guidelines', 'II.3. Reading Speed Limit')
+          : sec('14. Reading Speed Limits', 'I.14. Reading Speed Limits'),
+      },
+      'single-line': {
+        severity: 'info',
+        params: { maxChars: chars },
+        source: guide,
+        section: sec('10. Line Treatment', 'I.10. Line Treatment'),
+      },
+      'line-shape': {
+        severity: 'info',
+        params: { maxChars: chars },
+        source: guide,
+        section: sec('10. Line Treatment', 'I.10. Line Treatment'),
+      },
+      centred: { severity: 'info', source: 'netflix-general', section: '5. Positioning' },
+      'glyph-list': {
+        severity: 'warning',
+        source: 'netflix-glyphs',
+        section: 'General Requirements 3. Glyph List',
+      },
+      [traditional ? 'zh-hant-punctuation' : 'zh-hans-punctuation']: {
+        severity: 'warning',
+        source: guide,
+        section: sec('12. Punctuation; 13. Quotes', 'I.12. Punctuation; I.13. Quotations'),
+      },
+      'ellipsis-character': {
+        severity: 'warning',
+        source: guide,
+        section: sec('12. Punctuation (U+2026)', 'I.12. Punctuation (U+2026)'),
+      },
+      'zh-numbers': {
+        severity: 'warning',
+        source: guide,
+        section: sec('11. Numbers', 'I.11. Numbers'),
+      },
+      'no-italics': {
+        severity: 'warning',
+        source: guide,
+        section: sec('9. Italics', 'I.9. Italics'),
+      },
+      'speaker-hyphen': {
+        severity: 'warning',
+        params: { space: 0 },
+        source: guide,
+        section: sec('5. Dual Speakers', 'I.5. Dual Speakers'),
+      },
+      ...(sdh
+        ? {
+            'lyrics-notes': {
+              severity: 'info' as const,
+              params: { space: traditional ? 0 : 1 },
+              source: guide,
+              section: sdhSec('19. SDH Guidelines', 'II.8. Songs'),
+            },
+          }
+        : {}),
+    },
+  };
+};
+
+export const NETFLIX_ZH_HANS_ADULT = netflixChinese(false, false, false);
+export const NETFLIX_ZH_HANS_CHILDREN = netflixChinese(false, false, true);
+export const NETFLIX_ZH_HANS_SDH = netflixChinese(false, true, false);
+export const NETFLIX_ZH_HANS_SDH_CHILDREN = netflixChinese(false, true, true);
+export const NETFLIX_ZH_HANT_ADULT = netflixChinese(true, false, false);
+export const NETFLIX_ZH_HANT_CHILDREN = netflixChinese(true, false, true);
+export const NETFLIX_ZH_HANT_SDH = netflixChinese(true, true, false);
+export const NETFLIX_ZH_HANT_SDH_CHILDREN = netflixChinese(true, true, true);
+
+/** Korean subtitles and SDH. Latin letters, spaces and punctuation count as half a character. */
+const netflixKorean = (sdh: boolean, children: boolean): Ruleset => {
+  const cps = sdh ? (children ? 11 : 14) : children ? 9 : 12;
+  const sec = (regular: string, forSdh: string): string => (sdh ? forSdh : regular);
+  return {
+    id: `netflix-ko${variantId(sdh, children)}`,
+    name: `Netflix Korean${variantName(sdh, children)}`,
+    description: `Netflix’s Korean guide with the general requirements and timing guidelines, ${sdh ? 'for subtitles for the deaf and hard of hearing' : 'for subtitles'}: ${children ? 'children’s' : 'adult'} programs, 16 characters per line and ${cps} characters per second, Latin letters, spaces and punctuation counting as half a character.`,
+    language: 'ko',
+    sources: [NETFLIX_KO, NETFLIX_GENERAL, NETFLIX_TIMING, NETFLIX_GLYPHS],
+    notChecked: [
+      'Transliteration of names, honorifics, and the treatment of quotes and forced narratives (judgement).',
+      'Ellipses for pauses and interruptions (judgement).',
+      'Exceptions to one line when it fits: three or more punctuation marks, or a quotation (judgement).',
+      'Timing to the audio and to shot changes (need the audio and the picture).',
+    ],
+    rules: {
+      ...netflixTiming(),
+      'max-lines': {
+        severity: 'warning',
+        params: { max: 2 },
+        source: 'netflix-ko',
+        section: sec('I.11. Line Treatment', 'II.4 Line Treatment'),
+      },
+      'line-length': {
+        severity: 'warning',
+        params: { max: 16, halfWidth: 0.5 },
+        source: 'netflix-ko',
+        section: sec('I.2. Character Limitation', 'II.2. Character Limitation'),
+      },
+      'chars-per-second': {
+        severity: 'warning',
+        params: { max: cps, halfWidth: 0.5 },
+        source: 'netflix-ko',
+        section: sec('I.15. Reading Speed Limits', 'II.3. Reading Speed Limit'),
+      },
+      'single-line': {
+        severity: 'info',
+        params: { maxChars: 16, halfWidth: 0.5 },
+        source: 'netflix-ko',
+        section: sec('I.11. Line Treatment', 'II.4 Line Treatment'),
+      },
+      'line-shape': {
+        severity: 'info',
+        params: { maxChars: 16, halfWidth: 0.5 },
+        source: 'netflix-ko',
+        section: 'I.11. Line Treatment',
+      },
+      centred: { severity: 'info', source: 'netflix-general', section: '5. Positioning' },
+      'glyph-list': {
+        severity: 'warning',
+        source: 'netflix-glyphs',
+        section: 'General Requirements 3. Glyph List',
+      },
+      'ko-punctuation': { severity: 'warning', source: 'netflix-ko', section: 'I.13. Punctuation' },
+      'ellipsis-character': {
+        severity: 'warning',
+        source: 'netflix-ko',
+        section: 'I.4. Continuity',
+      },
+      'acronym-periods': { severity: 'warning', source: 'netflix-ko', section: 'I.1. Acronyms' },
+      'no-italics': { severity: 'warning', source: 'netflix-ko', section: 'I.10. Italics' },
+      'speaker-hyphen': {
+        severity: 'warning',
+        params: { space: 1 },
+        source: 'netflix-ko',
+        section: 'I.6. Dual Speakers',
+      },
+      ...(sdh
+        ? {
+            'lyrics-notes': {
+              severity: 'info' as const,
+              params: { space: 1 },
+              source: 'netflix-ko',
+              section: 'II.7 Songs and Music',
+            },
+          }
+        : {}),
+    },
+  };
+};
+
+export const NETFLIX_KO_ADULT = netflixKorean(false, false);
+export const NETFLIX_KO_CHILDREN = netflixKorean(false, true);
+export const NETFLIX_KO_SDH = netflixKorean(true, false);
+export const NETFLIX_KO_SDH_CHILDREN = netflixKorean(true, true);
+
+/**
+ * Japanese subtitles and SDH: 13 characters per horizontal line (16 for SDH), 11 per vertical
+ * line, half-width characters counting as half.
+ */
+const netflixJapanese = (sdh: boolean): Ruleset => {
+  const sec = (regular: string, forSdh: string): string => (sdh ? forSdh : regular);
+  const chars = sdh ? 16 : 13;
+  const cps = sdh ? 7 : 4;
+  return {
+    id: `netflix-ja${sdh ? '-sdh' : ''}`,
+    name: `Netflix Japanese${sdh ? ' SDH' : ''}`,
+    description: `Netflix’s Japanese guide with the general requirements and timing guidelines, ${sdh ? 'for subtitles for the deaf and hard of hearing' : 'for subtitles'}: ${chars} characters per horizontal line and 11 per vertical line, half-width characters counting as half, and ${cps} characters per second.`,
+    language: 'ja',
+    sources: [NETFLIX_JA, NETFLIX_JA_IMSC, NETFLIX_GENERAL, NETFLIX_TIMING, NETFLIX_GLYPHS],
+    notChecked: [
+      'Netflix takes Japanese subtitles only as IMSC 1.1 (TTML), not WebVTT (I.1); the Japanese IMSC 1.1 Creation Guide sets its attributes.',
+      'Ruby and bouten placement, vertical positioning and kumi-moji (tate-chū-yoko) numbers in vertical cues.',
+      'Italics for forced narratives, voices through devices, narration and lyrics; two-em dashes for continuity and the three-dot leader; chidori lyrics (judgement).',
+      'Kanji for children’s content, names, and timing to the audio and to shot changes.',
+    ],
+    rules: {
+      ...(sdh ? netflixTiming() : netflixTiming(500, 'netflix-ja', 'I.9. Duration (0.5 second)')),
+      'max-lines': {
+        severity: 'warning',
+        params: { max: 2 },
+        source: 'netflix-ja',
+        section: sec('I.14. Line Limitation', 'II.13. Line Limitation'),
+      },
+      'line-length': {
+        severity: 'warning',
+        params: { max: chars, maxVertical: 11, halfWidth: 0.5 },
+        source: 'netflix-ja',
+        section: sec('I.5. Character Limitation', 'II.6. Character Limitation'),
+      },
+      'chars-per-second': {
+        severity: 'warning',
+        params: { max: cps, halfWidth: 0.5 },
+        source: 'netflix-ja',
+        section: sec('I.19. Reading Speed Limits', 'II.18. Reading Speed Limits'),
+      },
+      'glyph-list': {
+        severity: 'warning',
+        source: 'netflix-glyphs',
+        section: 'General Requirements 3. Glyph List',
+      },
+      'ja-punctuation': {
+        severity: 'warning',
+        source: 'netflix-ja',
+        section: sec(
+          'I.17. Punctuation; I.12. Foreign Dialogue',
+          'II.16. Punctuation; II.11. Foreign Dialogue',
+        ),
+      },
+      'ja-numbers': {
+        severity: 'warning',
+        source: 'netflix-ja',
+        section: sec('I.15. Numbers', 'II.14. Numbers'),
+      },
+      'ja-latin': {
+        severity: 'info',
+        source: 'netflix-ja',
+        section: sec(
+          'I.2. Acronyms & Latin Alphabet Characters',
+          'II.3. Acronyms & Latin Alphabet Characters',
+        ),
+      },
+      ...(sdh
+        ? {}
+        : {
+            // Allowed in SDH (II.6).
+            'half-width-katakana': {
+              severity: 'warning' as const,
+              source: 'netflix-ja',
+              section: 'I.5. Character Limitation (II.6 allows it in SDH only)',
+            },
+          }),
+    },
+  };
+};
+
+export const NETFLIX_JA_ADULT = netflixJapanese(false);
+export const NETFLIX_JA_SDH = netflixJapanese(true);
+
 export const BBC_SUBTITLES: Ruleset = {
   id: 'bbc',
   name: 'BBC',
@@ -499,6 +844,20 @@ export const RULESETS: readonly Ruleset[] = [
   NETFLIX_FI_CHILDREN,
   NETFLIX_FI_SDH,
   NETFLIX_FI_SDH_CHILDREN,
+  NETFLIX_ZH_HANS_ADULT,
+  NETFLIX_ZH_HANS_CHILDREN,
+  NETFLIX_ZH_HANS_SDH,
+  NETFLIX_ZH_HANS_SDH_CHILDREN,
+  NETFLIX_ZH_HANT_ADULT,
+  NETFLIX_ZH_HANT_CHILDREN,
+  NETFLIX_ZH_HANT_SDH,
+  NETFLIX_ZH_HANT_SDH_CHILDREN,
+  NETFLIX_JA_ADULT,
+  NETFLIX_JA_SDH,
+  NETFLIX_KO_ADULT,
+  NETFLIX_KO_CHILDREN,
+  NETFLIX_KO_SDH,
+  NETFLIX_KO_SDH_CHILDREN,
   BBC_SUBTITLES,
   WCAG,
 ];

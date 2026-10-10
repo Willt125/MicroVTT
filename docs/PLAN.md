@@ -559,8 +559,14 @@ Still open:
       Finnish translations too (no more first word of the next sentence left at a cue's end).
 - [ ] Confirm the cleanup on a Chinese auto-caption file, and on a speech-recognition (not
       translated) Japanese one.
-- [ ] Line-length and reading-speed presets per script (CJK lines are about 13–16 full-width
-      characters). Needs Netflix's Japanese, Chinese and Korean guides.
+- [x] Netflix rulesets for Chinese (Simplified and Traditional), Japanese and Korean, with their
+      SDH and children's variants: 16 characters per line for Chinese and Korean, 13 (vertical 11)
+      for Japanese, half-width characters counting half in Japanese and Korean, and each guide's
+      reading speed, punctuation, numbers and Latin-letter rules (`rules-cjk.ts`). Traditional
+      Chinese text (`zh-TW`, `zh-Hant`) is offered the Traditional rules.
+- [ ] Auto-caption cleanup still wraps every language at 42 characters. Default its line length
+      (and half-width counting) from the text's language: 13 for Japanese, 16 for Chinese and
+      Korean.
 - [ ] Case-insensitive find follows JavaScript's simple case folding: Turkish `İ`/`ı` and German
       `ß`/`SS` do not match each other. Document in the help, or fold by the editor's language.
 - [ ] Guess more Latin-script languages (Croatian, Serbian and Bosnian; Malay; Slovenian…), which

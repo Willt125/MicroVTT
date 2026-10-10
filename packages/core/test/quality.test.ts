@@ -419,6 +419,37 @@ describe('rulesets', () => {
     expect(params(BBC_SUBTITLES, 'words-per-minute')).toEqual({ max: 180 });
     expect(params(BBC_SUBTITLES, 'min-gap')).toEqual({ minMs: 1000 });
     expect(params(WCAG, 'contrast')).toEqual({ min: 4.5 });
+    const byId = (id: string) => RULESETS.find((r) => r.id === id) as Ruleset;
+    // Chinese: 16 characters (18 SDH), 9/7 characters per second (11/9 SDH), 2 lines (3 SDH).
+    for (const script of ['hans', 'hant']) {
+      expect(params(byId(`netflix-zh-${script}`), 'line-length')).toEqual({ max: 16 });
+      expect(params(byId(`netflix-zh-${script}`), 'chars-per-second')).toEqual({ max: 9 });
+      expect(params(byId(`netflix-zh-${script}-children`), 'chars-per-second')).toEqual({ max: 7 });
+      expect(params(byId(`netflix-zh-${script}-sdh`), 'line-length')).toEqual({ max: 18 });
+      expect(params(byId(`netflix-zh-${script}-sdh`), 'chars-per-second')).toEqual({ max: 11 });
+      expect(params(byId(`netflix-zh-${script}-sdh-children`), 'chars-per-second')).toEqual({
+        max: 9,
+      });
+      expect(params(byId(`netflix-zh-${script}-sdh`), 'max-lines')).toEqual({ max: 3 });
+    }
+    // Korean: 16 characters, half-width counting half; 12/9 per second (14/11 SDH).
+    expect(params(byId('netflix-ko'), 'line-length')).toEqual({ max: 16, halfWidth: 0.5 });
+    expect(params(byId('netflix-ko'), 'chars-per-second')).toEqual({ max: 12, halfWidth: 0.5 });
+    expect(params(byId('netflix-ko-children'), 'chars-per-second')?.['max']).toBe(9);
+    expect(params(byId('netflix-ko-sdh'), 'chars-per-second')?.['max']).toBe(14);
+    expect(params(byId('netflix-ko-sdh-children'), 'chars-per-second')?.['max']).toBe(11);
+    expect(params(byId('netflix-ko'), 'speaker-hyphen')).toEqual({ space: 1 });
+    // Japanese: 13 horizontal (16 SDH), 11 vertical; 4 per second (7 SDH); 0.5 s minimum.
+    expect(params(byId('netflix-ja'), 'line-length')).toEqual({
+      max: 13,
+      maxVertical: 11,
+      halfWidth: 0.5,
+    });
+    expect(params(byId('netflix-ja-sdh'), 'line-length')?.['max']).toBe(16);
+    expect(params(byId('netflix-ja'), 'chars-per-second')).toEqual({ max: 4, halfWidth: 0.5 });
+    expect(params(byId('netflix-ja-sdh'), 'chars-per-second')?.['max']).toBe(7);
+    expect(params(byId('netflix-ja'), 'min-duration')).toEqual({ minMs: 500 });
+    expect(byId('netflix-ja-sdh').rules['half-width-katakana']).toBeUndefined();
   });
 
   it('let the user switch rules off and change settings', () => {

@@ -324,3 +324,27 @@ export function sampleText(doc: VttDocument, maxChars = 20000): string {
   }
   return out;
 }
+
+/** The script a language tag names, or implies by its region (Chinese in Taiwan, Hong Kong, Macau: traditional). */
+function scriptOf(tag: string): string | null {
+  const parts = tag.split(/[-_]/);
+  const script = parts.find((p, i) => i > 0 && /^[A-Za-z]{4}$/.test(p));
+  if (script) return script.toLowerCase();
+  if (parts[0]?.toLowerCase() !== 'zh') return null;
+  return parts.some((p, i) => i > 0 && /^(TW|HK|MO)$/i.test(p)) ? 'hant' : null;
+}
+
+/**
+ * Whether text in language `tag` is what a ruleset for `rulesetLanguage` is for: the same
+ * primary language and, when the ruleset names a script (zh-Hant), no other script. Text whose
+ * tag leaves the script open (plain "zh") fits either.
+ */
+export function languageMatches(rulesetLanguage: string, tag: string): boolean {
+  const primary = (t: string): string => (t.split(/[-_]/)[0] ?? '').toLowerCase();
+  if (primary(rulesetLanguage) !== primary(tag)) return false;
+  const wanted = scriptOf(rulesetLanguage);
+  const actual = scriptOf(tag);
+  if (wanted === null || actual === null) return true;
+  if (wanted === 'hans' && actual !== 'hant') return true; // zh-CN, zh-SG, zh-Hans
+  return wanted === actual;
+}
