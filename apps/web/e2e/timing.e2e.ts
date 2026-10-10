@@ -79,8 +79,8 @@ test.describe('with media', () => {
     await cueList(page).focus();
     await page.keyboard.press('ControlOrMeta+a');
     await expect(cueList(page).locator('[aria-selected=true]')).toHaveCount(3);
-    // "two", in the middle (the view may only reach the end of the last cue: until the media's
-    // duration is known, the first view fits the document).
+    // "two", in the middle, so the drag stays in view (Firefox sends no pointer events
+    // outside the window).
     await dragLane(page, 6000, 8000);
     const [one, two, three] = await starts(page);
     expect(toMs(one) - 1000).toBeGreaterThan(1500);

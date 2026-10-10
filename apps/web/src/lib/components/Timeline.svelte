@@ -65,10 +65,17 @@
 
   const setView = (next: View): void => {
     view = clampView(next, durationMs, width);
+    untouched = false;
   };
 
   /** Set when the view should return to the start at the default zoom, once the width is known. */
   let resetPending = true;
+  /**
+   * True while the view is still the default one (nothing has scrolled, zoomed or followed the
+   * playhead): it is then laid out again when the media's length becomes known, which may be
+   * after the first layout, and when the timeline is resized.
+   */
+  let untouched = false;
 
   // A new media file starts at its beginning, at the default zoom.
   $effect(() => {
@@ -80,7 +87,15 @@
   function resetView(): void {
     resetPending = false;
     setView({ startMs: 0, msPerPx: DEFAULT_VIEW_MS / width });
+    untouched = true;
   }
+
+  // The default view is limited to the length known when it was laid out (at first perhaps only
+  // the cues'): lay it out again as the media's length arrives.
+  $effect(() => {
+    void durationMs;
+    if (untrack(() => untouched && width > 0)) untrack(resetView);
+  });
 
   // Follow the playhead while playing.
   $effect(() => {
@@ -257,7 +272,7 @@
       const dpr = window.devicePixelRatio || 1;
       el.width = Math.round(width * dpr);
       el.height = Math.round(height * dpr);
-      if (resetPending) resetView();
+      if (resetPending || untouched) resetView();
       else setView(view);
     });
     observer.observe(el);
