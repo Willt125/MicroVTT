@@ -330,7 +330,7 @@ describe('cleanup', () => {
 
   it('breaks at non-Latin sentence ends and counts graphemes', () => {
     expect(visibleLength('नमस्ते')).toBeLessThanOrEqual(4); // Grapheme rules vary by Unicode version.
-    expect(visibleLength('👩‍👩‍👧')).toBe(1);
+    expect(visibleLength('👩\u200d👩\u200d👧')).toBe(1);
     const ja = rollUp([
       ['これは', '最初の', '文です。'],
       ['これは', '二番目の', '文です。'],

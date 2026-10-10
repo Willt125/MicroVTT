@@ -21,7 +21,14 @@ cue fails them. "Check anyway" runs them regardless.
 - **Characters per second** counts spaces and punctuation but not line breaks. The guides don't say
   how they count. Netflix's reading-speed figures are generally understood to include spaces, but
   the guide supplied doesn't state it.
-- **Words** are runs of non-space text that contain a letter or a digit.
+- **Words** are runs of non-space text that contain a letter or a digit. In scripts written
+  without spaces (Chinese, Japanese, Thai, Lao, Khmer, Myanmar) they are the words
+  `Intl.Segmenter` finds.
+- **Line breaks** that fixes make (Rewrap) fall at spaces, and inside unspaced scripts at the
+  word boundaries `Intl.Segmenter` finds. Punctuation stays with its word, opening brackets
+  with the word after, and Japanese hiragana endings with the word before. **Joining lines**
+  (One line when it fits) adds a space except between Chinese or Japanese text; Thai, Khmer
+  and Myanmar separate phrases with spaces, so a line break there stands for one.
 - **The next cue** is the next one in the file. A file out of start order is a format error in any
   case.
 
@@ -242,7 +249,7 @@ Only one ruleset is active at a time, so these never conflict in use.
 2. In `packages/core/src/quality/rulesets.ts`:
    - add a `GuideSource`;
    - add a `Ruleset` that picks rules from `rules.ts`, with settings and the section each comes
-     from, plus a `notChecked` list;
+     from, plus a `notChecked` list, and the `language` it is for, if one;
    - add it to `RULESETS`.
 3. If the guide needs a check no rule covers, add a rule to `rules.ts`. Each rule is a function
    over one cue (or over the document), and its settings are numbers.
@@ -251,3 +258,7 @@ Only one ruleset is active at a time, so these never conflict in use.
 
 Users can switch rules off and change settings per ruleset (the Rules… dialog). Their changes
 are kept in the browser and can be reset to the guide's values.
+
+When the text's language (from the file, or set by the user) differs from the chosen ruleset's
+`language`, the panel says so and offers a ruleset for the text's language if there is one. It
+never switches by itself, and rulesets for any language (the basic checks, WCAG) never prompt.
