@@ -537,15 +537,32 @@ gaps (2026-10-08):
 
 ### Phase 8: Converters
 
-- **SRT** (next): import with encoding detection (SRT is often Windows-1252 or similar, unlike `.vtt`)
-  and its common quirks (comma decimal separator, `<font>` tags, numbering); export with the
-  WebVTT-only features flattened and a report of what was lost.
+- **Format seam** (with SRT): split `packages/core` into what is common to every format (cue
+  list, timing, undo, find, timeline, the 5c quality rules) and what each format supplies: its
+  text dialect (parse markup, plain text, visible length, split at a position, tags skipped by
+  find), its settings, its validator or linter, its serializer, and the cue editor's settings
+  panel. Each format is then edited natively, not converted to WebVTT and back. Auto-caption
+  cleanup and the export compatibility options stay WebVTT-only.
+- **SRT** (next): native editing on the seam, keeping SRT's own conventions (numbering, `<font>`,
+  `{\an8}`). Import with encoding detection (SRT is often Windows-1252 or similar, unlike `.vtt`)
+  and its common quirks (comma decimal separator); conversion to and from WebVTT with the features
+  the other lacks flattened and a report of what was lost.
+- **ASS/SSA** (after SRT): lossless round-trip. Opening a file, editing timing and text, and
+  saving changes nothing else: `[Script Info]`, styles, `[Fonts]`, `[Graphics]`, unknown
+  sections, comment lines and field order are kept as found, and `{\...}` override blocks are
+  kept byte for byte as opaque tokens (skipped by find and length, carried correctly by split and
+  merge). Conversion to WebVTT maps what maps (`\i` `\b` `\u`, `\N`, actor to `<v>`, `\k` to
+  timestamp tags, `\an` to settings, styles to `::cue` classes) and reports typesetting it drops.
+  Out of scope: a styles editor, per-line layer/margin/effect editing beyond plain fields, an
+  override-tag helper, and a libass preview; those belong in a dedicated ASS editor.
 - **SCC** (long-term): Scenarist files carry CEA-608 byte pairs with 29.97 fps (drop-frame)
   timecode. Import needs a 608 decoder (pop-on, roll-up and paint-on modes, the 608 character
   set, 15 rows × 32 columns). Export is _constrained_: line breaking to 32 columns, character
   mapping, and timing that accounts for 608's two-bytes-per-frame bandwidth, so long captions have
   to be loaded early. The CTA-608 standard is paywalled, so the work will lean on open references and
-  sample files. Expect this to be the largest converter.
+  sample files: the owner suggests McPoodle's SCC format notes
+  (<https://theneitherworld.com/mcpoodle/SCC_TOOLS/DOCS/SCC_FORMAT.HTML>), to be read and checked
+  against sample files when the work starts. Expect this to be the largest converter.
 
 ## Decisions log
 
@@ -667,6 +684,10 @@ gaps (2026-10-08):
 - **2026-10-10 (owner):** Style and accessibility rules (Netflix, BBC, WCAG and the like) are
   their own category, independent of the format's errors and warnings, with a lite default set
   and stricter profiles to switch on. Planned as Phase 5c.
+
+- **2026-10-10 (owner):** Phase 8 builds a format seam with SRT, so each format is edited
+  natively. ASS/SSA gets lossless round-trip support (everything not edited is kept as found);
+  a styles editor, typesetting tools and a libass preview are left to a dedicated ASS editor.
 
 ## Open questions for the owner
 
