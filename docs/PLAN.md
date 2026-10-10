@@ -469,10 +469,11 @@ category, list and severity, never shown as conformance problems, and never bloc
       minimum and maximum duration, overlapping cues, too-small gaps between cues, and empty
       cues. Thresholds loose enough not to flag ordinary YouTube captions; lengths counted in
       graphemes, with per-script presets (see "text in any language and script").
-- [ ] Profiles that switch on stricter sets: Netflix timed-text style guide (general and
-      per-language), BBC subtitle guidelines, and WCAG. Others to consider: the DCMP Captioning
-      Key and the FCC's caption-quality rules (accuracy, synchronicity, completeness, placement).
-      Users can edit thresholds and save their own profile.
+- [ ] Profiles that switch on stricter sets, limited to the rules the editor can reasonably
+      detect: WCAG 2.2, the Netflix Timed Text Style Guide (2025-12-19 edition; general and
+      per-language), and the BBC Subtitle Guidelines (March 2026 edition). Others to consider
+      later: the DCMP Captioning Key and the FCC's caption-quality rules. Users can edit
+      thresholds and save their own profile.
 - [ ] Rules that need judgement are limited to what text can show: speaker identification on a
       change of speaker, sound descriptions present, line breaks that split a name or article
       from its noun. Anything that needs the audio (accuracy, sync against speech) is out of
@@ -688,6 +689,10 @@ gaps (2026-10-08):
 - **2026-10-10 (owner):** Phase 8 builds a format seam with SRT, so each format is edited
   natively. ASS/SSA gets lossless round-trip support (everything not edited is kept as found);
   a styles editor, typesetting tools and a libass preview are left to a dedicated ASS editor.
+
+- **2026-10-10 (owner):** The 5c profiles target WCAG 2.2, the Netflix Timed Text Style Guide
+  of 2025-12-19 and the BBC Subtitle Guidelines of March 2026, each limited to what the editor
+  can reasonably detect.
 
 ## Open questions for the owner
 
