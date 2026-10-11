@@ -11,8 +11,8 @@ trap 'rm -rf "$TMP"' EXIT
 
 git clone --quiet --depth 1 --branch "$REF" --filter=blob:none --sparse \
   https://github.com/web-platform-tests/wpt.git "$TMP/wpt"
-git -C "$TMP/wpt" sparse-checkout set webvtt/parsing webvtt/api
-git -C "$TMP/wpt" sparse-checkout add LICENSE.md 2>/dev/null || true
+git -C "$TMP/wpt" sparse-checkout set --no-cone /webvtt/parsing/ /webvtt/api/ \
+  /webvtt/rendering/cues-with-video/processing-model/ /fonts/Ahem.ttf /LICENSE.md
 
 SRC="$TMP/wpt/webvtt"
 rm -rf "$DEST"
@@ -31,9 +31,14 @@ cp "$SRC"/parsing/cue-text-parsing/dat/*.dat "$DEST/cue-text-parsing/"
 # VTTCue / VTTRegion API semantics (used as a reference for our model's setters).
 cp -r "$SRC"/api/VTTCue "$SRC"/api/VTTRegion "$DEST/api/"
 
+# Rendering reftests: each test page plays a track over a 320×180 video and is compared with a
+# reference page drawn in plain HTML and CSS. Ahem is the test font (square glyphs).
+cp -r "$SRC"/rendering/cues-with-video/processing-model "$DEST/rendering"
+cp "$TMP/wpt/fonts/Ahem.ttf" "$DEST/rendering/Ahem.ttf"
+
 cp "$TMP/wpt/LICENSE.md" "$DEST/LICENSE.md"
 {
-  echo "Source: https://github.com/web-platform-tests/wpt (webvtt/parsing, webvtt/api)"
+  echo "Source: https://github.com/web-platform-tests/wpt (webvtt/parsing, webvtt/api, webvtt/rendering; fonts/Ahem.ttf)"
   echo "Commit: $(git -C "$TMP/wpt" rev-parse HEAD)"
   echo "Date:   $(git -C "$TMP/wpt" log -1 --format=%cI)"
   echo "License: 3-Clause BSD (see LICENSE.md)"

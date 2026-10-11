@@ -147,3 +147,5 @@ export {
   sampleText,
 } from './language.ts';
 export type { LanguageGuess, LanguageHint, LanguageHintSource } from './language.ts';
+export * from './render.ts';
+export { scopeCueStylesheet } from './cue-css.ts';

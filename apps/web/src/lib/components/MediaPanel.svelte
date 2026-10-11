@@ -1,15 +1,18 @@
 <!--
-  The media player: plays a local audio or video file with the document shown as captions (the
-  browser's own WebVTT renderer, fed the exported file), loops the selected cue, and keeps the
-  cue list and the playhead in step.
+  The media player: plays a local audio or video file with the document shown as captions,
+  drawn by MicroVTT's spec renderer over the picture or by the browser's own WebVTT renderer
+  (fed the exported file), loops the selected cue, and keeps the cue list and the playhead in
+  step.
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
+  import type { Cue, Region } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import { cueAt, loopTarget } from '../media.ts';
   import { RATES, type Player } from '../player.svelte.ts';
   import { formatTime } from '../time.ts';
   import { FRAME_RATES, rateLabel, standardRate } from '../frames.ts';
+  import { CueRenderer, type RenderTrack } from '../render/renderer.ts';
 
   interface Props {
     editor: Editor;
@@ -59,9 +62,76 @@
       previewWindow = { fromMs: ms - WINDOW_BEFORE_MS, toMs: ms + WINDOW_AFTER_MS };
   });
 
-  // Rebuild the caption preview after edits settle (at once when only the window moved).
+  // The spec renderer: draws the document straight from the editor, over the picture.
+  let overlay = $state.raw<HTMLDivElement | null>(null);
+  /** Where the picture is inside the video element (it is letterboxed to fit). */
+  let picture = $state.raw({ left: 0, top: 0, width: 0, height: 0 });
+  const specCaptions = $derived(player.captions && player.renderer === 'spec');
+
+  const renderTrack = $derived.by((): RenderTrack => {
+    const doc = editor.doc;
+    return {
+      cues: doc.body.filter((item): item is Cue => item.type === 'cue'),
+      regions: doc.head.filter((item): item is Region => item.type === 'region'),
+      styles: doc.head.flatMap((item) => (item.type === 'style' ? [item.css] : [])),
+      language: editor.language ?? undefined,
+    };
+  });
+
+  function measure(): void {
+    const v = player.element;
+    if (!v) return;
+    const w = v.clientWidth;
+    const h = v.clientHeight;
+    let rect = { left: 0, top: 0, width: w, height: h };
+    if (v.videoWidth > 0 && v.videoHeight > 0) {
+      const scale = Math.min(w / v.videoWidth, h / v.videoHeight);
+      const width = v.videoWidth * scale;
+      const height = v.videoHeight * scale;
+      rect = { left: (w - width) / 2, top: (h - height) / 2, width, height };
+    }
+    picture = {
+      left: rect.left + v.offsetLeft,
+      top: rect.top + v.offsetTop,
+      width: rect.width,
+      height: rect.height,
+    };
+  }
+
   $effect(() => {
-    if (!player.hasMedia || !player.captions) return;
+    const v = player.element;
+    if (!v) return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(v);
+    v.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      v.removeEventListener('resize', measure);
+    };
+  });
+
+  let renderer: CueRenderer | null = null;
+  $effect(() => {
+    const el = overlay;
+    if (!el) return;
+    renderer = new CueRenderer(el);
+    return () => {
+      renderer?.clear();
+      renderer = null;
+    };
+  });
+
+  $effect(() => {
+    if (!overlay || !specCaptions) return;
+    // Size first: the renderer measures the overlay.
+    void picture;
+    renderer?.render([renderTrack], player.currentMs);
+  });
+
+  // The browser's renderer: rebuild its caption track after edits settle (at once when only the
+  // window moved).
+  $effect(() => {
+    if (!player.hasMedia || !player.captions || player.renderer !== 'browser') return;
     const doc = editor.doc;
     const window = previewWindow;
     const edited = doc !== previewedDoc;
@@ -169,27 +239,40 @@
 </script>
 
 <section class="media" aria-label="Media">
-  <!-- svelte-ignore a11y_media_has_caption (captions are the document being edited) -->
-  <video
-    bind:this={player.element}
-    class:audio={player.isAudio}
-    src={player.url}
-    controls
-    playsinline
-    preload="metadata"
-    {onplay}
-    {onpause}
-    onseeked={() => player.readTime()}
-    ontimeupdate={() => player.paused && player.readTime()}
-    {onloadedmetadata}
-    {onerror}
-  >
-    {#if trackUrl && player.captions}
-      {#key trackUrl}
-        <track kind="captions" label="Preview" src={trackUrl} use:showTrack />
-      {/key}
+  <div class="stage">
+    <!-- svelte-ignore a11y_media_has_caption (captions are the document being edited) -->
+    <video
+      bind:this={player.element}
+      class:audio={player.isAudio}
+      src={player.url}
+      controls
+      playsinline
+      preload="metadata"
+      {onplay}
+      {onpause}
+      onseeked={() => player.readTime()}
+      ontimeupdate={() => player.paused && player.readTime()}
+      {onloadedmetadata}
+      {onerror}
+    >
+      {#if trackUrl && player.captions && player.renderer === 'browser'}
+        {#key trackUrl}
+          <track kind="captions" label="Preview" src={trackUrl} use:showTrack />
+        {/key}
+      {/if}
+    </video>
+    {#if specCaptions}
+      <div
+        class="captions"
+        data-testid="spec-captions"
+        bind:this={overlay}
+        style:left="{picture.left}px"
+        style:top="{picture.top}px"
+        style:width="{picture.width}px"
+        style:height="{picture.height}px"
+      ></div>
     {/if}
-  </video>
+  </div>
 
   {#if player.error}
     <p class="error-text" role="alert">{player.error}</p>
@@ -251,6 +334,20 @@
     <label title="Show the document as captions over the media"
       ><input type="checkbox" bind:checked={player.captions} /> Captions</label
     >
+    <label
+      title="What draws the captions: MicroVTT, following the WebVTT spec’s rendering rules the same way in every browser, or this browser’s own renderer"
+    >
+      <span class="visually-hidden">Caption renderer</span>
+      <select
+        value={player.renderer}
+        disabled={!player.captions}
+        onchange={(e) =>
+          player.setRenderer(e.currentTarget.value === 'browser' ? 'browser' : 'spec')}
+      >
+        <option value="spec">Spec renderer</option>
+        <option value="browser">Browser renderer</option>
+      </select>
+    </label>
   </div>
   <div class="controls">
     <label title="The frame rate frame stepping uses (measured from the video, or chosen)">
@@ -290,7 +387,16 @@
     flex-direction: column;
     gap: 0.4rem;
   }
+  .stage {
+    position: relative;
+  }
+  .captions {
+    position: absolute;
+    pointer-events: none;
+    overflow: hidden;
+  }
   video {
+    display: block;
     width: 100%;
     max-height: 45vh;
     background: #000;

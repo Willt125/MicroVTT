@@ -497,10 +497,9 @@ in `docs/QUALITY-RULES.md`.
 - [x] The Netflix Glyph List (version 2), generated into core as code-point ranges.
 - [x] Netflix Finnish (subtitles and SDH, adult and children's; guide of 2025-12-19), with
       Kotus abbreviations and state body names.
-- [ ] Later: shot-change timing (needs shot detection);
-      other Netflix languages; suggesting a ruleset from the file's language; the DCMP Captioning Key and FCC caption-quality
-      rules; per-script line-length presets (see "text in any language and script"); checks
-      for speaker identification and sound descriptions.
+- [ ] Later: shot-change timing (needs shot detection); more Netflix languages; the DCMP
+      Captioning Key and FCC caption-quality rules; checks for speaker identification and sound
+      descriptions.
 - **Note on WCAG:** WCAG requires captions (1.2.2, 1.2.4) but sets few measurable values for
   them. The WCAG ruleset checks contrast of colours set in STYLE blocks (1.4.3), and says that
   passing it does not make captions accessible.
@@ -580,12 +579,36 @@ Still open:
 
 ### Phase 6: Spec renderer and full feature coverage
 
-- §7 renderer overlay (positioning, snap-to-lines, regions, roll-up, `::cue` styling, `:past` and
-  `:future`), plus a toggle to compare with native rendering.
+**6a: spec renderer** (done 2026-10-11):
+
+- [x] A renderer that follows §7 and §8: cue boxes from the settings, snap-to-lines placement,
+      overlap avoidance for percentage lines, regions (6vh lines, anchors), vertical
+      cues, the §7.4 defaults, and `::cue`, `::cue()`, `::cue-region` with `:past` and `:future`.
+      Only the properties §8 allows are kept, and STYLE blocks apply to their own track and win
+      over the page's rules. Layout math is in core (`render.ts`, `cue-css.ts`); the DOM part is
+      `apps/web/src/lib/render/renderer.ts`.
+- [x] Drawn over the picture in the media panel (fitted to the letterboxed video), by default;
+      "Browser renderer" shows the browser's own instead, to compare. The choice is kept in the
+      browser.
+- [x] WPT's rendering reftests (vendored by `scripts/sync-wpt.sh`) run against it in Chromium:
+      234 tests are drawn and compared pixel by pixel, and 19 that drive the media element are
+      skipped. 167 match as they are. Where a reference contradicts the spec, the test is listed
+      in `apps/web/e2e/wpt-rendering-expectations.ts` with its reason: 33 expected failures, and
+      32 with one stated adjustment (such as a region drawn without its background) that must
+      then match. Two more differ only between Chromium versions (sub-pixel rounding) and have
+      a stated tolerance. See `SPEC-NOTES.md`.
+
+Next, in this order (owner, 2026-10-11):
+
+- **6b: format seam with SRT**, moved up from Phase 8 (see there), before the rich editor, so
+  that the cue-text editor is built on the seam.
 - Editors for cue settings, regions and STYLE blocks. A rich cue-text editor for spans, voices,
   ruby, lang, and karaoke timestamps.
 - Chapters and metadata file modes.
-- Renderer reference screenshots on Chromium, Firefox and WebKit.
+- The scroll-up animation of regions (0.433s): scroll-up regions show their latest lines, but
+  the renderer rebuilds the cues it draws whenever they change, so nothing moves smoothly yet.
+- Renderer reference results on Firefox and WebKit: the WPT harness runs there with
+  `WPT_ALL_BROWSERS=1`; their differences are still to be reviewed and recorded.
 
 ### Phase 7: Packaging, hosting and polish
 
@@ -595,13 +618,13 @@ Still open:
 
 ### Phase 8: Converters
 
-- **Format seam** (with SRT): split `packages/core` into what is common to every format (cue
+- **Format seam** (with SRT; moved up to Phase 6b): split `packages/core` into what is common to every format (cue
   list, timing, undo, find, timeline, the 5c quality rules) and what each format supplies: its
   text dialect (parse markup, plain text, visible length, split at a position, tags skipped by
   find), its settings, its validator or linter, its serializer, and the cue editor's settings
   panel. Each format is then edited natively, not converted to WebVTT and back. Auto-caption
   cleanup and the export compatibility options stay WebVTT-only.
-- **SRT** (next): native editing on the seam, keeping SRT's own conventions (numbering, `<font>`,
+- **SRT** (Phase 6b): native editing on the seam, keeping SRT's own conventions (numbering, `<font>`,
   `{\an8}`). Import with encoding detection (SRT is often Windows-1252 or similar, unlike `.vtt`)
   and its common quirks (comma decimal separator); conversion to and from WebVTT with the features
   the other lacks flattened and a report of what was lost.
@@ -758,6 +781,11 @@ Still open:
 - **2026-10-10 (owner):** The 5c profiles target WCAG 2.2, the Netflix Timed Text Style Guide
   of 2025-12-19 and the BBC Subtitle Guidelines of March 2026, each limited to what the editor
   can reasonably detect.
+
+- **2026-10-11 (owner):** The SRT format seam comes before the rich cue-text editor (Phase 6b).
+- **2026-10-11 (Phase 6a):** The spec renderer is the default preview: it draws the same in
+  every browser and follows the spec where browsers differ. Where WPT's references contradict the
+  spec, the spec wins, and each case is listed with its reason.
 
 ## Open questions for the owner
 

@@ -1,6 +1,6 @@
-Source: https://github.com/web-platform-tests/wpt (webvtt/parsing, webvtt/api)
-Commit: a31e9d8ea6686588e83bdc094a22aa845afa3fb3
-Date:   2026-10-06T08:41:25-07:00
+Source: https://github.com/web-platform-tests/wpt (webvtt/parsing, webvtt/api, webvtt/rendering; fonts/Ahem.ttf)
+Commit: 2f17dec1f36194d1c236120fd38b3556be466072
+Date:   2026-10-11T02:21:03+02:00
 License: 3-Clause BSD (see LICENSE.md)
 
 Do not edit by hand; re-run scripts/sync-wpt.sh.
