@@ -7,7 +7,9 @@
 <script lang="ts">
   import {
     addStyle,
+    backsCSpans,
     cueSelectors,
+    cuesOutsideC,
     cuesWithUntaggedTiming,
     deleteStyle,
     NEW_STYLE_SHEET,
@@ -15,6 +17,7 @@
     ruleTemplates,
     styleSheetProblems,
     updateStyle,
+    wrapForBackgroundInAll,
     wrapTimedPartsInAll,
     type Cue,
   } from '@microvtt/core';
@@ -38,9 +41,18 @@
   );
   const style = $derived(styles.find((s) => s.index === selected) ?? styles[0] ?? null);
   const problems = $derived(style ? styleSheetProblems(style.css) : []);
+  // Cue text the sheet's rules cannot reach. Only captions: wrapping would change what chapter
+  // titles read and what metadata payloads hold.
+  const captions = $derived(editor.fileType === 'captions' || editor.fileType === 'any');
+  /** Cues with text outside a <c>, when the sheet puts the background on <c> spans. */
+  const outsideC = $derived(
+    style && captions && backsCSpans(style.css) ? cuesOutsideC(editor.doc) : 0,
+  );
   /** Cues whose timed text the sheet's :past/:future rules cannot reach, when it has any. */
   const untagged = $derived(
-    style && /:(?:past|future)\b/.test(style.css) ? cuesWithUntaggedTiming(editor.doc) : 0,
+    style && captions && outsideC === 0 && /:(?:past|future)\b/.test(style.css)
+      ? cuesWithUntaggedTiming(editor.doc)
+      : 0,
   );
   const templates = $derived(open ? ruleTemplates(cueSelectors(editor.doc)) : []);
   const previewCue = $derived<Cue | null>(
@@ -202,6 +214,19 @@
                 </li>
               {/each}
             </ul>
+          {/if}
+          {#if outsideC > 0}
+            <p class="warning-text small" role="status">
+              {outsideC}
+              {outsideC === 1 ? 'cue has' : 'cues have'} text outside a <code>&lt;c&gt;</code>,
+              which this sheet leaves without a background.
+              <button
+                class="small"
+                onclick={() =>
+                  editor.apply(wrapForBackgroundInAll(editor.doc), 'Wrap cue text in <c>')}
+                >Wrap it in &lt;c&gt;</button
+              >
+            </p>
           {/if}
           {#if untagged > 0}
             <p class="warning-text small" role="status">

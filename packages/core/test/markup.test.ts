@@ -19,6 +19,7 @@ import {
   spreadWordTimes,
   timeWords,
   timestampProblems,
+  wrapForBackground,
   wrapTimedParts,
   timestampTags,
   unwrapRange,
@@ -256,28 +257,28 @@ describe('word timings', () => {
 });
 
 describe('wrapping timed parts for :past and :future', () => {
-  it('puts bare text beside timestamps in <c>, whitespace outside', () => {
+  it('puts bare text beside timestamps in <c>, with the spaces after it', () => {
     const wrapped = wrapTimedParts('Never <00:01.000>gonna <00:01.500>give');
-    expect(wrapped).toBe('<c>Never</c> <00:01.000><c>gonna</c> <00:01.500><c>give</c>');
+    expect(wrapped).toBe('<c>Never </c><00:01.000><c>gonna </c><00:01.500><c>give</c>');
     expect(wrapTimedParts(wrapped)).toBe(wrapped);
     expect(wrapTimedParts('one\n<00:01.000>two three')).toBe(
       '<c>one</c>\n<00:01.000><c>two three</c>',
     );
-    expect(wrapTimedParts('a &amp; b <00:01.000>c')).toBe('<c>a &amp; b</c> <00:01.000><c>c</c>');
+    expect(wrapTimedParts('a &amp; b <00:01.000>c')).toBe('<c>a &amp; b </c><00:01.000><c>c</c>');
   });
 
   it('leaves spans of their own, text away from timestamps, and untimed cues', () => {
     expect(wrapTimedParts('plain <i>text</i>')).toBe('plain <i>text</i>');
     expect(wrapTimedParts('<i>a</i> <00:01.000><b>b</b>')).toBe('<i>a</i> <00:01.000><b>b</b>');
     expect(wrapTimedParts('<v Bob>Hi <00:01.000>there</v> <i>friend</i>')).toBe(
-      '<v Bob><c>Hi</c> <00:01.000><c>there</c></v> <i>friend</i>',
+      '<v Bob><c>Hi </c><00:01.000><c>there</c></v> <i>friend</i>',
     );
   });
 
   it('keeps wrapped words wrapped when they are timed again', () => {
     const wrapped = wrapTimedParts('Never <00:01.000>gonna <00:01.500>give');
     const retimed = timeWords(wrapped, [1100, 1600]);
-    expect(retimed).toBe('<c>Never</c> <00:00:01.100><c>gonna</c> <00:00:01.600><c>give</c>');
+    expect(retimed).toBe('<c>Never </c><00:00:01.100><c>gonna </c><00:00:01.600><c>give</c>');
     expect(wrapTimedParts(retimed)).toBe(retimed);
     expect(timeWords('a <i>b</i>', [500])).toBe('a <00:00:00.500><i>b</i>');
   });
@@ -299,5 +300,28 @@ describe('wrapping timed parts for :past and :future', () => {
       );
     const root = parseCueText(text);
     expect(bare(root.children, true)).toEqual([]);
+  });
+});
+
+describe('wrapping every visible part for a background on <c>', () => {
+  it('wraps an untimed cue whole, and leaves one that already is', () => {
+    expect(wrapForBackground('An untimed cue')).toBe('<c>An untimed cue</c>');
+    expect(wrapForBackground('  <i>a</i> b \n')).toBe('  <c><i>a</i> b </c>\n');
+    expect(wrapForBackground('<c>done</c>')).toBe('<c>done</c>');
+    expect(wrapForBackground('')).toBe('');
+  });
+
+  it('gives other untimed spans of a timed cue a <c> each, never one around timed text', () => {
+    const text = 'a <00:00:01.000><i>b</i> <i>c</i>';
+    expect(wrapForBackground(text)).toBe('<c>a </c><00:00:01.000><c><i>b</i> </c><c><i>c</i></c>');
+    // A voice holding a timing is not wrapped (the <c> would stay visible over hidden text).
+    expect(wrapForBackground('<v Bob>Hi <00:01.000>there</v> <i>friend</i>')).toBe(
+      '<v Bob><c>Hi </c><00:01.000><c>there</c></v> <c><i>friend</i></c>',
+    );
+    expect(wrapForBackground('<v Bob><i>a</i> <00:01.000>b</v>')).toBe(
+      '<v Bob><c><i>a</i> </c><00:01.000><c>b</c></v>',
+    );
+    for (const t of [text, 'An untimed cue', '<v Bob>Hi <00:01.000>there</v> x'])
+      expect(wrapForBackground(wrapForBackground(t))).toBe(wrapForBackground(t));
   });
 });
