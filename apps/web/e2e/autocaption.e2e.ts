@@ -109,3 +109,30 @@ test('takes line limits from the chosen guide, or the language', async ({ page }
       expect([...line].length).toBeLessThanOrEqual(16);
   }
 });
+
+test("puts timed words in <c> when the file's styles need it", async ({ page }) => {
+  const text = rollUp(
+    [
+      ['Welcome', ' back', ' to', ' the', ' workshop'],
+      ['today', ' we', ' build', ' a', ' bench'],
+      ['with', ' simple', ' tools', ' and', ' care'],
+    ],
+    '\n\nSTYLE\n::cue(:future) {\n  color: grey;\n}',
+  );
+  await page.goto('/');
+  await page
+    .locator('input[type="file"][accept*=".vtt"]')
+    .setInputFiles({ name: 'styled.vtt', mimeType: 'text/vtt', buffer: Buffer.from(text) });
+  const offer = page.getByRole('status').filter({ hasText: 'auto-captions' });
+  await offer.getByRole('button', { name: 'Clean up…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Clean up auto-captions' });
+  const wrap = dialog.getByLabel('Put timed words in <c> (for karaoke / paint-on styles)');
+  // On, as the file's style sheet uses :future.
+  await expect(wrap).toBeChecked();
+  // Evenly spaced test timings read as estimates, which are not kept unless asked.
+  await dialog.getByLabel('Keep word timings').check();
+  await dialog.getByRole('button', { name: 'Apply cleanup' }).click();
+  await expect(offer).toBeHidden();
+  await rows(page).first().click();
+  await expect(page.locator('#cue-text')).toHaveValue(/^<c>Welcome <\/c><[\d:.]+><c>back <\/c>/);
+});

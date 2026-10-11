@@ -7,6 +7,8 @@ import {
   cleanupLineDefaults,
   createCue,
   createDocument,
+  cuesOutsideC,
+  cuesWithUntaggedTiming,
   detectAutoCaptions,
   extractLines,
   findReviewMarkers,
@@ -17,6 +19,7 @@ import {
   serialize,
   validate,
   visibleLength,
+  wrapForStyles,
   wrapWords,
 } from '../src/index.ts';
 
@@ -252,6 +255,35 @@ describe('cleanup', () => {
     expect(cuesOf(cleanupAutoCaptions(translated()).document)[0]?.text).not.toContain('<0');
     const kept = cuesOf(cleanupAutoCaptions(sample(), { keepCueSettings: true }).document);
     expect(kept[0]).toMatchObject({ align: 'start', position: 0 });
+  });
+
+  it("wraps its output in <c> as the file's style sheets need", () => {
+    const withStyle = (css: string): VttDocument => ({
+      ...sample(),
+      head: [...sample().head, { type: 'style', css }],
+    });
+    const texts = (doc: VttDocument, options = {}): string[] =>
+      cuesOf(cleanupAutoCaptions(doc, options).document).map((c) => c.text);
+    // No styles: as before, and YouTube's own <c> spans are not kept.
+    expect(wrapForStyles(sample())).toBe('none');
+    expect(texts(sample()).some((t) => t.includes('<c>'))).toBe(false);
+    // :past/:future rules: the timed words in <c>, untimed cues left alone.
+    const karaoke = withStyle('::cue(:future) { color: grey; }');
+    expect(wrapForStyles(karaoke)).toBe('timed');
+    const timed = texts(karaoke);
+    expect(timed[0]).toContain('<00:00:00.820><c>back');
+    expect(
+      cuesWithUntaggedTiming({ ...karaoke, body: cleanupAutoCaptions(karaoke).document.body }),
+    ).toBe(0);
+    // A background on <c>: every cue's text in <c>, untimed text included.
+    const box = withStyle('::cue { background: transparent; }\n::cue(c) { background: black; }');
+    expect(wrapForStyles(box)).toBe('all');
+    expect(cuesOutsideC(cleanupAutoCaptions(box).document)).toBe(0);
+    expect(cuesOutsideC(cleanupAutoCaptions(box, { keepWordTimings: false }).document)).toBe(0);
+    // Asked not to.
+    expect(texts(karaoke, { wrapInC: 'none' }).some((t) => t.includes('<c>'))).toBe(false);
+    // Wrapped output is still valid WebVTT.
+    expect(validate(serialize(cleanupAutoCaptions(box).document)).diagnostics).toEqual([]);
   });
 
   it('tidies whitespace by default, and keeps it when asked', () => {
