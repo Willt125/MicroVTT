@@ -206,6 +206,8 @@ export {
   wrapForBackgroundInAll,
   wrapForStyles,
   applyTextWrap,
+  cuesStylesMiss,
+  wrapAsStylesNeed,
 } from './styles.ts';
 export type { CueSelectors, StyleProblem, TextWrap } from './styles.ts';
 export {

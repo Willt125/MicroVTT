@@ -23,6 +23,8 @@ import {
   createCue,
   createDocument,
   findQuickFixes,
+  cuesStylesMiss,
+  wrapAsStylesNeed,
   formatById,
   formatOf,
   WEBVTT,
@@ -197,6 +199,23 @@ export class Editor {
 
   /** Text kept as a comment that was probably meant otherwise (see core's quickfix.ts). */
   quickFixes = $derived(findQuickFixes(this.doc));
+
+  /**
+   * Cues the file's own style sheets cannot reach (core's `cuesStylesMiss`): text outside a <c>
+   * when a sheet backs <c> spans, timed text outside a tag for :past/:future rules. Captions
+   * only: chapter titles and metadata payloads are never wrapped.
+   */
+  stylesMiss = $derived(
+    this.format.id === 'webvtt' && (this.fileType === 'captions' || this.fileType === 'any')
+      ? cuesStylesMiss(this.doc)
+      : { wrap: 'none' as const, cues: [] },
+  );
+
+  /** Wraps the text of every cue the file's styles cannot reach, as one undo step. */
+  wrapForFileStyles(): void {
+    if (this.stylesMiss.cues.length === 0) return;
+    this.apply(wrapAsStylesNeed(this.doc), 'Wrap cue text in <c>');
+  }
 
   /** Body indices of cues, in order: row i of the cue table shows body[cueRows[i]]. */
   cueRows = $derived.by(() => {

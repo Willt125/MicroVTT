@@ -133,8 +133,8 @@ export function ruleTemplates(selectors: CueSelectors): { label: string; css: st
       label: 'Words not yet spoken, hidden, box growing with them (paint-on)',
       css: [
         rule('::cue', 'background: transparent;'),
-        rule('::cue(c)', 'background: rgba(0, 0, 0, 0.8);'),
-        rule('::cue(c c)', 'background: transparent;'),
+        rule(`::cue(${PLAIN_C})`, 'background: rgba(0, 0, 0, 0.8);'),
+        rule(`::cue(c ${PLAIN_C})`, 'background: transparent;'),
         rule('::cue(:future)', 'visibility: hidden;'),
       ].join('\n'),
     },
@@ -158,6 +158,14 @@ export function ruleTemplates(selectors: CueSelectors): { label: string; css: st
 }
 
 const CSS_IDENT = /^-?[_a-zA-Z][\w-]*$/;
+
+/**
+ * `c` without one of the spec's background colour classes (§5): those are presentational hints
+ * below every style sheet, so a background rule on all `c` spans would hide them.
+ */
+const PLAIN_C = `c:not(${['white', 'lime', 'cyan', 'red', 'yellow', 'magenta', 'blue', 'black']
+  .map((c) => `.bg_${c}`)
+  .join(', ')})`;
 
 /** `doc` with `wrap` applied to every cue's text; the same document when no cue changes. */
 function mapCueText(doc: VttDocument, wrap: (text: string) => string): VttDocument {
@@ -191,7 +199,7 @@ export const backsCSpans = (css: string): boolean =>
   parseStylesheet(css).rules.some(
     (r) =>
       !r.atRule &&
-      /::cue\(\s*c\s*\)/.test(r.prelude) &&
+      /::cue\(\s*c(?::not\([^)]*\))?\s*\)/.test(r.prelude) &&
       r.declarations.some((d) => d.name === 'background' || d.name === 'background-color'),
   );
 
@@ -219,3 +227,24 @@ export function wrapForStyles(doc: VttDocument): TextWrap {
 /** `text` wrapped as `wrap` says (`wrapTimedParts`, `wrapForBackground`). */
 export const applyTextWrap = (text: string, wrap: TextWrap): string =>
   wrap === 'all' ? wrapForBackground(text) : wrap === 'timed' ? wrapTimedParts(text) : text;
+
+/**
+ * Cues whose text the document's style sheets cannot reach, by body index, with the wrapping
+ * that fixes them (`wrapForStyles`): text outside a `<c>` where a sheet backs `c` spans, timed
+ * text outside a tag where one uses `:past` or `:future`. Empty when no sheet needs either.
+ */
+export function cuesStylesMiss(doc: VttDocument): { wrap: TextWrap; cues: number[] } {
+  const wrap = wrapForStyles(doc);
+  const cues: number[] = [];
+  if (wrap !== 'none')
+    doc.body.forEach((item, i) => {
+      if (item.type === 'cue' && applyTextWrap(item.text, wrap) !== item.text) cues.push(i);
+    });
+  return { wrap, cues };
+}
+
+/** `doc` with every cue wrapped as its style sheets need; the same document when none changes. */
+export const wrapAsStylesNeed = (doc: VttDocument): VttDocument => {
+  const wrap = wrapForStyles(doc);
+  return wrap === 'none' ? doc : mapCueText(doc, (text) => applyTextWrap(text, wrap));
+};

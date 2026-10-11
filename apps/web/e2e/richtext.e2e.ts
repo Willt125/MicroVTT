@@ -195,10 +195,11 @@ test('the growing-box paint-on style puts every cue in <c> and backs only the wo
     mimeType: 'text/vtt',
     buffer: Buffer.from(
       'WEBVTT\n\n00:00:01.000 --> 00:00:04.000\nOne <00:00:02.000>two <00:00:03.000><i>three</i>\n\n' +
-        '00:00:05.000 --> 00:00:07.000\nNo timings\n',
+        '00:00:05.000 --> 00:00:07.000\nNo timings\n\n' +
+        '00:00:08.000 --> 00:00:09.500\n<c.bg_yellow>Yellow</c>\n',
     ),
   });
-  await expect(status(page)).toContainText('2 cues');
+  await expect(status(page)).toContainText('3 cues');
   await page.getByRole('button', { name: 'Styles…' }).click();
   const dialog = page.getByRole('dialog', { name: 'Styles' });
   await dialog.getByRole('button', { name: 'Add style block' }).click();
@@ -240,6 +241,20 @@ test('the growing-box paint-on style puts every cue in <c> and backs only the wo
   // The cue without timings keeps a box, from its <c>.
   await page.locator('video').evaluate((v: HTMLVideoElement) => (v.currentTime = 6));
   await expect(word('No timings')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0.8)');
+  // The spec's background colour classes still show.
+  await page.locator('video').evaluate((v: HTMLVideoElement) => (v.currentTime = 8.5));
+  await expect(word('Yellow')).toHaveCSS('background-color', 'rgb(255, 255, 0)');
+
+  // A cue added later is listed with the problems, and wrapped from there.
+  const panel = page.locator('details.styles-miss');
+  await expect(panel).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add cue' }).click();
+  await cueText(page).fill('New words');
+  await expect(panel.locator('summary')).toHaveText('Not reached by the styles (1)');
+  await expect(panel).toContainText('text outside one shows without a background');
+  await panel.getByRole('button', { name: 'Wrap in <c> (1 cue)' }).click();
+  await expect(cueText(page)).toHaveValue('<c>New words</c>');
+  await expect(panel).toHaveCount(0);
 });
 
 test('taps word timings while the media plays', async ({ page }) => {

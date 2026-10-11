@@ -9,12 +9,14 @@ import {
   cueSelectors,
   backsCSpans,
   cuesOutsideC,
+  cuesStylesMiss,
   cuesWithUntaggedTiming,
   deleteStyle,
   exportDocument,
   ruleTemplates,
   styleSheetProblems,
   updateStyle,
+  wrapAsStylesNeed,
   wrapForBackgroundInAll,
   wrapTimedPartsInAll,
 } from '../src/index.ts';
@@ -163,5 +165,44 @@ describe('styles with the background on <c>', () => {
     ]);
     expect(cuesOutsideC(wrapped)).toBe(0);
     expect(wrapForBackgroundInAll(wrapped)).toBe(wrapped);
+  });
+});
+
+describe('cues the style sheets miss', () => {
+  const body = [
+    createCue(0, 3000, 'a <00:00:01.000>b'),
+    createCue(3000, 6000, 'plain'),
+    createCue(6000, 9000, '<c>done</c>'),
+  ];
+  const withCss = (css: string): VttDocument => ({
+    ...createDocument(),
+    head: [{ type: 'style', css }],
+    body,
+  });
+
+  it('lists them by what the sheets need, and wraps them as one change', () => {
+    expect(cuesStylesMiss({ ...createDocument(), body })).toEqual({ wrap: 'none', cues: [] });
+    expect(cuesStylesMiss(withCss('::cue(:future) { visibility: hidden; }'))).toEqual({
+      wrap: 'timed',
+      cues: [0],
+    });
+    const preset = ruleTemplates(cueSelectors(createDocument())).find((t) =>
+      t.label.includes('box growing'),
+    )?.css as string;
+    const box = withCss(preset);
+    expect(cuesStylesMiss(box)).toEqual({ wrap: 'all', cues: [0, 1] });
+    const fixed = wrapAsStylesNeed(box);
+    expect(cuesStylesMiss(fixed).cues).toEqual([]);
+    expect(fixed.body[2]).toBe(box.body[2]);
+    expect(wrapAsStylesNeed(fixed)).toBe(fixed);
+  });
+
+  it("leaves the spec's background colour classes to show through the box preset", () => {
+    const preset = ruleTemplates(cueSelectors(createDocument())).find((t) =>
+      t.label.includes('box growing'),
+    )?.css as string;
+    expect(preset).toContain('::cue(c:not(.bg_white, .bg_lime, .bg_cyan, .bg_red, .bg_yellow,');
+    expect(backsCSpans(preset)).toBe(true);
+    expect(styleSheetProblems(preset)).toEqual([]);
   });
 });
