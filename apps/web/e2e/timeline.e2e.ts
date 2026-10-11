@@ -25,16 +25,68 @@ async function inkedFraction(page: Page): Promise<number> {
   });
 }
 
-test.beforeEach(async ({ page }) => {
-  await openSample(page);
-  await openMedia(page);
-});
+/** The page x of a time on the timeline, from the view it reports. */
+async function xOf(page: Page, ms: number): Promise<number> {
+  const box = (await page.locator('.timeline canvas').boundingBox()) as { x: number };
+  const startMs = Number(await timeline(page).getAttribute('data-start-ms'));
+  const msPerPx = Number(await timeline(page).getAttribute('data-ms-per-px'));
+  return box.x + 1 + (ms - startMs) / msPerPx;
+}
 
-test('draws the waveform of the loaded media', async ({ page }) => {
-  await expect(timeline(page)).toHaveAttribute('data-waveform', 'ready', { timeout: 15_000 });
-  await expect(timeline(page)).toHaveAttribute('data-method', 'stream');
-  // The tone fills the band from 0 to 20 s; the default view shows 30 s.
-  await expect.poll(() => inkedFraction(page)).toBeGreaterThan(0.4);
+// With the sample cues and a 20 s tone open.
+test.describe('with media', () => {
+  test.beforeEach(async ({ page }) => {
+    await openSample(page);
+    await openMedia(page);
+  });
+
+  test('draws the waveform of the loaded media', async ({ page }) => {
+    await expect(timeline(page)).toHaveAttribute('data-waveform', 'ready', { timeout: 15_000 });
+    await expect(timeline(page)).toHaveAttribute('data-method', 'stream');
+    // The tone fills the band from 0 to 20 s; the default view shows 30 s.
+    await expect.poll(() => inkedFraction(page)).toBeGreaterThan(0.4);
+  });
+
+  test('selects a cue clicked in the lane, and seeks where clicked', async ({ page }) => {
+    const box = (await page.locator('.timeline canvas').boundingBox()) as {
+      y: number;
+      height: number;
+    };
+    // The third sample cue runs from 3.08 s to 5.53 s.
+    await page.mouse.click(await xOf(page, 4300), box.y + box.height - 8);
+    expect((await selectedCells(page)).num).toBe('3');
+    await page.mouse.click(await xOf(page, 12_000), box.y + box.height * 0.4);
+    // Within a few pixels (ms per pixel is about 15 here).
+    await expect.poll(() => mediaTime(page)).toBeCloseTo(12_000, -2);
+  });
+
+  test('zooms with the buttons', async ({ page }) => {
+    const before = await inkedFraction(page);
+    await timeline(page).getByRole('button', { name: 'Whole file' }).click();
+    await timeline(page).getByRole('button', { name: 'Zoom in' }).click();
+    await expect.poll(() => inkedFraction(page)).not.toBe(before);
+  });
+
+  test('streams compressed audio (Opus) where the browser can decode it', async ({
+    page,
+    browserName,
+  }) => {
+    await mediaInput(page).setInputFiles(
+      new URL('./media/tone-opus.webm', import.meta.url).pathname,
+    );
+    await expect(timeline(page)).not.toHaveAttribute('data-waveform', 'loading', {
+      timeout: 15_000,
+    });
+    const state = await timeline(page).getAttribute('data-waveform');
+    const method = await timeline(page).getAttribute('data-method');
+    if (browserName === 'webkit') {
+      // WebKit builds without WebCodecs Opus fall back (or explain why there is no waveform).
+      expect(['ready', 'unavailable']).toContain(state);
+    } else {
+      expect([state, method]).toEqual(['ready', 'stream']);
+      await expect.poll(() => inkedFraction(page)).toBeGreaterThan(0.1);
+    }
+  });
 });
 
 // A persistent profile: Playwright's default (ephemeral) context has no origin-private file
@@ -69,51 +121,7 @@ test('reuses the peaks when the same file is opened again', async ({
   }
 });
 
-/** The page x of a time on the timeline, from the view it reports. */
-async function xOf(page: Page, ms: number): Promise<number> {
-  const box = (await page.locator('.timeline canvas').boundingBox()) as { x: number };
-  const startMs = Number(await timeline(page).getAttribute('data-start-ms'));
-  const msPerPx = Number(await timeline(page).getAttribute('data-ms-per-px'));
-  return box.x + 1 + (ms - startMs) / msPerPx;
-}
-
-test('selects a cue clicked in the lane, and seeks where clicked', async ({ page }) => {
-  const box = (await page.locator('.timeline canvas').boundingBox()) as {
-    y: number;
-    height: number;
-  };
-  // The third sample cue runs from 3.08 s to 5.53 s.
-  await page.mouse.click(await xOf(page, 4300), box.y + box.height - 8);
-  expect((await selectedCells(page)).num).toBe('3');
-  await page.mouse.click(await xOf(page, 12_000), box.y + box.height * 0.4);
-  // Within a few pixels (ms per pixel is about 15 here).
-  await expect.poll(() => mediaTime(page)).toBeCloseTo(12_000, -2);
-});
-
-test('zooms with the buttons', async ({ page }) => {
-  const before = await inkedFraction(page);
-  await timeline(page).getByRole('button', { name: 'Whole file' }).click();
-  await timeline(page).getByRole('button', { name: 'Zoom in' }).click();
-  await expect.poll(() => inkedFraction(page)).not.toBe(before);
-});
-
-test('streams compressed audio (Opus) where the browser can decode it', async ({
-  page,
-  browserName,
-}) => {
-  await mediaInput(page).setInputFiles(new URL('./media/tone-opus.webm', import.meta.url).pathname);
-  await expect(timeline(page)).not.toHaveAttribute('data-waveform', 'loading', { timeout: 15_000 });
-  const state = await timeline(page).getAttribute('data-waveform');
-  const method = await timeline(page).getAttribute('data-method');
-  if (browserName === 'webkit') {
-    // WebKit builds without WebCodecs Opus fall back (or explain why there is no waveform).
-    expect(['ready', 'unavailable']).toContain(state);
-  } else {
-    expect([state, method]).toEqual(['ready', 'stream']);
-    await expect.poll(() => inkedFraction(page)).toBeGreaterThan(0.1);
-  }
-});
-
+// A fresh page: the metadata must be held back from the first load on.
 test('fits the whole media once its duration is known, even when that comes late', async ({
   page,
 }) => {
