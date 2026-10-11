@@ -201,3 +201,28 @@ export {
   updateStyle,
 } from './styles.ts';
 export type { CueSelectors, StyleProblem } from './styles.ts';
+export {
+  classProblem,
+  clearMarkup,
+  cueWords,
+  escapeAnnotation,
+  escapeCueText,
+  insertTimestamp,
+  languageProblem,
+  markupSpans,
+  outerRange,
+  removeSpan,
+  removeTimestamp,
+  removeTimestamps,
+  setTimestamp,
+  spanTags,
+  spansAt,
+  spreadWordTimes,
+  timestampProblems,
+  timestampTags,
+  timeWords,
+  unwrapRange,
+  wellFormedRange,
+  wrapRange,
+} from './markup.ts';
+export type { MarkupEdit, MarkupKind, MarkupSpan, TextRange, TimestampTag } from './markup.ts';

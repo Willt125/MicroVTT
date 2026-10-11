@@ -657,7 +657,27 @@ Next, in this order (owner, 2026-10-11):
     preview draws the selected (or first) cue with the styles.
   - Core: `addStyle`, `updateStyle`, `deleteStyle`, `styleSheetProblems`, `cueSelectors`,
     `ruleTemplates`, `NEW_STYLE_SHEET`.
-- A rich cue-text editor for spans, voices, ruby, lang, and karaoke timestamps.
+- [x] **6e: rich cue-text editing** (2026-10-11). The owner chose markup tools over a
+      formatted (WYSIWYG) editor: the text field stays the source, so markup the tools do not touch
+      is kept exactly as written.
+  - A toolbar over the cue text: italic, bold, underline (Ctrl/⌘+I, B, U; strikethrough too in
+    SubRip) turn a span on or off for the selection, taking just the selection out of a span it
+    is in (`<i>a|b|c</i>` → `<i>a</i>b<i>c</i>`). WebVTT adds Class…, Voice…, Language… and
+    Ruby…, with checked values and suggestions from what the file uses. Clear removes the spans
+    in the selection (all of them with no selection), keeping word timings. A selection is grown
+    so new markup never crosses a span, and never splits a tag, a character reference or a
+    SubRip override block; ruby text stays directly inside its ruby.
+  - A breadcrumb under the text lists the spans at the cursor (e.g. Voice Bob › Italic): click
+    one to select its text, × to remove it (its text stays; ruby text goes with its ruby).
+  - Word timing (WebVTT): the cue's timestamps, each with the word it starts, editable, with
+    checks (inside the cue, after the one before); insert one at the cursor (at the playhead, or
+    halfway between its neighbours without media); spread the cue over its words by their length;
+    remove all; and tap timing: play the cue and tap (Space on the Tap button) as each word
+    starts. Words are found with `Intl.Segmenter`, so unspaced scripts are timed by word too.
+  - Core (`markup.ts`): `markupSpans`, `spansAt`, `wellFormedRange`, `wrapRange`, `unwrapRange`,
+    `removeSpan`, `clearMarkup`, `spanTags`, `classProblem`, `languageProblem`,
+    `timestampTags`, `setTimestamp`, `removeTimestamp(s)`, `insertTimestamp`,
+    `timestampProblems`, `cueWords`, `timeWords`, `spreadWordTimes`.
 - Chapters and metadata file modes.
 - The scroll-up animation of regions (0.433s): scroll-up regions show their latest lines, but
   the renderer rebuilds the cues it draws whenever they change, so nothing moves smoothly yet.
@@ -841,6 +861,9 @@ Next, in this order (owner, 2026-10-11):
   BOM, renumber, and write UTF-8 (the original encoding when every character fits). Its editable
   markup is `<b>` `<i>` `<u>` `<font color>` and `{\an1}`–`{\an9}`; other brace blocks are kept
   as found. The preview converts SRT to WebVTT for the spec renderer.
+- **2026-10-11 (owner):** Rich cue-text editing is markup tools over the raw text field (with a
+  breadcrumb of the spans at the cursor), not a formatted editor. Word timing includes editing,
+  spreading and tap timing in the same PR.
 - **2026-10-11 (Phase 6a):** The spec renderer is the default preview: it draws the same in
   every browser and follows the spec where browsers differ. Where WPT's references contradict the
   spec, the spec wins, and each case is listed with its reason.

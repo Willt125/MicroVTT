@@ -416,6 +416,7 @@
         <CueEditor
           {editor}
           bind:textarea
+          {player}
           onregions={editor.format.cueSettings.includes('region')
             ? () => (regionsOpen = true)
             : undefined}
