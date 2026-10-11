@@ -17,6 +17,7 @@ import {
   type VttDocument,
 } from './document.ts';
 import { DEFAULT_CUE_SETTINGS } from './regions.ts';
+import { addStyle } from './styles.ts';
 import { textTimestamps, type TextDialect } from './format/dialect.ts';
 import { WEBVTT_TEXT } from './format/webvtt-text.ts';
 
@@ -28,9 +29,20 @@ export interface RollUpOptions {
   lines: number;
   /** A pause between cues at least this long clears the screen. */
   clearAfterMs: number;
+  /**
+   * For the region form: a background behind each line, as pop-on cues have, rather than the
+   * region's own box (the spec's default, the region's full width and every line high). Adds a
+   * STYLE block with `::cue-region(#id) { background: transparent; }`.
+   */
+  lineBackgrounds: boolean;
 }
 
-export const DEFAULT_ROLL_UP: RollUpOptions = { form: 'region', lines: 3, clearAfterMs: 1000 };
+export const DEFAULT_ROLL_UP: RollUpOptions = {
+  form: 'region',
+  lines: 3,
+  clearAfterMs: 1000,
+  lineBackgrounds: true,
+};
 
 /** One roll-up line: its raw text and when it starts. */
 export interface RollUpLine {
@@ -235,6 +247,11 @@ export function makeRollUp(
     const lastRegion = head.reduce((at, h, i) => (h.type === 'region' ? i : at), -1);
     head = [...head];
     head.splice(lastRegion + 1, 0, region);
+    if (o.lineBackgrounds)
+      head = addStyle(
+        { ...doc, head },
+        `::cue-region(#${regionId}) {\n  background: transparent;\n}`,
+      ).document.head;
   }
   return {
     document: { ...doc, head, body },

@@ -8,6 +8,7 @@ import {
   cueLines,
   makeRollUp,
   serialize,
+  styleSheetProblems,
   validate,
 } from '../src/index.ts';
 
@@ -61,6 +62,12 @@ describe('making roll-up captions', () => {
       [15000, 17000, 'After a pause.'],
     ]);
     expect(cuesOf(r.document).every((c) => c.region === 'rollup' && c.line === 'auto')).toBe(true);
+    // Each line keeps its own background, as pop-on cues do, rather than the region's box.
+    const sheets = r.document.head.flatMap((h) => (h.type === 'style' ? [h.css] : []));
+    expect(sheets).toEqual(['::cue-region(#rollup) {\n  background: transparent;\n}']);
+    expect(styleSheetProblems(sheets[0] as string)).toEqual([]);
+    const boxed = makeRollUp(doc(), [0, 1, 2, 3], { lineBackgrounds: false }).document;
+    expect(boxed.head.some((h) => h.type === 'style')).toBe(false);
     expect(validate(serialize(r.document)).diagnostics).toEqual([]);
   });
 

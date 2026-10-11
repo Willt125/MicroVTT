@@ -741,7 +741,11 @@ hidden; }`; hidden words keep their place, as the layout does not change with ti
     and reopened at line breaks). Two forms (`makeRollUp`): one-line cues overlapping in a new
     `scroll:up` region, each shown until the line `lines` places later pushes it out; or cues
     that repeat the last `lines` lines (YouTube's form). A pause of a second or more clears the
-    screen. Regions are WebVTT only; SubRip gets repeated lines. Chrome's own caption rendering
+    screen. A region draws its own box by default (§7.4: its full width and every line high, behind
+    the lines), which also covers paint-on words not yet shown; so by default the tool adds
+    `::cue-region(#rollup) { background: transparent; }`, and each line keeps its own background
+    as a pop-on cue does (an option turns this off; the growing-box paint-on preset clears region
+    backgrounds too). Regions are WebVTT only; SubRip gets repeated lines. Chrome's own caption rendering
     ignores regions and stacks the lines newest on top; YouTube drops regions. Repeated lines
     look like YouTube auto-captions, so a file saved that way is offered cleanup when reopened
     (the offer says it looks like roll-up captions, and to keep them if rolled up on purpose).
