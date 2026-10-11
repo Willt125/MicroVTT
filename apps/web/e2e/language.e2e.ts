@@ -1,6 +1,6 @@
 /** Text in other languages and scripts: the editor's language, direction marks, find. */
 import { expect, test, type Page } from '@playwright/test';
-import { cueText, rows, status, vttInput } from './support.ts';
+import { cueList, cueText, rows, status, vttInput } from './support.ts';
 
 async function open(page: Page, name: string, text: string): Promise<void> {
   await page.goto('/');
@@ -67,6 +67,8 @@ test('suggests rules for the text’s language', async ({ page }) => {
 
 test('finds letters however they are encoded', async ({ page }) => {
   await open(page, 'cafe.vtt', 'WEBVTT\n\n00:00.000 --> 00:02.000\nCafe\u0301 ja café\n');
+  // Focus the page first: with nothing focused, Firefox can take Ctrl+F as its own find.
+  await cueList(page).focus();
   await page.keyboard.press('ControlOrMeta+f');
   await page.getByLabel('Find', { exact: true }).fill('café');
   const bar = page.getByRole('region', { name: 'Find and replace' });
