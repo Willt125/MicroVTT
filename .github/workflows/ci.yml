@@ -32,6 +32,14 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm build:single
+      # The single-file editor, to download and try from disk.
+      - uses: actions/upload-artifact@v7
+        if: matrix.node == '24'
+        with:
+          name: microvtt-single-file
+          path: apps/web/dist-single/microvtt.html
+          retention-days: 30
 
   e2e:
     runs-on: ubuntu-latest

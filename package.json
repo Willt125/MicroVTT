@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "pnpm --filter @microvtt/web dev",
     "build": "pnpm -r build",
+    "build:single": "pnpm --filter @microvtt/web build:single",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "pnpm --filter @microvtt/web e2e",

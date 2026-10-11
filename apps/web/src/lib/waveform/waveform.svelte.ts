@@ -5,6 +5,7 @@
  * media then has no waveform, only the timeline.
  */
 import type { WaveformMethod, WaveformRequest, WaveformResponse } from './protocol.ts';
+import { createWaveformWorker } from '../workers.ts';
 
 /**
  * Longest media decoded whole by the fallback. `decodeAudioData` decodes at the codec's own rate
@@ -54,9 +55,7 @@ export class Waveform {
     this.file = file;
     this.mediaDurationMs = mediaDurationMs;
     this.state = 'loading';
-    // Vite resolves the worker from this exact form; it is not reactive state.
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity
-    this.worker = new Worker(new URL('./waveform.worker.ts', import.meta.url), { type: 'module' });
+    this.worker = createWaveformWorker();
     this.worker.onmessage = (event: MessageEvent<WaveformResponse>) => this.receive(event.data);
     this.worker.onerror = (event) => {
       this.state = 'error';

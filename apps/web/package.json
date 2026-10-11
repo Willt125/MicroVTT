@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:single": "vite build --mode single",
     "preview": "vite preview",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json && tsc -p e2e",
     "e2e": "playwright test"
@@ -25,6 +26,7 @@
     "typescript": "~6.0.3",
     "videojs-vtt.js": "^0.15.5",
     "vite": "^8.3.2",
+    "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^5.0.3"
   }
 }
