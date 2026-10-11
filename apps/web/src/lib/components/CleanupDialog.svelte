@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
   import type { CleanupOptions, CleanupResult, Cue } from '@microvtt/core';
+  import { RULESETS, cleanupLineDefaults } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import { plainText } from '../display.ts';
   import { formatTime } from '../time.ts';
@@ -23,6 +24,10 @@
   // Options (seconds in the form, milliseconds for the engine).
   let maxLineLength = $state(42);
   let maxLines = $state(2);
+  /** Half-width characters count as half (Japanese, Korean). */
+  let halfWidthHalf = $state(false);
+  /** Where the line limits came from (a ruleset or a language), or null for the default. */
+  let limitsFrom = $state<string | null>(null);
   let minDuration = $state(1);
   let maxDuration = $state(7);
   let maxCharsPerSecond = $state(20);
@@ -31,8 +36,8 @@
   let wordBreaks = $state(false);
   let keepWordTimings = $state(true);
   let keepCueSettings = $state(false);
-  let collapseSpaces = $state(false);
-  let removeDoubledZeroWidthSpaces = $state(false);
+  let collapseSpaces = $state(true);
+  let removeDoubledZeroWidthSpaces = $state(true);
 
   const info = $derived(editor.autoCaptions);
   const approximate = $derived(info?.approximateTimings ?? false);
@@ -52,6 +57,17 @@
       await editor.detectAutoCaptions();
       checking = false;
     }
+    // Line limits from the chosen style guide when it fits the text, else from the language.
+    const { ruleset: id, overrides } = editor.qualitySettings;
+    const limits = cleanupLineDefaults(
+      RULESETS.find((r) => r.id === id),
+      overrides[id] ?? {},
+      editor.language,
+    );
+    maxLineLength = limits.maxLineLength;
+    maxLines = limits.maxLines;
+    halfWidthHalf = limits.halfWidth < 1;
+    limitsFrom = limits.from;
     // Translations' word times are estimates: default to line breaks and no timing tags.
     keepWordTimings = !approximate;
     wordBreaks = false;
@@ -59,6 +75,7 @@
 
   const options = $derived<Partial<CleanupOptions>>({
     maxLineLength,
+    halfWidth: halfWidthHalf ? 0.5 : 1,
     maxLines,
     minDurationMs: Math.round(minDuration * 1000),
     maxDurationMs: Math.round(maxDuration * 1000),
@@ -149,6 +166,14 @@
       >
       <label>Lines per cue <input type="number" min="1" max="5" bind:value={maxLines} /></label>
       <label
+        class="inline"
+        title="As the Japanese and Korean guides count: Latin letters, digits, spaces and ASCII punctuation"
+        ><input type="checkbox" bind:checked={halfWidthHalf} /> Half-width characters count as half</label
+      >
+      {#if limitsFrom}
+        <p class="muted limits-from">Line limits from {limitsFrom}.</p>
+      {/if}
+      <label
         >Shortest cue (s) <input type="number" min="0" step="0.1" bind:value={minDuration} /></label
       >
       <label
@@ -190,10 +215,12 @@
       <label
         ><input type="checkbox" bind:checked={keepCueSettings} /> Keep YouTube's left-aligned positioning</label
       >
-      <label><input type="checkbox" bind:checked={collapseSpaces} /> Collapse repeated spaces</label
+      <label
+        title="Repeated spaces become one; spaces between Chinese or Japanese characters (which machine translation adds after 。 and 、) are removed"
+        ><input type="checkbox" bind:checked={collapseSpaces} /> Tidy spaces</label
       >
       <label
-        title="U+200B is real word separation in some scripts (Thai, Khmer…); pairs of them are an artifact of machine translation"
+        title="A single U+200B separates words in some scripts (Thai, Khmer…) and is kept; doubled ones, and ones next to a space, are artifacts of machine translation"
         ><input type="checkbox" bind:checked={removeDoubledZeroWidthSpaces} /> Remove doubled zero-width
         spaces</label
       >
@@ -218,7 +245,9 @@
           {#each sample as cue, i (i)}
             <li>
               <span class="time">{formatTime(cue.startMs)}</span>
-              <span class="text">{plainText(cue.text)}</span>
+              <span class="text" dir="auto" lang={editor.language ?? undefined}
+                >{plainText(cue.text)}</span
+              >
             </li>
           {/each}
         </ol>
@@ -262,6 +291,16 @@
     flex-direction: column;
     gap: 0.15rem;
     font-size: 0.88rem;
+  }
+  fieldset label.inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .limits-from {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 0.85rem;
   }
   fieldset input[type='number'] {
     width: 6rem;

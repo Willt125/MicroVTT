@@ -2,12 +2,15 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { Cue, VttDocument } from '../src/index.ts';
 import {
+  RULESETS,
   cleanupAutoCaptions,
+  cleanupLineDefaults,
   createCue,
   createDocument,
   detectAutoCaptions,
   extractLines,
   findReviewMarkers,
+  formatTimestamp,
   importDocument,
   parseTimestamp,
   segment,
@@ -33,7 +36,7 @@ const words = (raw: string): string[] =>
     .filter(Boolean);
 
 /**
- * The Phase 4 acceptance checks: the result conforms, no word is lost or reordered, cues are in
+ * The Phase 4 acceptance checks: the result conforms, no text is lost or reordered, cues are in
  * order without overlaps, every cue's times lie within its own words' times, word timestamps lie
  * inside their cue in increasing order, and lines respect the length limit (a single word that
  * is longer, or punctuation that must stay with its word, may exceed it).
@@ -46,8 +49,11 @@ function checkCleanup(doc: VttDocument): void {
   const errors = validate(serialize(out)).diagnostics.filter((d) => d.severity === 'error');
   expect(errors).toEqual([]);
 
+  // Every character kept, in order (separators aside: spaces are tidied, and lines of scripts
+  // without spaces join without one).
+  const flat = (text: string) => text.replace(/<[^>]*>/g, '').replace(/[ \t\n\u200b]+/g, '');
   const source = lines.flatMap((l) => l.groups.flatMap((g) => g.words.map((w) => w.text)));
-  expect(cues.flatMap((c) => words(c.text))).toEqual(source);
+  expect(flat(cues.map((c) => c.text).join(''))).toBe(flat(source.join('')));
 
   // A cue starts on a word group's start and ends inside its last group (at its end, or
   // earlier when a word before a pause is held for at most maxWordHoldMs).
@@ -65,9 +71,9 @@ function checkCleanup(doc: VttDocument): void {
       if (ts.ok) last = ts.ms;
     }
     for (const line of cue.text.split('\n')) {
-      const ws = words(line);
-      if (visibleLength(line) > 42)
-        expect(ws.length === 1 || /^[.,!?…;:]+$/.test(ws.at(-1) as string)).toBe(true);
+      // Closing punctuation stays with its word, so may run over.
+      const closing = /(?:<[^>]*>)*[.,!?…;:'"”’»。、！？]+$/u;
+      if (visibleLength(line.replace(closing, '')) > 42) expect(words(line).length).toBe(1);
     }
   });
 }
@@ -248,24 +254,205 @@ describe('cleanup', () => {
     expect(kept[0]).toMatchObject({ align: 'start', position: 0 });
   });
 
-  it('changes whitespace only when asked', () => {
+  it('tidies whitespace by default, and keeps it when asked', () => {
     const all = (doc: VttDocument) =>
       cuesOf(doc)
         .map((c) => c.text)
         .join('\n');
     const wide = { maxLineLength: 100 }; // One line per cue, so the separators stay inline.
-    const kept = all(cleanupAutoCaptions(translated(), wide).document);
-    expect(kept).toContain('pajaan.  Tänään');
-    expect(kept).toContain('\u200b\u200b');
-    const cleaned = all(
+    const kept = all(
       cleanupAutoCaptions(translated(), {
         ...wide,
-        collapseSpaces: true,
-        removeDoubledZeroWidthSpaces: true,
+        collapseSpaces: false,
+        removeDoubledZeroWidthSpaces: false,
       }).document,
     );
+    expect(kept).toContain('pajaan.  Tänään');
+    expect(kept).toContain('\u200b\u200b');
+    const cleaned = all(cleanupAutoCaptions(translated(), wide).document);
     expect(cleaned).toContain('pajaan. Tänään');
     expect(cleaned).not.toContain('\u200b');
+  });
+
+  /**
+   * YouTube-style roll-up captions from lines of words, each word with its own separator
+   * ("word " in spaced scripts, nothing in Chinese or Japanese, U+200B in Thai machine output).
+   */
+  function rollUp(lines: string[][], stepMs = 500): VttDocument {
+    const parts = ['WEBVTT\nKind: captions\n'];
+    let t = 0;
+    let shown = ' ';
+    for (const ws of lines) {
+      const end = t + ws.length * stepMs;
+      const timed = ws
+        .map((w, i) => (i === 0 ? w : `<${formatTimestamp(t + i * stepMs)}><c>${w}</c>`))
+        .join('');
+      const cue = (from: number, to: number, text: string) =>
+        `${formatTimestamp(from)} --> ${formatTimestamp(to)} align:start position:0%\n${text}\n`;
+      parts.push(cue(t, end, `${shown}\n${timed}`));
+      shown = ws.join('');
+      parts.push(cue(end, end + 10, `${shown}\n `));
+      t = end + 10;
+    }
+    return docOf(parts.join('\n'));
+  }
+  const textOf = (doc: VttDocument, options = {}) =>
+    cuesOf(cleanupAutoCaptions(doc, { keepWordTimings: false, ...options }).document)
+      .map((c) => c.text)
+      .join('\n');
+
+  it('adds no spaces to scripts written without them', () => {
+    const ja = rollUp([
+      ['今日は', 'いい', '天気', 'ですね。'],
+      ['散歩に', '行きましょう。'],
+    ]);
+    expect(detectAutoCaptions(ja).detected).toBe(true);
+    expect(textOf(ja, { maxLineLength: 100 }).replace(/\n/g, '')).toBe(
+      '今日はいい天気ですね。散歩に行きましょう。',
+    );
+    expect(textOf(ja, { maxLineLength: 100 })).not.toMatch(/ /);
+    const zh = rollUp([['我们', '今天', '去', '公园，'], ['好吗？']]);
+    expect(textOf(zh, { maxLineLength: 100 })).toBe('我们今天去公园，好吗？');
+  });
+
+  it('keeps a single zero-width space between Thai words and drops doubled ones', () => {
+    const th = rollUp([['สวัสดี\u200b\u200b', 'ครับ\u200b', 'วันนี้']]);
+    expect(textOf(th, { maxLineLength: 100 })).toBe('สวัสดี\u200bครับ\u200bวันนี้');
+  });
+
+  it('joins lines with a space in spaced scripts, Arabic and Hindi included', () => {
+    const ar = rollUp([
+      ['مرحبا ', 'بكم'],
+      ['في ', 'البرنامج.'],
+    ]);
+    expect(textOf(ar, { maxLineLength: 100 })).toBe('مرحبا بكم في البرنامج.');
+    const hi = rollUp([
+      ['नमस्ते ', 'दोस्तों।'],
+      ['आज ', 'हम'],
+    ]);
+    expect(textOf(hi, { maxLineLength: 100 })).toBe('नमस्ते दोस्तों। आज हम');
+  });
+
+  it('breaks at non-Latin sentence ends and counts graphemes', () => {
+    expect(visibleLength('नमस्ते')).toBeLessThanOrEqual(4); // Grapheme rules vary by Unicode version.
+    expect(visibleLength('👩\u200d👩\u200d👧')).toBe(1);
+    const ja = rollUp([
+      ['これは', '最初の', '文です。'],
+      ['これは', '二番目の', '文です。'],
+    ]);
+    const cues = cuesOf(
+      cleanupAutoCaptions(ja, { maxLineLength: 10, keepWordTimings: false }).document,
+    );
+    expect(cues.map((c) => c.text.replace(/\n/g, ''))).toEqual([
+      'これは最初の文です。',
+      'これは二番目の文です。',
+    ]);
+  });
+
+  /** A YouTube machine translation: evenly timed pieces, lines held over above a blank line. */
+  const machineTranslated = (lines: string[][], holdOver = true): VttDocument => {
+    const parts = ['WEBVTT\n'];
+    const cue = (from: number, to: number, text: string) =>
+      `${formatTimestamp(from)} --> ${formatTimestamp(to)} align:start position:0%\n${text}\n`;
+    let t = 0;
+    let shown = ' ';
+    for (const ws of lines) {
+      const end = t + ws.length * 300;
+      const timed = ws
+        .map((w, i) => (i === 0 ? w : `<${formatTimestamp(t + i * 300)}><c>${w}</c>`))
+        .join('');
+      parts.push(cue(t, end, `${shown}\n${timed}`));
+      shown = ws.join('');
+      // The new line held on for a while, then handed off.
+      if (holdOver) parts.push(cue(end, end + 1500, `${shown}\n `));
+      parts.push(cue(end + (holdOver ? 1500 : 0), end + (holdOver ? 1510 : 10), `${shown}\n `));
+      t = end + (holdOver ? 1510 : 10);
+    }
+    return docOf(parts.join('\n'));
+  };
+
+  it('reads machine translations: held-over lines, stray punctuation and split words', () => {
+    const ko = machineTranslated([
+      ['이 ', '헤드', '라인', '을 ', '설명', '해 ', '주실 ', '분 ', '계신가', '요'],
+      ['?'],
+      ['나', '도 ', '전혀 ', '모르겠어', '.'],
+    ]);
+    // Held-over lines are not new lines, and a line of punctuation joins the line before it.
+    expect(textOf(ko, { maxLineLength: 100 }).replace(/\n/g, ' ')).toBe(
+      '이 헤드라인을 설명해 주실 분 계신가요? 나도 전혀 모르겠어.',
+    );
+    // A line is never broken inside a word split over pieces ("헤드" + "라인").
+    for (const line of textOf(ko, { maxLineLength: 12 }).split('\n'))
+      expect(line).not.toMatch(/헤드$|^라인/);
+
+    const ja = machineTranslated([
+      ['これが', '広がった', '。 ', 'わから'],
+      ['ない', '。'],
+      ['そして', '私は', '決めた', '。'],
+    ]);
+    const cues = cuesOf(cleanupAutoCaptions(ja, { keepWordTimings: false }).document);
+    // No space after "。", and the word split over two lines ("わから" + "ない") stays whole.
+    expect(cues.map((c) => c.text).join('')).not.toMatch(/ /);
+    for (const limit of [8, 10, 42]) {
+      const text = textOf(ja, { maxLineLength: limit });
+      expect(text).toContain('わからない');
+      expect(text.split('\n').some((l) => l.endsWith('わから'))).toBe(false);
+    }
+  });
+
+  it('starts from the chosen guide’s line limits, then the language’s, then 42', () => {
+    const byId = (id: string) => RULESETS.find((r) => r.id === id);
+    expect(cleanupLineDefaults(byId('netflix-ja'), {}, 'ja')).toEqual({
+      maxLineLength: 13,
+      maxLines: 2,
+      halfWidth: 0.5,
+      from: 'Netflix Japanese',
+    });
+    // The user's changes to the ruleset count; a third (SDH) line does not.
+    expect(
+      cleanupLineDefaults(
+        byId('netflix-zh-hans-sdh'),
+        { 'line-length': { params: { max: 15 } } },
+        'zh',
+      ),
+    ).toMatchObject({ maxLineLength: 15, maxLines: 2 });
+    // A guide for another language, or no guide: the language's usual limits.
+    expect(cleanupLineDefaults(byId('netflix-en-us'), {}, 'ko')).toEqual({
+      maxLineLength: 16,
+      maxLines: 2,
+      halfWidth: 0.5,
+      from: 'Korean',
+    });
+    expect(cleanupLineDefaults(byId('lite'), {}, 'zh-TW').maxLineLength).toBe(16);
+    expect(cleanupLineDefaults(byId('bbc'), {}, null)).toMatchObject({ maxLineLength: 37 });
+    expect(cleanupLineDefaults(byId('lite'), {}, 'fi')).toEqual({
+      maxLineLength: 42,
+      maxLines: 2,
+      halfWidth: 1,
+      from: null,
+    });
+  });
+
+  it('counts half-width characters as half when asked', () => {
+    const ko = machineTranslated([
+      ['오늘 ', '날씨가 ', '정말 ', '좋네요 ', 'OK ', '공원에 ', '갈까요'],
+    ]);
+    const lines = (halfWidth: number) =>
+      cuesOf(
+        cleanupAutoCaptions(ko, { maxLineLength: 16, halfWidth, keepWordTimings: false }).document,
+      ).flatMap((c) => c.text.split('\n'));
+    // Every line keeps to 16 by the guide's count.
+    for (const line of lines(0.5)) expect(visibleLength(line, 0.5)).toBeLessThanOrEqual(16);
+    expect(lines(1).every((l) => visibleLength(l) <= 16)).toBe(true);
+    const flat = (ls: string[]) => ls.join('').replace(/\s/g, '');
+    expect(flat(lines(0.5))).toBe(flat(lines(1)));
+    // At half width the whole text (16 Hangul, 6 spaces, "OK": 20) fits one line of 20; at full
+    // width (24) it does not.
+    const one = (halfWidth: number) =>
+      cuesOf(cleanupAutoCaptions(ko, { maxLineLength: 20, maxLines: 1, halfWidth }).document)
+        .length;
+    expect(one(0.5)).toBe(1);
+    expect(one(1)).toBeGreaterThan(1);
   });
 
   it('keeps notes in place and the head unchanged', () => {

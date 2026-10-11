@@ -86,6 +86,7 @@ export type { CueUpdate, SyncPoint } from './edit.ts';
 export {
   DEFAULT_SEGMENT_OPTIONS,
   cleanupAutoCaptions,
+  cleanupLineDefaults,
   detectAutoCaptions,
   extractLines,
   findReviewMarkers,
@@ -101,6 +102,7 @@ export type {
   CleanupOptions,
   CleanupReport,
   CleanupResult,
+  LineDefaults,
   ReviewKind,
   ReviewMarker,
   Segment,
@@ -135,3 +137,13 @@ export type { LegacyTag } from './legacy-text.ts';
 export { applyQuickFix, findQuickFixes } from './quickfix.ts';
 export type { QuickFix, QuickFixKind } from './quickfix.ts';
 export * from './quality/index.ts';
+export { breakUnits, hasUnspaced, joinLines, joinsWithoutSpace } from './script.ts';
+export type { BreakUnit } from './script.ts';
+export {
+  guessLanguage,
+  languageHint,
+  languageMatches,
+  languageName,
+  sampleText,
+} from './language.ts';
+export type { LanguageGuess, LanguageHint, LanguageHintSource } from './language.ts';

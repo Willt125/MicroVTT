@@ -330,8 +330,9 @@ Split into three PRs:
       characters per second, or starting with punctuation alone. A whole sound-tag line
       (`[Music]`) gets a cue of its own. The last word before a pause is held for at most 2 s
       (a word otherwise lasts until the next one, so music or silence stretched cues to 14 s).
-      Lines are balanced, preferring punctuation. Translated tracks break only between YouTube's lines by default (their word
-      times are guesses); breaking between words is an option.
+      Lines are balanced, preferring punctuation. Translated tracks break only between YouTube's
+      lines and at sentence ends within them by default (their word times are guesses); breaking
+      between words is an option.
 - [x] Output: word timings kept as timestamp tags (default for speech recognition, off for
       translations), cue settings reset to defaults (YouTube's `align:start position:0%` kept
       on request), notes kept in place, head unchanged. Optional whitespace cleanup: collapse
@@ -507,34 +508,72 @@ in `docs/QUALITY-RULES.md`.
 ### Ongoing: text in any language and script
 
 The editor should handle non-English and non-Latin text well: pick up language hints on import,
-and process and render each script correctly. Done alongside the phases, not as one PR. Known
-gaps (2026-10-08):
+and process and render each script correctly. Done alongside the phases, not as one PR.
 
-- [ ] Auto-caption cleanup inserts spaces between timed words that had none (`gapText`), which
-      breaks Japanese, Chinese, Thai and other unspaced scripts. Keep empty gaps empty, and join
-      lines without a space in those scripts. Confirm on a real YouTube Japanese auto-caption file.
-- [ ] Lengths in graphemes (`Intl.Segmenter`), not UTF-16 units, so combining marks (Devanagari,
-      Thai, decomposed Vietnamese) and astral characters (emoji, rare Han) count once. Line-length
-      and reading-speed presets per script (CJK lines are about 13–16 full-width characters);
-      belongs with 5c.
-- [ ] Line-break preferences that know non-Latin punctuation (`。、！？`, `؟ ،`, `।`, `¿¡`), and
-      never start a line with closing punctuation of any script.
-- [ ] `dir="auto"` on cue text in the editor and the table, so right-to-left cues (Arabic,
-      Hebrew, Persian, Urdu) display and edit with the right base direction. Make direction marks
-      (U+200E, U+200F and the isolates) visible and insertable.
-- [ ] Language hints on import: YouTube's `Language:` header, a language code in the file name
-      (`video.ja.vtt`, as yt-dlp writes), and `<lang>` spans. An explicit hint sets the `lang`
-      of the text fields (spell check, and the right Han glyphs for Japanese against Chinese);
-      without one, the text fields keep the page language.
-- [ ] Without an explicit hint, guess the language and, only when the guess is confident, ask
-      whether to use it. Script alone settles some (kana: Japanese; Hangul: Korean; Thai); letters
-      distinguish others (Ukrainian `ії є`, Persian `پ چ ژ گ`, Urdu `ے ٹ`); Latin-script languages
-      need a small n-gram model. Never switch silently.
-- [ ] Find: optional Unicode normalization (NFC against NFD), and note the limits of
-      case-insensitive matching (Turkish `İ`/`ı`, `ß`).
-- [ ] More fallback encodings: Windows-1258 (Vietnamese), Windows-1257 (Baltic), KOI8-R, EUC-JP.
-- [ ] Test fixtures in CJK, Arabic, Hebrew, Devanagari and Thai, through import, cleanup, split,
-      find and export.
+Done (2026-10-10):
+
+- [x] Auto-caption cleanup keeps empty gaps between timed words empty, and joins caption lines
+      without a space between Chinese or Japanese text (`script.ts`). Whitespace tidying (double
+      spaces, doubled U+200B, which YouTube's machine translations carry) is on by default; a
+      single U+200B between Thai or Khmer words is kept.
+- [x] Lengths in graphemes in cleanup and the quality rules.
+- [x] Sentence and clause ends in cleanup know CJK, Arabic and Devanagari punctuation, and
+      closing brackets of any script. Rewrap breaks unspaced scripts at `Intl.Segmenter` word
+      boundaries, keeping punctuation and Japanese hiragana endings with their word; Join adds no
+      space between Chinese or Japanese lines. Words per minute counts segmenter words there.
+- [x] `dir="auto"` on cue text in the editor, the table, the find bar and the cleanup preview.
+      Invisible characters in a cue (direction marks, isolates, embeddings, zero-width
+      characters) are listed under the text field and can be removed; an Insert mark menu adds
+      RLM, LRM, ALM, an isolate around the selection, ZWSP or ZWNJ.
+- [x] Language hints on import (`language.ts`): YouTube's `Language:` header, `<lang>` around
+      every cue, or a registered language code in the file name (`talk.fi.vtt`,
+      `talk.en-orig.vtt`). The hint sets `lang` on the text fields; a Language field shows where
+      it came from and takes any BCP 47 tag; it is kept with autosaves.
+- [x] Without a hint, a guess, offered in a banner and applied only if accepted. It is made only
+      when one script dominates and the script (kana, Hangul, Thai, Hebrew, Greek…),
+      distinguishing letters (Ukrainian, Persian, Urdu, Kazakh…) or common function words (Latin
+      script, Devanagari) point clearly to one language. Close pairs (Danish and Norwegian, Czech
+      and Slovak) and minority Turkic Cyrillic get no guess. Simplified and traditional Chinese
+      are told apart by common characters.
+- [x] Rulesets name their language; a mismatch with the text's language is pointed out in the
+      Style and accessibility panel, with the fitting ruleset offered (Finnish today).
+- [x] Find matches NFC and NFD forms of a plain query, and whole-word search treats combining
+      marks as part of the word.
+- [x] Encodings: Windows-1257, Windows-1258, KOI8-R, KOI8-U and EUC-JP added. A file that is not
+      UTF-8 is read in the legacy encoding whose text has the most common words of its languages,
+      not always Windows-1252.
+- [x] Fixtures in Japanese, Chinese, Korean, Arabic, Hebrew, Hindi and Thai
+      (`packages/core/test/fixtures/multilingual/`) through import, validation, export, language
+      hints, split and every ruleset; e2e tests for the language field, the guess, direction marks,
+      the ruleset suggestion and normalized find.
+
+Still open:
+
+- [x] Checked the cleanup on real YouTube Japanese and Korean machine translations (private
+      fixtures). Fixed what they showed: lines held over for seconds above an empty line were read
+      as new lines (doubled text); a line starting with the previous sentence's punctuation got a
+      space before it; spaces after `。` and between Japanese characters were kept; lines and cues
+      broke inside words split over timed pieces (`わから` + `ない`, Korean `헤드` + `라인`), and a
+      pause in the source's timing could part them; untimed Japanese lines could not be wrapped.
+      Translated tracks now also break at sentence ends inside YouTube's lines, which helped the
+      Finnish translations too (no more first word of the next sentence left at a cue's end).
+- [ ] Confirm the cleanup on a Chinese auto-caption file, and on a speech-recognition (not
+      translated) Japanese one.
+- [x] Netflix rulesets for Chinese (Simplified and Traditional), Japanese and Korean, with their
+      SDH and children's variants: 16 characters per line for Chinese and Korean, 13 (vertical 11)
+      for Japanese, half-width characters counting half in Japanese and Korean, and each guide's
+      reading speed, punctuation, numbers and Latin-letter rules (`rules-cjk.ts`). Traditional
+      Chinese text (`zh-TW`, `zh-Hant`) is offered the Traditional rules.
+- [x] Auto-caption cleanup starts from the chosen style ruleset's line limits when it follows a
+      guide for the text's language (with the user's changes; at most two lines), else from the
+      language (13 for Japanese, 16 for Chinese and Korean, half-width counting half in Japanese
+      and Korean), else 42; the dialog says where they came from. A caption line too long for
+      one cue at those limits breaks between its words, an untimed one at estimated times; when
+      choosing cues, punctuation no longer runs over the limit.
+- [ ] Case-insensitive find follows JavaScript's simple case folding: Turkish `İ`/`ı` and German
+      `ß`/`SS` do not match each other. Document in the help, or fold by the editor's language.
+- [ ] Guess more Latin-script languages (Croatian, Serbian and Bosnian; Malay; Slovenian…), which
+      need more than function words to tell apart.
 - [ ] Optional, may be dropped: spell check beyond the browser's own. The browser checks
       with the dictionaries the user has, guided by `lang`; anything more means dictionaries
       fetched on demand (never bundled) and a license check per dictionary.

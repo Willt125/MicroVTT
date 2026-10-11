@@ -71,7 +71,7 @@ syntax; editing such files is MicroVTT's main use, so dropping what they say wou
 | `Region: id=r width=40%` header lines (2014–15)                                   | ignores them                       | REGION blocks                                                                 | `region-header-legacy`     |
 | `<br>`                                                                            | drops the tag (words run together) | a line break                                                                  | `cue-text-legacy-tag`      |
 | `<font color="yellow">`, `color="#ff8800"`                                        | drops the tag                      | `<c.yellow>` (a default colour class), or a generated class with a STYLE rule | `cue-text-legacy-tag`      |
-| bytes that are not UTF-8                                                          | turns letters into `�`             | Windows-1252, or a chosen encoding; a UTF-16 BOM is honoured                  | `file-encoding`            |
+| bytes that are not UTF-8                                                          | turns letters into `�`             | the legacy encoding the text reads best in, or a chosen one; UTF-16 BOM kept  | `file-encoding`            |
 
 The validator reports each one, and export writes the current form, so output still conforms.
 The parser itself stays exactly the spec's algorithm unless asked
@@ -101,8 +101,11 @@ on cue text, IDs, or selectors.
 - Before parsing, replace NUL → U+FFFD, then CRLF → LF, then any remaining CR → LF. The
   source map records offsets in the original text, so diagnostics point at the right place.
 - The spec's parser is incremental. Our parser should be too, so it can run on a stream.
-- _Converter imports (SRT, later SCC) may need encoding detection_ (Windows-1252 and so on). That
-  is outside the WebVTT spec and must never apply to `.vtt` input.
+- _Encoding detection is outside the WebVTT spec._ The editor applies it only to files that are
+  not valid UTF-8 (which a conforming parser would read with U+FFFD in place of letters): it
+  tries the legacy encodings and keeps the one whose text contains the most common words of a
+  language that encoding is used for, Windows-1252 if none does. It says so in a banner, the
+  user can choose another, and export always writes UTF-8.
 
 ### File parser (`core/parse`), spec §6.1 "WebVTT file parsing"
 

@@ -16,6 +16,11 @@
  * Detection is structural (roll-up repetition, hand-off cues, timestamp spacing), not tied to
  * exact header strings, because YouTube has changed the format before.
  */
+import { languageMatches, languageName } from './language.ts';
+import { effectiveRules } from './quality/check.ts';
+import { displayLength } from './quality/measure.ts';
+import type { RuleOverrides, Ruleset } from './quality/types.ts';
+import { breakUnits, continuesWord, hasUnspaced, joinsWithoutSpace } from './script.ts';
 import type { BodyItem, Cue, Note, VttDocument } from './document.ts';
 import { createCue } from './document.ts';
 import { formatTimestamp, parseTimestamp } from './timestamp.ts';
@@ -25,6 +30,11 @@ export interface CaptionWord {
   text: string;
   /** Raw separator before the word: spaces, tabs or zero-width spaces ('' for a line's first). */
   gap: string;
+  /**
+   * Split from a run of text by its word boundaries (an untimed line in a script without
+   * spaces): a line may break before it.
+   */
+  split?: boolean;
 }
 
 /** Words sharing one start time: one timestamp tag in the source, or an untimed line's words. */
@@ -104,7 +114,18 @@ function parseLine(raw: string, startMs: number, endMs: number): WordGroup[] {
     const words: CaptionWord[] = [];
     let last = 0;
     for (const m of text.matchAll(WORD)) {
-      words.push({ text: m[2] as string, gap: pending + (m[1] as string) });
+      // Lines without word timings come as one run in scripts written without spaces: split it
+      // where a line may break.
+      const pieces = hasUnspaced(m[2] as string) ? breakUnits(m[2] as string) : [];
+      if (pieces.length > 1)
+        pieces.forEach((p, k) =>
+          words.push(
+            k === 0
+              ? { text: p.text, gap: pending + (m[1] as string) }
+              : { text: p.text, gap: '', split: true },
+          ),
+        );
+      else words.push({ text: m[2] as string, gap: pending + (m[1] as string) });
       pending = '';
       last = m.index + m[0].length;
     }
@@ -116,7 +137,7 @@ function parseLine(raw: string, startMs: number, endMs: number): WordGroup[] {
     if (prev && (at <= prev.startMs || at >= endMs)) prev.words.push(...words);
     else groups.push({ startMs: at, endMs, words });
   }
-  if (groups[0]) (groups[0].words[0] as CaptionWord).gap = '';
+  if (groups[0]) (groups[0].words[0] as CaptionWord).gap = LINE_START;
   for (let i = 0; i < groups.length - 1; i++)
     (groups[i] as WordGroup).endMs = (groups[i + 1] as WordGroup).startMs;
   return groups;
@@ -138,7 +159,13 @@ export function extractLines(doc: VttDocument): CaptionLine[] {
       !hasTimestamps(cue.text) &&
       last !== null &&
       lineKey(nonBlank[0] as string) === last;
-    if (handoff) continue;
+    // Machine translations also hold the last line on for seconds, above an empty new line.
+    const holdover =
+      nonBlank.length === 1 &&
+      cue.text.split('\n').at(-1)?.trim() === '' &&
+      !hasTimestamps(cue.text) &&
+      lineKey(newest) === last;
+    if (handoff || holdover) continue;
     const groups = parseLine(newest, cue.startMs, cue.endMs);
     if (groups.length === 0) continue;
     lines.push({ startMs: cue.startMs, endMs: cue.endMs, groups, source });
@@ -194,6 +221,11 @@ function analyze(doc: VttDocument): { info: AutoCaptionInfo; lines: CaptionLine[
 export interface SegmentOptions {
   /** Characters per line (default 42). */
   maxLineLength: number;
+  /**
+   * What a half-width character (Latin, ASCII digits, punctuation and spaces) counts as in line
+   * lengths: 1 (default), or 0.5 as the Japanese and Korean guides count.
+   */
+  halfWidth: number;
   /** Lines per cue (default 2). */
   maxLines: number;
   /** Shorter cues are discouraged, not forbidden (default 1000). */
@@ -213,21 +245,27 @@ export interface SegmentOptions {
    */
   maxWordHoldMs: number;
   /**
-   * 'word' lets cues break between any timed words; 'line' only between YouTube's lines (for
-   * approximate timings, where word times are guesses). Default: 'line' when approximate.
+   * 'word' lets cues break between any timed words; 'line' only between YouTube's lines, at
+   * sentence ends within them, and inside a line too long for one cue (for approximate timings,
+   * where word times are guesses). Default: 'line' when approximate.
    */
   unit: 'word' | 'line';
-  /** Collapse runs of spaces between words to one (default false). */
+  /**
+   * Collapse runs of spaces between words to one, and remove spaces between Chinese or Japanese
+   * characters (default true).
+   */
   collapseSpaces: boolean;
   /**
-   * Remove doubled U+200B ZERO WIDTH SPACEs (seen in machine translations). Default false:
-   * U+200B is legitimate word separation in some scripts.
+   * Remove the doubled U+200B ZERO WIDTH SPACEs machine translations leave (default true). As
+   * U+200B is real word separation in some scripts (Thai, Khmer…), one is kept where nothing
+   * else separates the words.
    */
   removeDoubledZeroWidthSpaces: boolean;
 }
 
 export const DEFAULT_SEGMENT_OPTIONS: SegmentOptions = {
   maxLineLength: 42,
+  halfWidth: 1,
   maxLines: 2,
   minDurationMs: 1000,
   maxDurationMs: 7000,
@@ -236,11 +274,12 @@ export const DEFAULT_SEGMENT_OPTIONS: SegmentOptions = {
   maxGapMs: 1500,
   maxWordHoldMs: 2000,
   unit: 'word',
-  collapseSpaces: false,
-  removeDoubledZeroWidthSpaces: false,
+  collapseSpaces: true,
+  removeDoubledZeroWidthSpaces: true,
 };
 
-type GapOptions = Pick<SegmentOptions, 'collapseSpaces' | 'removeDoubledZeroWidthSpaces'>;
+type GapOptions = Pick<SegmentOptions, 'collapseSpaces' | 'removeDoubledZeroWidthSpaces'> &
+  Partial<Pick<SegmentOptions, 'halfWidth'>>;
 
 /** A sound tag such as `[Music]` (not the censored-word marker `[ __ ]`). */
 const isSoundTag = (raw: string): boolean => {
@@ -248,12 +287,37 @@ const isSoundTag = (raw: string): boolean => {
   return /^\[[^\]]*\]$/.test(text) && !text.includes('__');
 };
 
-/** The separator written before a word (one space where the source had none). */
-export function gapText(gap: string, o: GapOptions): string {
+/**
+ * The gap before the first word of a caption line. When lines are joined into one cue line, it
+ * becomes a space, or nothing between scripts written without spaces (Chinese, Japanese, Thai…).
+ */
+const LINE_START = '\n';
+
+/** Punctuation that closes what comes before it, at the start of a word. */
+const CLOSING_START = /^(?:<[^>]*>)*[.,!?…;:。、！？，；：؟،।॥)\]}」』）】》〉’”»]/u;
+
+/**
+ * The separator written before a word: its gap in the source, tidied. `before` and `after` are
+ * the words on either side, which decide how lines join.
+ */
+export function gapText(gap: string, o: GapOptions, before?: string, after?: string): string {
+  if (gap === LINE_START) {
+    if (after === undefined) return ' ';
+    // A line that starts with the previous sentence's punctuation (". next" in translations).
+    if (before !== undefined && CLOSING_START.test(after)) return '';
+    return joinsWithoutSpace(before, after) ? '' : ' ';
+  }
   let g = gap;
-  if (o.removeDoubledZeroWidthSpaces) g = g.replace(/\u200b{2,}/g, '');
-  if (o.collapseSpaces) g = g.replace(/[ \t]{2,}/g, ' ');
-  return g === '' ? ' ' : g;
+  if (o.removeDoubledZeroWidthSpaces)
+    g = /[ \t]/.test(g) ? g.replace(/\u200b+/g, '') : g.replace(/\u200b{2,}/g, '\u200b');
+  if (o.collapseSpaces) {
+    g = g.replace(/[ \t]{2,}/g, ' ');
+    // Chinese and Japanese take no spaces; machine translations put them after "。" and "、".
+    if (before !== undefined && after !== undefined && /^[ \t]+$/.test(g)) {
+      if (joinsWithoutSpace(before, after)) g = '';
+    }
+  }
+  return g;
 }
 
 /** A cue to be: consecutive word groups, wrapped into lines. */
@@ -285,20 +349,51 @@ interface Unit {
 
 /**
  * Visible length of raw cue text: tags and zero-width spaces removed, each character reference
- * one character.
+ * one character, half-width characters counting `halfWidth`.
  */
-export function visibleLength(raw: string): number {
-  return raw
-    .replace(/<[^>]*>|\u200b/g, '')
-    .replace(/&(?:#[0-9]+|#[xX][0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);/g, 'x').length;
+export function visibleLength(raw: string, halfWidth = 1): number {
+  return displayLength(
+    raw
+      .replace(/<[^>]*>|\u200b/g, '')
+      .replace(/&(?:#[0-9]+|#[xX][0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);/g, 'x'),
+    halfWidth,
+  );
 }
 
 const wordsOf = (groups: WordGroup[]): CaptionWord[] => groups.flatMap((g) => g.words);
 
+/**
+ * A word group too long for one cue (an untimed line, all one group) as groups of a line's worth
+ * of words each, their start times estimated from the characters before them.
+ */
+function splitLongGroup(
+  g: WordGroup,
+  o: GapOptions & Pick<SegmentOptions, 'maxLineLength' | 'maxLines'>,
+): WordGroup[] {
+  if (g.words.length < 2 || wrapWords(g.words, o.maxLineLength, o.maxLines, o, true)) return [g];
+  const lines = wrapWords(g.words, o.maxLineLength, Infinity, o) ?? [g.words];
+  if (lines.length < 2) return [g];
+  const lengths = lines.map((ws) => ws.reduce((n, w) => n + wordLength(w, o.halfWidth), 0));
+  const total = lengths.reduce((a, b) => a + b, 0) || 1;
+  const out: WordGroup[] = [];
+  let before = 0;
+  lines.forEach((ws, i) => {
+    const startMs = Math.round(g.startMs + ((g.endMs - g.startMs) * before) / total);
+    before += lengths[i] as number;
+    const prev = out.at(-1);
+    // Too little time to tell the pieces apart: keep them together.
+    if (prev && startMs <= prev.startMs) prev.words.push(...ws);
+    else out.push({ startMs, endMs: g.endMs, words: [...ws] });
+  });
+  for (let i = 0; i < out.length - 1; i++)
+    (out[i] as WordGroup).endMs = (out[i + 1] as WordGroup).startMs;
+  return out;
+}
+
 function toUnits(
   lines: CaptionLine[],
   unit: 'word' | 'line',
-  o: GapOptions & Pick<SegmentOptions, 'maxWordHoldMs'>,
+  o: GapOptions & Pick<SegmentOptions, 'maxWordHoldMs' | 'maxLineLength' | 'maxLines'>,
 ): Unit[] {
   // `soundLine`: the caption line is nothing but sound tags (a whole "[Music]" line).
   const make = (groups: WordGroup[], source: number, soundLine: boolean): Unit => {
@@ -314,62 +409,102 @@ function toUnits(
       groups,
       source,
       chars: words.reduce(
-        (n, w, i) => n + visibleLength(w.text) + (i > 0 ? visibleLength(gapText(w.gap, o)) : 0),
+        (n, w, i) =>
+          n +
+          visibleLength(w.text, o.halfWidth) +
+          (i > 0 ? visibleLength(gapText(w.gap, o, words[i - 1]?.text, w.text), o.halfWidth) : 0),
         0,
       ),
-      gapBefore: visibleLength(gapText((words[0] as CaptionWord).gap, o)),
+      gapBefore: visibleLength(
+        gapText((words[0] as CaptionWord).gap, o, undefined, (words[0] as CaptionWord).text),
+        o.halfWidth,
+      ),
       speakerChange: (words[0] as CaptionWord).text.startsWith('&gt;&gt;'),
       attached: isPunctuation((words[0] as CaptionWord).text),
       soundOnly: soundLine,
       lastWord: last.text.replace(/<[^>]*>/g, ''),
     };
   };
-  return lines.flatMap((line) => {
+  return lines.flatMap((source) => {
+    const line = { ...source, groups: source.groups.flatMap((g) => splitLongGroup(g, o)) };
     const soundLine = wordsOf(line.groups).every((w) => isSoundTag(w.text));
-    return unit === 'line'
-      ? [make(line.groups, line.source, soundLine)]
-      : line.groups.map((g) => make([g], line.source, soundLine));
+    if (unit === 'word') return line.groups.map((g) => make([g], line.source, soundLine));
+    // A line in pieces ending at sentence ends ("…広がった。" | "わから").
+    const pieces: WordGroup[][] = [[]];
+    line.groups.forEach((g, k) => {
+      (pieces.at(-1) as WordGroup[]).push(g);
+      const lastWord = (g.words.at(-1) as CaptionWord).text.replace(/<[^>]*>/g, '');
+      if (k < line.groups.length - 1 && SENTENCE_END.test(lastWord)) pieces.push([]);
+    });
+    // A piece too long for one cue (short lines, as in Japanese) breaks between its words too.
+    return pieces.flatMap((groups) => {
+      const whole = make(groups, line.source, soundLine);
+      const fits =
+        whole.chars <= o.maxLineLength ||
+        wrapWords(wordsOf(groups), o.maxLineLength, o.maxLines, o, true) !== null;
+      return !fits && groups.length > 1
+        ? groups.map((g) => make([g], line.source, soundLine))
+        : [whole];
+    });
   });
 }
 
 // Segmentation measures the same words many times; cache their lengths.
 const wordLengths = new WeakMap<CaptionWord, number>();
-const wordLength = (w: CaptionWord): number => {
+const wordLength = (w: CaptionWord, halfWidth = 1): number => {
+  if (halfWidth !== 1) return visibleLength(w.text, halfWidth); // Cached in displayLength.
   let l = wordLengths.get(w);
   if (l === undefined) wordLengths.set(w, (l = visibleLength(w.text)));
   return l;
 };
-const gapLength = (gap: string, o: GapOptions): number =>
-  gap === ' ' ? 1 : visibleLength(gapText(gap, o));
+const gapLength = (gap: string, o: GapOptions, before?: string, after?: string): number =>
+  gap === ' ' ? (o.halfWidth ?? 1) : visibleLength(gapText(gap, o, before, after), o.halfWidth);
 
 /** A word that is only punctuation, which must stay on the line of the word before it. */
-const isPunctuation = (text: string): boolean => /^[.,!?…;:)\]"'”’]+$/.test(text);
+const isPunctuation = (text: string): boolean =>
+  /^[\p{Pe}\p{Pf}.,!?…;:"'。、！？，；：؟،।॥]+$/u.test(text);
 
-const SENTENCE_END = /[.!?…]["'”’)\]]*$/;
-const CLAUSE_END = /[,;:–—]["'”’)\]]*$/;
+/** Closing quotes and brackets that may follow the end of a sentence or clause. */
+const CLOSERS = `["'”’»)\\]」』）】》〉]*`;
+const SENTENCE_END = new RegExp(`[.!?…。！？؟।॥]${CLOSERS}$`, 'u');
+const CLAUSE_END = new RegExp(`[,;:–—、，；：،]${CLOSERS}$`, 'u');
 
-/** Splits words into at most `maxLines` lines of at most `maxLineLength`, balanced; or null. */
+/**
+ * Splits words into at most `maxLines` lines of at most `maxLineLength`, balanced; or null. A line
+ * may run over for a single word, or punctuation that stays with its word; with `strict` (when
+ * choosing cues), only for a single word.
+ */
 export function wrapWords(
   words: CaptionWord[],
   maxLineLength: number,
   maxLines: number,
   o: GapOptions = DEFAULT_SEGMENT_OPTIONS,
+  strict = false,
 ): CaptionWord[][] | null {
-  const gaps = words.map((w) => gapLength(w.gap, o));
+  const gaps = words.map((w, k) => gapLength(w.gap, o, words[k - 1]?.text, w.text));
   // prefix[k]: visible length of words[0..k) with the separators between them.
   const prefix = [0];
   words.forEach((w, k) =>
-    prefix.push((prefix[k] as number) + (k > 0 ? (gaps[k] as number) : 0) + wordLength(w)),
+    prefix.push(
+      (prefix[k] as number) + (k > 0 ? (gaps[k] as number) : 0) + wordLength(w, o.halfWidth),
+    ),
   );
   const lineLength = (from: number, to: number): number =>
     (prefix[to] as number) - (prefix[from] as number) - (from > 0 ? (gaps[from] as number) : 0);
   if (lineLength(0, words.length) <= maxLineLength) return [words];
+  // Not before punctuation, nor inside a word (a word split over timed pieces, "わから" + "ない").
+  const canBreakBefore = (k: number): boolean => {
+    const w = words[k] as CaptionWord;
+    if (isPunctuation(w.text)) return false;
+    if (w.split) return true;
+    return !(gaps[k] === 0 && continuesWord((words[k - 1] as CaptionWord).text, w.text));
+  };
   if (maxLines < 2) return null;
   // Best single break: both lines fit, as even as possible, preferring punctuation.
   let best = -1;
   let bestScore = Infinity;
   for (let k = 1; k < words.length; k++) {
-    if (isPunctuation((words[k] as CaptionWord).text)) continue;
+    if (!canBreakBefore(k)) continue;
     const a = lineLength(0, k);
     const b = lineLength(k, words.length);
     if (a > maxLineLength || b > maxLineLength) continue;
@@ -387,19 +522,22 @@ export function wrapWords(
   const lines: CaptionWord[][] = [];
   let line: CaptionWord[] = [];
   let length = 0;
+  let overflow = false;
   words.forEach((w, k) => {
-    const l = wordLength(w);
+    const l = wordLength(w, o.halfWidth);
     const gap = gaps[k] as number;
-    if (line.length > 0 && length + gap + l > maxLineLength && !isPunctuation(w.text)) {
-      lines.push(line);
-      line = [];
-      length = 0;
+    if (line.length > 0 && length + gap + l > maxLineLength) {
+      if (canBreakBefore(k)) {
+        lines.push(line);
+        line = [];
+        length = 0;
+      } else overflow = true; // Punctuation, or a word that cannot be split.
     }
     length += (line.length > 0 ? gap : 0) + l;
     line.push(w);
   });
   lines.push(line);
-  return lines.length <= maxLines ? lines : null;
+  return lines.length <= maxLines && !(strict && overflow) ? lines : null;
 }
 
 /** Groups caption lines into cues; see `SegmentOptions` for the rules. */
@@ -408,16 +546,23 @@ export function segment(lines: CaptionLine[], options: Partial<SegmentOptions> =
   const units = toUnits(lines, o.unit, o);
   const n = units.length;
   const capacity = o.maxLineLength * o.maxLines;
+  // A unit that continues the previous unit's word (a line that ends mid-word).
+  const gluedBefore = (k: number): boolean => {
+    const first = wordsOf((units[k] as Unit).groups)[0] as CaptionWord;
+    const prev = wordsOf((units[k - 1] as Unit).groups).at(-1) as CaptionWord;
+    return (
+      gapText(first.gap, o, prev.text, first.text) === '' && continuesWord(prev.text, first.text)
+    );
+  };
+  const glued = units.map((_, k) => k > 0 && gluedBefore(k));
   const forcedBefore = (k: number): boolean => {
     if (k <= 0 || k >= n) return false;
     const u = units[k] as Unit;
     const prev = units[k - 1] as Unit;
-    return (
-      u.soundOnly ||
-      prev.soundOnly ||
-      (o.breakOnSpeakerChange && u.speakerChange) ||
-      u.startMs - prev.endMs > o.maxGapMs
-    );
+    // A pause does not part a word from its ending, or punctuation from what it closes (machine
+    // translations keep the source's pauses, wherever they fall in the translated text).
+    const pause = u.startMs - prev.endMs > o.maxGapMs && !u.attached && !glued[k];
+    return u.soundOnly || prev.soundOnly || (o.breakOnSpeakerChange && u.speakerChange) || pause;
   };
   const breakCost = (j: number): number => {
     if (j === n - 1 || forcedBefore(j + 1)) return 0;
@@ -439,13 +584,17 @@ export function segment(lines: CaptionLine[], options: Partial<SegmentOptions> =
       if (j > i && forcedBefore(j)) break;
       // A cue should not start with an attached unit (heavily penalized rather than forbidden,
       // so that a segmentation always exists).
-      const endsBeforeAttached = j + 1 < n && (units[j + 1] as Unit).attached;
+      const endsBeforeAttached = j + 1 < n && ((units[j + 1] as Unit).attached || glued[j + 1]);
       chars += u.chars + (j > i ? u.gapBefore : 0);
       for (const g of u.groups) words.push(...g.words);
       const duration = u.endMs - (units[i] as Unit).startMs;
       const single = j === i;
       if (!single && (chars > capacity || duration > o.maxDurationMs)) break;
-      if (!single && chars > o.maxLineLength && !wrapWords(words, o.maxLineLength, o.maxLines, o))
+      if (
+        !single &&
+        chars > o.maxLineLength &&
+        !wrapWords(words, o.maxLineLength, o.maxLines, o, true)
+      )
         break;
       let cost = 1 + breakCost(j);
       if (sentenceInside && !SENTENCE_END.test(u.lastWord) && breakCost(j) > 0) cost += 1.5;
@@ -515,7 +664,7 @@ function cueText(seg: Segment, o: CleanupOptions): string {
             tag = `<${formatTimestamp(at)}>`;
             last = at;
           }
-          return (k === 0 ? '' : gapText(w.gap, o)) + tag + w.text;
+          return (k === 0 ? '' : gapText(w.gap, o, line[k - 1]?.text, w.text)) + tag + w.text;
         })
         .join(''),
     )
@@ -602,4 +751,55 @@ export function findReviewMarkers(doc: VttDocument): ReviewMarker[] {
         out.push({ index, kind, text: m[0], offset: m.index });
   });
   return out.sort((a, b) => a.index - b.index || a.offset - b.offset);
+}
+
+/** Where the cleanup's line limits came from, for the dialog to say. */
+export interface LineDefaults {
+  maxLineLength: number;
+  maxLines: number;
+  halfWidth: number;
+  /** The ruleset's name or the language's, or null for the general default. */
+  from: string | null;
+}
+
+/** Line limits by language, for text with no style guide chosen (Netflix's figures). */
+const LINE_DEFAULTS_BY_LANGUAGE: Record<string, { maxLineLength: number; halfWidth: number }> = {
+  ja: { maxLineLength: 13, halfWidth: 0.5 },
+  ko: { maxLineLength: 16, halfWidth: 0.5 },
+  zh: { maxLineLength: 16, halfWidth: 1 },
+};
+
+/**
+ * The line limits a cleanup starts with: those of the chosen ruleset when it follows a guide for
+ * the text's language (with the user's changes to it); otherwise the usual limits for the
+ * language; otherwise 42 characters. At most two lines: guides that allow a third keep it for
+ * sound descriptions.
+ */
+export function cleanupLineDefaults(
+  ruleset: Ruleset | undefined,
+  overrides: RuleOverrides,
+  language: string | null,
+): LineDefaults {
+  const fits =
+    ruleset?.language !== undefined &&
+    (language === null || languageMatches(ruleset.language, language));
+  if (ruleset && fits) {
+    const rules = effectiveRules(ruleset, overrides);
+    const length = rules.find((r) => r.id === 'line-length')?.params;
+    if (length?.['max'] !== undefined) {
+      const lines = rules.find((r) => r.id === 'max-lines')?.params['max'] ?? 2;
+      return {
+        maxLineLength: length['max'],
+        maxLines: Math.min(lines, 2),
+        halfWidth: length['halfWidth'] ?? 1,
+        from: ruleset.name,
+      };
+    }
+  }
+  const primary = language?.split('-')[0]?.toLowerCase();
+  const byLanguage = primary ? LINE_DEFAULTS_BY_LANGUAGE[primary] : undefined;
+  if (byLanguage && language) {
+    return { ...byLanguage, maxLines: 2, from: languageName(primary as string) ?? language };
+  }
+  return { maxLineLength: 42, maxLines: 2, halfWidth: 1, from: null };
 }

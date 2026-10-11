@@ -27,6 +27,8 @@ import {
   parseColour,
   readableLines,
   wordCount,
+  breakUnits,
+  joinLines,
 } from '../src/index.ts';
 
 const doc = (...cues: Cue[]): VttDocument => ({ ...createDocument(), body: cues });
@@ -62,6 +64,7 @@ describe('measuring', () => {
     expect(graphemeLength('👍🏽ok')).toBe(3);
     expect(graphemeLength('é')).toBe(1); // e + combining acute
     expect(wordCount('Well -- I mean, it’s 3 a.m.!')).toBe(6);
+    expect(wordCount('我们今天去公园。')).toBeGreaterThan(2);
   });
 
   it('balances lines bottom-heavy', () => {
@@ -71,6 +74,27 @@ describe('measuring', () => {
       'you would agree with me',
     ]);
     expect(balanceLines(['supercalifragilistic'], 5)).toBeNull();
+  });
+
+  it('breaks and joins lines by script', () => {
+    const shown = (text: string) => breakUnits(text).map((u) => u.gap + u.text);
+    expect(shown('Hello there,\nfriend.')).toEqual(['Hello', ' there,', ' friend.']);
+    // Punctuation stays with its word; Japanese endings in hiragana stay with the word before.
+    expect(shown('「こんにちは」と言った。')).toEqual(['「こんにちは」と', '言った。']);
+    // Only short particles and endings join hiragana before them; a longer word starts a phrase.
+    // (Exact pieces depend on the dictionary, so only their size is checked.)
+    const phrases = shown('興味深いことをしようとしているので、');
+    expect(phrases.join('')).toBe('興味深いことをしようとしているので、');
+    expect(phrases.length).toBeGreaterThanOrEqual(3);
+    expect(phrases.every((p) => [...p].length <= 10)).toBe(true);
+    expect(shown('我们今天去公园，好吗？').join('')).toBe('我们今天去公园，好吗？');
+    expect(shown('我们今天去公园，好吗？').length).toBeGreaterThan(2);
+    expect(joinLines(['東京に', '行きます。'])).toBe('東京に行きます。');
+    expect(joinLines(['สวัสดีครับ', 'วันนี้'])).toBe('สวัสดีครับ วันนี้');
+    expect(joinLines(['Hello', 'there '])).toBe('Hello there');
+    const lines = balanceLines(breakUnits('我们今天去公园，你也一起来吗？'), 10);
+    expect(lines?.join('')).toBe('我们今天去公园，你也一起来吗？');
+    expect(lines?.every((l) => !l.includes(' ') && l.length <= 10)).toBe(true);
   });
 
   it('reads CSS colours and computes WCAG contrast', () => {
@@ -216,6 +240,22 @@ describe('rules', () => {
         only('single-line'),
       ),
     ).toEqual([]);
+  });
+
+  it('joins and rewraps Chinese and Japanese without spaces', () => {
+    const [joined] = checkQuality(
+      doc(createCue(0, 2000, '東京に\n行きます。')),
+      only('single-line'),
+    );
+    expect(joined?.fix?.change).toEqual({ kind: 'text', text: '東京に行きます。' });
+    const [wrapped] = checkQuality(
+      doc(createCue(0, 3000, '今日はいい天気ですね。散歩に行きましょう。')),
+      only('line-length', { max: 13 }),
+    );
+    expect(wrapped?.fix?.change).toEqual({
+      kind: 'text',
+      text: '今日はいい天気ですね。\n散歩に行きましょう。',
+    });
   });
 
   it('text: characters and conventions, with fixes', () => {
@@ -385,6 +425,37 @@ describe('rulesets', () => {
     expect(params(BBC_SUBTITLES, 'words-per-minute')).toEqual({ max: 180 });
     expect(params(BBC_SUBTITLES, 'min-gap')).toEqual({ minMs: 1000 });
     expect(params(WCAG, 'contrast')).toEqual({ min: 4.5 });
+    const byId = (id: string) => RULESETS.find((r) => r.id === id) as Ruleset;
+    // Chinese: 16 characters (18 SDH), 9/7 characters per second (11/9 SDH), 2 lines (3 SDH).
+    for (const script of ['hans', 'hant']) {
+      expect(params(byId(`netflix-zh-${script}`), 'line-length')).toEqual({ max: 16 });
+      expect(params(byId(`netflix-zh-${script}`), 'chars-per-second')).toEqual({ max: 9 });
+      expect(params(byId(`netflix-zh-${script}-children`), 'chars-per-second')).toEqual({ max: 7 });
+      expect(params(byId(`netflix-zh-${script}-sdh`), 'line-length')).toEqual({ max: 18 });
+      expect(params(byId(`netflix-zh-${script}-sdh`), 'chars-per-second')).toEqual({ max: 11 });
+      expect(params(byId(`netflix-zh-${script}-sdh-children`), 'chars-per-second')).toEqual({
+        max: 9,
+      });
+      expect(params(byId(`netflix-zh-${script}-sdh`), 'max-lines')).toEqual({ max: 3 });
+    }
+    // Korean: 16 characters, half-width counting half; 12/9 per second (14/11 SDH).
+    expect(params(byId('netflix-ko'), 'line-length')).toEqual({ max: 16, halfWidth: 0.5 });
+    expect(params(byId('netflix-ko'), 'chars-per-second')).toEqual({ max: 12, halfWidth: 0.5 });
+    expect(params(byId('netflix-ko-children'), 'chars-per-second')?.['max']).toBe(9);
+    expect(params(byId('netflix-ko-sdh'), 'chars-per-second')?.['max']).toBe(14);
+    expect(params(byId('netflix-ko-sdh-children'), 'chars-per-second')?.['max']).toBe(11);
+    expect(params(byId('netflix-ko'), 'speaker-hyphen')).toEqual({ space: 1 });
+    // Japanese: 13 horizontal (16 SDH), 11 vertical; 4 per second (7 SDH); 0.5 s minimum.
+    expect(params(byId('netflix-ja'), 'line-length')).toEqual({
+      max: 13,
+      maxVertical: 11,
+      halfWidth: 0.5,
+    });
+    expect(params(byId('netflix-ja-sdh'), 'line-length')?.['max']).toBe(16);
+    expect(params(byId('netflix-ja'), 'chars-per-second')).toEqual({ max: 4, halfWidth: 0.5 });
+    expect(params(byId('netflix-ja-sdh'), 'chars-per-second')?.['max']).toBe(7);
+    expect(params(byId('netflix-ja'), 'min-duration')).toEqual({ minMs: 500 });
+    expect(byId('netflix-ja-sdh').rules['half-width-katakana']).toBeUndefined();
   });
 
   it('let the user switch rules off and change settings', () => {

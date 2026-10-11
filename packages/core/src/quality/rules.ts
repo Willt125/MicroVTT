@@ -6,8 +6,10 @@
 import type { Cue, VttDocument } from '../document.ts';
 import { parseStylesheet } from '../css.ts';
 import { composite, contrastRatio, hexOf, parseColour, type Rgba } from './colour.ts';
-import { graphemeLength, wordCount } from './measure.ts';
+import { breakUnits, joinLines, type BreakUnit } from '../script.ts';
+import { displayLength, formatCount, graphemeLength, wordCount } from './measure.ts';
 import { NETFLIX_GLYPH_RANGES } from './netflix-glyphs.generated.ts';
+import { CJK_RULES } from './rules-cjk.ts';
 import { FINNISH_RULES } from './rules-fi.ts';
 import type { ParamSpec, QualityCategory, QualityFix, QualityRuleId } from './types.ts';
 
@@ -43,6 +45,16 @@ export interface RuleDefinition {
   document?: (doc: VttDocument, params: Record<string, number>, emit: (f: Emitted) => void) => void;
 }
 
+/** The setting for guides that count half-width characters (Latin, ASCII) as half. */
+const HALF_WIDTH_PARAM: ParamSpec = {
+  key: 'halfWidth',
+  label: 'Half-width characters count as',
+  unit: 'chars',
+  min: 0.5,
+  max: 1,
+  step: 0.5,
+};
+
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(ms % 1000 === 0 ? 0 : 2)} s`;
 const duration = (c: Cue): number => c.endMs - c.startMs;
 const plain = (info: CueInfo): string => info.lines.join('\n');
@@ -55,15 +67,25 @@ const isPlain = (text: string): boolean => !/[<&]/.test(text);
  * preferred, then one without just one or two words on top, then the most even. Null when it
  * cannot fit.
  */
-export function balanceLines(words: string[], max: number): string[] | null {
-  const all = words.join(' ');
-  if (graphemeLength(all) <= max) return [all];
+export function balanceLines(
+  words: readonly (string | BreakUnit)[],
+  max: number,
+  measure: (text: string) => number = graphemeLength,
+): string[] | null {
+  const units = words.map((w) => (typeof w === 'string' ? { text: w, gap: ' ' } : w));
+  const join = (from: number, to: number): string =>
+    units
+      .slice(from, to)
+      .map((u, i) => (i === 0 ? '' : u.gap) + u.text)
+      .join('');
+  const all = join(0, units.length);
+  if (measure(all) <= max) return [all];
   let best: string[] | null = null;
   let bestScore = Infinity;
   for (let k = 1; k < words.length; k++) {
-    const top = words.slice(0, k).join(' ');
-    const bottom = words.slice(k).join(' ');
-    const [a, b] = [graphemeLength(top), graphemeLength(bottom)];
+    const top = join(0, k);
+    const bottom = join(k, units.length);
+    const [a, b] = [measure(top), measure(bottom)];
     if (a > max || b > max) continue;
     const score = Math.abs(a - b) + (a > b ? 1000 : 0) + (k <= 2 && words.length - k > 2 ? 500 : 0);
     if (score < bestScore) {
@@ -74,10 +96,11 @@ export function balanceLines(words: string[], max: number): string[] | null {
   return best;
 }
 
-const rewrapFix = (info: CueInfo, max: number): QualityFix | undefined => {
+const rewrapFix = (info: CueInfo, max: number, halfWidth = 1): QualityFix | undefined => {
   if (!isPlain(info.cue.text)) return undefined;
-  const words = info.lines.join(' ').split(/\s+/).filter(Boolean);
-  const lines = balanceLines(words, max);
+  const lines = balanceLines(breakUnits(info.lines.join('\n')), max, (t) =>
+    displayLength(t, halfWidth),
+  );
   if (!lines) return undefined;
   const text = lines.join('\n');
   return text === info.cue.text ? undefined : { label: 'Rewrap', change: { kind: 'text', text } };
@@ -302,11 +325,14 @@ const RULE_LIST: RuleDefinition[] = [
     title: 'Reading speed (characters)',
     description:
       'Characters per second, counting spaces and punctuation but not line breaks, against the cue’s duration.',
-    params: [{ key: 'max', label: 'Fastest', unit: 'chars/s', min: 5, max: 60, step: 1 }],
-    defaults: { max: 25 },
-    cue(info, { max = Infinity }, emit) {
+    params: [
+      { key: 'max', label: 'Fastest', unit: 'chars/s', min: 1, max: 60, step: 1 },
+      HALF_WIDTH_PARAM,
+    ],
+    defaults: { max: 25, halfWidth: 1 },
+    cue(info, { max = Infinity, halfWidth = 1 }, emit) {
       const d = duration(info.cue);
-      const chars = graphemeLength(info.lines.join(''));
+      const chars = displayLength(info.lines.join(''), halfWidth);
       if (d <= 0 || chars === 0) return;
       const cps = chars / (d / 1000);
       if (cps > max)
@@ -351,20 +377,33 @@ const RULE_LIST: RuleDefinition[] = [
     id: 'line-length',
     category: 'layout',
     title: 'Line length',
-    description: 'A line with more characters than the limit.',
-    params: [{ key: 'max', label: 'Longest line', unit: 'chars', min: 10, max: 120, step: 1 }],
-    defaults: { max: 42 },
-    cue(info, { max = Infinity }, emit) {
+    description:
+      'A line with more characters than the limit (in vertical cues, the vertical limit if one is set).',
+    params: [
+      { key: 'max', label: 'Longest line', unit: 'chars', min: 5, max: 120, step: 1 },
+      {
+        key: 'maxVertical',
+        label: 'Longest vertical line (0: the same)',
+        unit: 'chars',
+        min: 0,
+        max: 120,
+        step: 1,
+      },
+      HALF_WIDTH_PARAM,
+    ],
+    defaults: { max: 42, maxVertical: 0, halfWidth: 1 },
+    cue(info, { max: horizontal = Infinity, maxVertical = 0, halfWidth = 1 }, emit) {
+      const max = info.cue.vertical && maxVertical > 0 ? maxVertical : horizontal;
       const long = info.lines
-        .map((line, i) => [i + 1, graphemeLength(line)] as const)
+        .map((line, i) => [i + 1, displayLength(line, halfWidth)] as const)
         .filter(([, n]) => n > max);
       if (long.length === 0) return;
-      const fix = rewrapFix(info, max);
+      const fix = rewrapFix(info, max, halfWidth);
       emit({
         index: info.index,
         message:
-          long.map(([i, n]) => `Line ${i} has ${n} characters`).join('; ') +
-          `; the limit is ${max}.`,
+          long.map(([i, n]) => `Line ${i} has ${formatCount(n)} characters`).join('; ') +
+          `; the limit is ${max}${max === horizontal ? '' : ' (vertical)'}.`,
         ...(fix ? { fix } : {}),
       });
     },
@@ -375,14 +414,17 @@ const RULE_LIST: RuleDefinition[] = [
     title: 'Line shape',
     description:
       'Two lines where the top one is longer (a bottom-heavy shape is preferred), or holds only one or two words.',
-    params: [{ key: 'maxChars', label: 'Longest line', unit: 'chars', min: 10, max: 120, step: 1 }],
-    defaults: { maxChars: 42 },
-    cue(info, { maxChars = 42 }, emit) {
+    params: [
+      { key: 'maxChars', label: 'Longest line', unit: 'chars', min: 5, max: 120, step: 1 },
+      HALF_WIDTH_PARAM,
+    ],
+    defaults: { maxChars: 42, halfWidth: 1 },
+    cue(info, { maxChars = 42, halfWidth = 1 }, emit) {
       if (info.lines.length !== 2) return;
       const [top, bottom] = info.lines as [string, string];
       const shortTop = wordCount(top) <= 2 && wordCount(bottom) > 2;
-      if (graphemeLength(top) <= graphemeLength(bottom) && !shortTop) return;
-      const fix = rewrapFix(info, maxChars);
+      if (displayLength(top, halfWidth) <= displayLength(bottom, halfWidth) && !shortTop) return;
+      const fix = rewrapFix(info, maxChars, halfWidth);
       emit({
         index: info.index,
         message: shortTop
@@ -398,15 +440,19 @@ const RULE_LIST: RuleDefinition[] = [
     title: 'One line when it fits',
     description:
       'Text broken over two lines that would fit on one (dual-speaker cues, one speaker per line, are left alone).',
-    params: [{ key: 'maxChars', label: 'Longest line', unit: 'chars', min: 10, max: 120, step: 1 }],
-    defaults: { maxChars: 42 },
-    cue(info, { maxChars = 42 }, emit) {
+    params: [
+      { key: 'maxChars', label: 'Longest line', unit: 'chars', min: 5, max: 120, step: 1 },
+      HALF_WIDTH_PARAM,
+    ],
+    defaults: { maxChars: 42, halfWidth: 1 },
+    cue(info, { maxChars = 42, halfWidth = 1 }, emit) {
       if (info.lines.length < 2 || info.lines.some((l) => /^\s*-/.test(l))) return;
-      const joined = info.lines.map((l) => l.trim()).join(' ');
-      if (graphemeLength(joined) > maxChars) return;
+      const joined = joinLines(info.lines);
+      const length = displayLength(joined, halfWidth);
+      if (length > maxChars) return;
       emit({
         index: info.index,
-        message: `Fits on one line (${graphemeLength(joined)} characters).`,
+        message: `Fits on one line (${formatCount(length)} characters).`,
         ...(isPlain(info.cue.text)
           ? { fix: { label: 'Join', change: { kind: 'text', text: joined } } }
           : {}),
@@ -452,17 +498,21 @@ const RULE_LIST: RuleDefinition[] = [
     id: 'ellipsis-character',
     category: 'text',
     title: 'Ellipsis character',
-    description: 'Three dots where the single ellipsis character (…) is wanted.',
+    description:
+      'Three dots, or the midline ellipsis (⋯, U+22EF), where the ellipsis character (…, U+2026) is wanted.',
     params: [],
     defaults: {},
     cue(info, _, emit) {
-      if (!plain(info).includes('...')) return;
+      const text = plain(info);
+      const dots = text.includes('...');
+      const midline = text.includes('⋯');
+      if (!dots && !midline) return;
       emit({
         index: info.index,
-        message: 'Three dots; use the ellipsis character (…).',
+        message: `${dots ? 'Three dots' : 'A midline ellipsis (⋯)'}; use the ellipsis character (…).`,
         fix: {
           label: 'Use …',
-          change: { kind: 'text', text: info.cue.text.replace(/\.{3}/g, '…') },
+          change: { kind: 'text', text: info.cue.text.replace(/\.{3}|⋯/g, '…') },
         },
       });
     },
@@ -502,10 +552,29 @@ const RULE_LIST: RuleDefinition[] = [
     id: 'speaker-hyphen',
     category: 'text',
     title: 'Speaker hyphens',
-    description: 'A line starting with a hyphen and a space; dual-speaker hyphens take no space.',
-    params: [],
-    defaults: {},
-    cue(info, _, emit) {
+    description:
+      'Dual-speaker hyphens followed by a space where the guide wants none, or with none where it wants one.',
+    params: [
+      { key: 'space', label: 'Spaces after the hyphen', unit: 'spaces', min: 0, max: 1, step: 1 },
+    ],
+    defaults: { space: 0 },
+    cue(info, { space = 0 }, emit) {
+      if (space > 0) {
+        if (info.cue.text.split('\n').length < 2 || !info.lines.some((l) => /^-[^\s-]/.test(l)))
+          return;
+        emit({
+          index: info.index,
+          message: 'A speaker hyphen with no space after it.',
+          fix: {
+            label: 'Add a space',
+            change: {
+              kind: 'text',
+              text: info.cue.text.replace(/^((?:<[^>\n]*>)*)-(?=[^\s-])/gm, '$1- '),
+            },
+          },
+        });
+        return;
+      }
       if (!info.lines.some((l) => /^-[ \t]+\S/.test(l))) return;
       emit({
         index: info.index,
@@ -563,16 +632,22 @@ const RULE_LIST: RuleDefinition[] = [
     id: 'lyrics-notes',
     category: 'text',
     title: 'Lyrics notes',
-    description: 'Song lyrics not enclosed in music notes (♪) with a space inside each.',
-    params: [],
-    defaults: {},
-    cue(info, _, emit) {
+    description:
+      'Song lyrics not enclosed in music notes (♪), with a space inside each (or none, as some guides want).',
+    params: [
+      { key: 'space', label: 'Spaces inside the notes', unit: 'spaces', min: 0, max: 1, step: 1 },
+    ],
+    defaults: { space: 1 },
+    cue(info, { space = 1 }, emit) {
       const text = plain(info).trim();
       if (!text.includes('♪')) return;
-      if (text.startsWith('♪ ') && text.endsWith(' ♪')) return;
+      const gap = space > 0 ? ' ' : '';
+      const open = new RegExp(`^♪${space > 0 ? ' ' : '(?! )'}`);
+      const close = new RegExp(`${space > 0 ? ' ' : '(?<! )'}♪$`);
+      if (open.test(text) && close.test(text)) return;
       emit({
         index: info.index,
-        message: 'Lyrics start with “♪ ” and end with “ ♪”.',
+        message: `Lyrics start with “♪${gap}” and end with “${gap}♪”.`,
       });
     },
   },
@@ -709,5 +784,5 @@ const RULE_LIST: RuleDefinition[] = [
 ];
 
 export const RULES: Readonly<Record<QualityRuleId, RuleDefinition>> = Object.fromEntries(
-  [...RULE_LIST, ...FINNISH_RULES].map((r) => [r.id, r]),
+  [...RULE_LIST, ...FINNISH_RULES, ...CJK_RULES].map((r) => [r.id, r]),
 ) as Record<QualityRuleId, RuleDefinition>;

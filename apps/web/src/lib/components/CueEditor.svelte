@@ -4,8 +4,10 @@
 -->
 <script lang="ts">
   import type { AlignSetting, Cue, CueUpdate, DirectionSetting } from '@microvtt/core';
-  import { regionsOf, updateCue } from '@microvtt/core';
+  import { languageName, regionsOf, updateCue } from '@microvtt/core';
+  import { tick } from 'svelte';
   import type { Editor } from '../editor.svelte.ts';
+  import { INSERTS, insertAround, marksIn, withoutMark } from '../marks.ts';
   import { SEVERITY_LABEL } from '../display.ts';
   import { formatDuration, formatTime, parseTimeInput } from '../time.ts';
 
@@ -82,6 +84,49 @@
     update({ [field]: n }, field === 'position' ? 'Change position' : 'Change size');
   }
 
+  /** Languages offered in the language field (any BCP 47 tag can be typed). */
+  const LANGUAGES = (
+    'ar bn cs da de el en en-GB en-US es es-419 fa fi fr fr-CA he hi hu id it ja ko ms nb nl ' +
+    'pl pt pt-BR ro ru sv ta th tr uk ur vi zh-Hans zh-Hant'
+  ).split(' ');
+  const SOURCE_LABEL = {
+    header: 'from the file’s Language: line',
+    markup: 'from the <lang> tags',
+    'file-name': 'from the file name',
+    user: 'set by you',
+  } as const;
+
+  function commitLanguage(input: HTMLInputElement): void {
+    try {
+      editor.setLanguage(input.value);
+      input.removeAttribute('aria-invalid');
+      fieldError = null;
+    } catch (error) {
+      input.setAttribute('aria-invalid', 'true');
+      fieldError = (error as Error).message;
+    }
+  }
+
+  const marks = $derived(cue ? marksIn(cue.text) : []);
+
+  /** Inserts a mark at the caret, or an isolate around the selection, and keeps the caret. */
+  async function insertMark(select: HTMLSelectElement): Promise<void> {
+    const ins = INSERTS[Number(select.value)];
+    select.value = '';
+    if (!ins || !cue || !textarea) return;
+    const next = insertAround(
+      cue.text,
+      textarea.selectionStart,
+      textarea.selectionEnd,
+      ins.before,
+      ins.after,
+    );
+    update({ text: next.text }, 'Insert mark');
+    await tick();
+    textarea.focus();
+    textarea.setSelectionRange(next.start, next.end);
+  }
+
   const lineText = (c: Cue): string =>
     c.line === 'auto' ? 'auto' : c.snapToLines ? String(c.line) : `${c.line}%`;
   const posText = (c: Cue): string => (c.position === 'auto' ? 'auto' : `${c.position}%`);
@@ -128,17 +173,65 @@
         </p>
       {/if}
 
-      <label class="text-label" for="cue-text"
-        >Text <span class="muted">(WebVTT markup, e.g. &lt;i&gt;, &lt;v Name&gt;, &amp;amp;)</span
-        ></label
-      >
+      <div class="text-head">
+        <label class="text-label" for="cue-text"
+          >Text <span class="muted">(WebVTT markup, e.g. &lt;i&gt;, &lt;v Name&gt;, &amp;amp;)</span
+          ></label
+        >
+        <label
+          class="language"
+          title={editor.language && editor.languageSource
+            ? `${languageName(editor.language) ?? editor.language}, ${SOURCE_LABEL[editor.languageSource]}`
+            : 'The text’s language, for spelling and line breaking (a BCP 47 tag, e.g. fi)'}
+        >
+          Language
+          <input
+            value={editor.language ?? ''}
+            list="language-tags"
+            size="7"
+            placeholder="unknown"
+            autocomplete="off"
+            onchange={(e) => commitLanguage(e.currentTarget)}
+          />
+        </label>
+        <datalist id="language-tags">
+          {#each LANGUAGES as tag (tag)}<option value={tag}>{languageName(tag) ?? tag}</option
+            >{/each}
+        </datalist>
+      </div>
       <textarea
         id="cue-text"
         bind:this={textarea}
         value={cue.text}
         rows="3"
+        lang={editor.language ?? undefined}
+        dir="auto"
         spellcheck="true"
         oninput={(e) => update({ text: e.currentTarget.value }, 'Edit text', 'text')}></textarea>
+
+      <div class="marks">
+        {#if marks.length > 0}
+          <span class="muted">Invisible characters:</span>
+          {#each marks as { mark, count } (mark.char)}
+            <button
+              class="small mark"
+              title="{mark.name}{count > 1 ? ` (${count})` : ''}: click to remove"
+              aria-label="Remove {mark.name}{count > 1 ? ` (${count})` : ''}"
+              onclick={() =>
+                update({ text: withoutMark(cue.text, mark.char) }, `Remove ${mark.abbr}`)}
+              >{mark.abbr}{count > 1 ? ` ×${count}` : ''}</button
+            >
+          {/each}
+        {/if}
+        <select
+          class="insert-mark"
+          aria-label="Insert an invisible character"
+          onchange={(e) => void insertMark(e.currentTarget)}
+        >
+          <option value="">Insert mark…</option>
+          {#each INSERTS as ins, i (ins.label)}<option value={i}>{ins.label}</option>{/each}
+        </select>
+      </div>
 
       <details class="settings">
         <summary>Settings</summary>
@@ -256,8 +349,29 @@
     font-family: var(--mono);
     font-size: 0.9rem;
   }
-  .text-label {
-    display: block;
+  .text-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+  }
+  .language {
+    margin-left: auto;
+    font-size: 0.85rem;
+  }
+  .marks {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+  }
+  .mark {
+    font-family: var(--mono);
+  }
+  .insert-mark {
+    margin-left: auto;
+    font-size: 0.85rem;
   }
   .multiple {
     margin: 0;

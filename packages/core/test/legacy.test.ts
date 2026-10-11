@@ -196,6 +196,75 @@ describe('file encodings', () => {
     expect(decodeFile(latin1)).toEqual({ text: vtt, encoding: 'windows-1252', guessed: true });
   });
 
+  /** Encodes text in a legacy encoding, by searching its one- and two-byte codes. */
+  function encodeLegacy(text: string, label: string): Uint8Array {
+    const decoder = new TextDecoder(label, { fatal: true });
+    const codes = new Map<string, number[]>();
+    const tryBytes = (b: number[]) => {
+      try {
+        const ch = decoder.decode(Uint8Array.from(b));
+        if ([...ch].length === 1 && !codes.has(ch)) codes.set(ch, b);
+      } catch {
+        // Not a character in this encoding.
+      }
+    };
+    for (let a = 0x80; a <= 0xff; a++) tryBytes([a]);
+    const needed = new Set([...text].filter((c) => c.charCodeAt(0) >= 0x80 && !codes.has(c)));
+    for (let a = 0x81; a <= 0xfe && needed.size > 0; a++)
+      for (let b = 0x40; b <= 0xfe; b++) {
+        tryBytes([a, b]);
+        const ch = decoder.decode(Uint8Array.from(codes.get([...needed][0] as string) ?? []));
+        if (needed.has(ch)) needed.delete(ch);
+        for (const c of needed) if (codes.has(c)) needed.delete(c);
+      }
+    return Uint8Array.from(
+      [...text].flatMap((c) =>
+        c.charCodeAt(0) < 0x80 ? [c.charCodeAt(0)] : (codes.get(c) ?? [0x3f]),
+      ),
+    );
+  }
+
+  it.each([
+    [
+      'windows-1251',
+      'Что ты думаешь о новом плане? Я думаю, что он неплохой, но мы должны сначала поговорить с ними.',
+    ],
+    [
+      'koi8-r',
+      'Что ты думаешь о новом плане? Я думаю, что он неплохой, но мы должны сначала поговорить с ними.',
+    ],
+    [
+      'windows-1250',
+      'Co myślisz o nowym planie? Myślę, że nie jest zły, ale musimy najpierw z nimi porozmawiać, bo to jest ich decyzja i tak już było.',
+    ],
+    [
+      'windows-1253',
+      'Τι πιστεύεις για το νέο σχέδιο; Νομίζω ότι δεν είναι κακό, αλλά πρέπει πρώτα να μιλήσουμε μαζί τους.',
+    ],
+    [
+      'windows-1255',
+      'מה אתה חושב על התוכנית החדשה? אני חושב שהיא לא רעה, אבל אנחנו צריכים לדבר איתם קודם.',
+    ],
+    [
+      'shift_jis',
+      '今日はいい天気ですね。散歩に行きましょうか。そうですね、公園まで歩いて、それからお昼ご飯を食べましょう。',
+    ],
+    [
+      'gb18030',
+      '我们今天去公园吗？这个时候人很多，没有地方坐。对，我们还是在家里看电视吧，你说呢？',
+    ],
+    ['big5', '我們今天去公園嗎？這個時候人很多，沒有地方坐。對，我們還是在家裡看電視吧，你說呢？'],
+    [
+      'windows-1252',
+      'Mitä mieltä olet uudesta suunnitelmasta? Minusta se ei ole huono, mutta meidän täytyy puhua heidän kanssaan. Jos he sanovat että se on hyvä, niin tämä on valmis.',
+    ],
+  ])('recognizes %s from the text', (label, line) => {
+    const text = `WEBVTT\n\n00:00.000 --> 00:05.000 align:start position:0%\n${line}\n`;
+    const bytes = encodeLegacy(text, label);
+    expect(new TextDecoder(label).decode(bytes)).toBe(text);
+    expect(decodeFile(bytes)).toEqual({ text, encoding: label, guessed: true });
+  });
+
   it('honours a UTF-16 byte order mark', () => {
     const le = new Uint8Array(2 + vtt.length * 2);
     le.set([0xff, 0xfe]);

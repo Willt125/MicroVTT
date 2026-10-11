@@ -38,6 +38,15 @@ export type QualityRuleId =
   | 'acronym-periods'
   | 'finnish-abbreviations'
   | 'agency-names'
+  | 'no-italics'
+  | 'zh-hans-punctuation'
+  | 'zh-hant-punctuation'
+  | 'zh-numbers'
+  | 'ja-punctuation'
+  | 'ja-numbers'
+  | 'ja-latin'
+  | 'half-width-katakana'
+  | 'ko-punctuation'
   | 'bbc-characters'
   | 'bbc-colours'
   | 'contrast';
@@ -103,6 +112,8 @@ export interface Ruleset {
   id: string;
   name: string;
   description: string;
+  /** The language the ruleset is for (a primary language subtag); none for any language. */
+  language?: string;
   sources: GuideSource[];
   /** Requirements of the guides that cannot be checked from the file, for the record. */
   notChecked: string[];

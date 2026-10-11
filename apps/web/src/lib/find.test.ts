@@ -42,6 +42,17 @@ describe('find', () => {
     expect(buildPattern(opts('(', { regex: true }))).toMatch(/Invalid|Unterminated/);
   });
 
+  it('finds composed and decomposed letters alike', () => {
+    const text = 'Cafe\u0301 ja café, 한국 and \u1112\u1161\u11ab\u1100\u116e\u11a8';
+    expect(text.match(pattern('café'))?.length).toBe(2);
+    expect(text.match(pattern('cafe\u0301'))?.length).toBe(2);
+    expect(text.match(pattern('CAFÉ', { matchCase: false }))?.length).toBe(2);
+    expect(text.match(pattern('한국'))?.length).toBe(2);
+    // A word ends after its combining marks.
+    expect('cafe\u0301'.match(pattern('cafe', { wholeWord: true }))).toBeNull();
+    expect('नमस्ते'.match(pattern('नम', { wholeWord: true }))).toBeNull();
+  });
+
   it('finds matches in table order and steps with wraparound', () => {
     const d = doc('one two', 'two', 'three');
     const rows = [0, 1, 2];

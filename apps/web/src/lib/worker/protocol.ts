@@ -9,6 +9,7 @@ import type {
   ReviewMarker,
   ExportOptions,
   FileType,
+  LanguageHintSource,
   QualityFinding,
   RepairEntry,
   RuleOverrides,
@@ -79,6 +80,9 @@ export interface AutosaveMeta {
   /** `Date.now()` when saved. */
   savedAt: number;
   cues: number;
+  /** The editor's language and where it came from (absent in older saves). */
+  language?: string | null;
+  languageSource?: LanguageHintSource | 'user' | null;
 }
 
 export interface Autosave {

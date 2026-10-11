@@ -7,6 +7,8 @@ import type {
   Cue,
   ExportOptions,
   FileType,
+  LanguageGuess,
+  LanguageHintSource,
   QualityFinding,
   QualityRuleId,
   VttDocument,
@@ -19,8 +21,12 @@ import {
   createCue,
   createDocument,
   findQuickFixes,
+  guessLanguage,
+  isValidLanguageTag,
+  languageHint,
   mergeCues,
   resyncCues,
+  sampleText,
   shiftCues,
   sortCuesMapped,
   splitCue,
@@ -106,6 +112,15 @@ export class Editor {
   autoCaptions = $state.raw<AutoCaptionInfo | null>(null);
   /** Whether to show the offer to clean up (until used or dismissed). */
   cleanupOffered = $state(false);
+  /**
+   * The text's language (a BCP 47 tag), set on the text fields for spelling, fonts and line
+   * breaking; null when unknown. Never changed by a guess without asking.
+   */
+  language = $state<string | null>(null);
+  /** Where `language` came from: the file, or the user. */
+  languageSource = $state<LanguageHintSource | 'user' | null>(null);
+  /** A confident guess at the language when the file names none, offered until answered. */
+  languageGuess = $state.raw<LanguageGuess | null>(null);
   /** The encoding the open file was read in; not "utf-8" only for files that are not UTF-8. */
   encoding = $state('utf-8');
   encodingGuessed = $state(false);
@@ -361,6 +376,16 @@ export class Editor {
     this.canRedo = this.future.length > 0;
   }
 
+  /** Sets the text's language (null for none); a tag that is not valid BCP 47 is refused. */
+  setLanguage(tag: string | null): void {
+    const value = tag?.trim() || null;
+    if (value !== null && !isValidLanguageTag(value))
+      throw new Error(`"${value}" is not a language tag (e.g. fi, en-GB, zh-Hant).`);
+    this.language = value;
+    this.languageSource = value === null ? null : 'user';
+    this.languageGuess = null;
+  }
+
   /** Starts a new, empty document. */
   newDocument(): void {
     this.load(createDocument(), 'untitled.vtt', [], null);
@@ -379,6 +404,10 @@ export class Editor {
     this.importDiagnostics = importDiagnostics;
     this.autoCaptions = autoCaptions?.detected ? autoCaptions : null;
     this.cleanupOffered = this.autoCaptions !== null;
+    const hint = languageHint(doc, name);
+    this.language = hint?.tag ?? null;
+    this.languageSource = hint?.source ?? null;
+    this.languageGuess = hint ? null : guessLanguage(sampleText(doc));
     this.encoding = 'utf-8';
     this.encodingGuessed = false;
     this.sourceBytes = null;
@@ -621,6 +650,11 @@ export class Editor {
     }
     this.load(save.document, save.meta.fileName, [], null);
     this.fileType = save.meta.fileType;
+    if (save.meta.language !== undefined) {
+      this.language = save.meta.language;
+      this.languageSource = save.meta.languageSource ?? null;
+      if (this.language !== null) this.languageGuess = null;
+    }
     this.dirty = true;
     this.autosaved = true; // It is this session's work now.
     this.restorable = null;
@@ -646,6 +680,8 @@ export class Editor {
       fileType: this.fileType,
       savedAt: Date.now(),
       cues: this.cueRows.length,
+      language: this.language,
+      languageSource: this.languageSource,
     };
     try {
       // The worker handles requests in order, so it still holds `workerDoc` when this arrives.

@@ -170,6 +170,30 @@ describe('Editor', () => {
     expect(editor.selectedCue?.text).toBe('pasted');
   });
 
+  it('takes the language from the file, and only offers a guess', async () => {
+    const editor = new Editor(fakeWorker());
+    await editor.open(file(SAMPLE, 'talk.fi.vtt'));
+    expect([editor.language, editor.languageSource, editor.languageGuess]).toEqual([
+      'fi',
+      'file-name',
+      null,
+    ]);
+    const russian =
+      'Что ты думаешь о новом плане? Я думаю, что он неплохой, но мы должны сначала поговорить с ними.';
+    await editor.open(file(`WEBVTT\n\n00:00.000 --> 00:05.000\n${russian}\n`));
+    expect(editor.language).toBeNull();
+    expect(editor.languageGuess?.tag).toBe('ru');
+    editor.setLanguage(editor.languageGuess!.tag);
+    expect([editor.language, editor.languageSource, editor.languageGuess]).toEqual([
+      'ru',
+      'user',
+      null,
+    ]);
+    expect(() => editor.setLanguage('not a tag')).toThrow(/not a language tag/);
+    editor.setLanguage('');
+    expect(editor.language).toBeNull();
+  });
+
   it('autosaves edits, restores them, and clears the save once saved', async () => {
     vi.useFakeTimers();
     const store: { save: Autosave | null } = { save: null };
@@ -177,7 +201,7 @@ describe('Editor', () => {
     await editor.open(file(SAMPLE));
     editor.updateSelected((c) => ({ ...c, text: 'edited' }), 'Edit text');
     await vi.advanceTimersByTimeAsync(2000);
-    expect(store.save?.meta).toMatchObject({ fileName: 'a.vtt', cues: 2 });
+    expect(store.save?.meta).toMatchObject({ fileName: 'a.vtt', cues: 2, language: null });
     expect(editor.autosaveStatus).toBe('saved');
 
     const later = new Editor(fakeWorker(store));
