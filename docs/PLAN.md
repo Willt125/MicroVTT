@@ -678,7 +678,29 @@ Next, in this order (owner, 2026-10-11):
     `removeSpan`, `clearMarkup`, `spanTags`, `classProblem`, `languageProblem`,
     `timestampTags`, `setTimestamp`, `removeTimestamp(s)`, `insertTimestamp`,
     `timestampProblems`, `cueWords`, `timeWords`, `spreadWordTimes`.
-- Chapters and metadata file modes.
+- [x] **6f: chapters and metadata modes** (2026-10-11):
+  - The file type (captions, chapters, metadata, any) is chosen in the toolbar ("Type", WebVTT
+    only) as well as in Export, and the editor follows it. A file opens as captions; when its
+    name says chapters or metadata, every payload is JSON, or its cues look like chapters (long,
+    one-line titles that follow each other), a banner offers the other type. Opening another file
+    resets the type; autosave keeps it.
+  - Chapters and metadata get no markup tools, word timing, cue settings, caption overlay or
+    style rules (those are for caption text). The validator's chapter rules apply as before.
+  - Chapters: the cue field is the title; a Chapters panel shows the outline (nested chapters
+    indented, crossing ones flagged), adds a chapter at the playhead (splitting the chapter
+    there) or after the last one, makes the top-level chapters continuous (first from 0:00, the
+    last to the media's end), imports a chapter list ("0:00 Intro" lines, time before or after
+    the title) and copies the chapters out as one, with what YouTube would object to. The
+    chapter at the playhead shows over the media.
+  - Metadata: the payload field is monospace without spell check; a JSON payload is checked as
+    you type, and Format / One line rewrite it with "-->" inside strings as "--\u003e". Blank
+    lines and "-->" are flagged.
+  - The side column scrolls when the media and panels do not fit, and each panel keeps a
+    minimum height (with media open, panels could shrink to nothing under the timeline).
+  - Core: `chapterOutline`, `splitChapterAt`, `makeChaptersContinuous`, `parseChapterList`,
+    `chaptersFromList`, `chapterList`, `formatListTime`, `chapterTitleText` (`chapters.ts`);
+    `looksLikeJson`, `jsonProblem`, `formatJson`, `metadataPayloadProblems`, `guessFileType`
+    (`metadata.ts`).
 - The scroll-up animation of regions (0.433s): scroll-up regions show their latest lines, but
   the renderer rebuilds the cues it draws whenever they change, so nothing moves smoothly yet.
 - Renderer reference results on Firefox and WebKit: the WPT harness runs there with
@@ -861,6 +883,9 @@ Next, in this order (owner, 2026-10-11):
   BOM, renumber, and write UTF-8 (the original encoding when every character fits). Its editable
   markup is `<b>` `<i>` `<u>` `<font color>` and `{\an1}`–`{\an9}`; other brace blocks are kept
   as found. The preview converts SRT to WebVTT for the spec renderer.
+- **2026-10-11 (owner):** Chapters mode converts to and from chapter lists ("0:00 Intro");
+  metadata mode understands JSON payloads; the file type is guessed on open and offered, never
+  switched without asking.
 - **2026-10-11 (owner):** Rich cue-text editing is markup tools over the raw text field (with a
   breadcrumb of the spans at the cursor), not a formatted editor. Word timing includes editing,
   spreading and tap timing in the same PR.

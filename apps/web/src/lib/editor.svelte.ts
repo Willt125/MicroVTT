@@ -6,6 +6,7 @@
 import type {
   Cue,
   FileType,
+  FileTypeGuess,
   LanguageGuess,
   LanguageHintSource,
   QualityFinding,
@@ -25,6 +26,7 @@ import {
   formatById,
   formatOf,
   WEBVTT,
+  guessFileType,
   guessLanguage,
   isValidLanguageTag,
   languageHint,
@@ -130,6 +132,8 @@ export class Editor {
   languageSource = $state<LanguageHintSource | 'user' | null>(null);
   /** A confident guess at the language when the file names none, offered until answered. */
   languageGuess = $state.raw<LanguageGuess | null>(null);
+  /** A guess that the file holds chapters or metadata, offered until answered. */
+  fileTypeGuess = $state.raw<FileTypeGuess | null>(null);
   /** The encoding the open file was read in; not "utf-8" only for files that are not UTF-8. */
   encoding = $state('utf-8');
   encodingGuessed = $state(false);
@@ -440,6 +444,9 @@ export class Editor {
     this.language = hint?.tag ?? null;
     this.languageSource = hint?.source ?? null;
     this.languageGuess = hint ? null : guessLanguage(sampleText(doc));
+    // Every file opens as captions; chapters and metadata are offered when it looks like one.
+    this.fileType = 'captions';
+    this.fileTypeGuess = format.id === 'webvtt' ? guessFileType(doc, name) : null;
     this.encoding = 'utf-8';
     this.encodingGuessed = false;
     this.style = { lineEnding: '\n', byteOrderMark: false };
@@ -568,6 +575,7 @@ export class Editor {
 
   setFileType(fileType: FileType): void {
     this.fileType = fileType;
+    this.fileTypeGuess = null;
     this.scheduleValidation(0);
   }
 
@@ -711,6 +719,7 @@ export class Editor {
       formatById(save.meta.format ?? 'webvtt'),
     );
     this.fileType = save.meta.fileType;
+    this.fileTypeGuess = null;
     if (save.meta.style) this.style = save.meta.style;
     if (save.meta.language !== undefined) {
       this.language = save.meta.language;
@@ -866,7 +875,8 @@ export class Editor {
     try {
       const { ruleset, overrides } = this.qualitySettings;
       const quality =
-        ruleset === '' || this.qualityPaused
+        // The style rules (reading speed, line length…) are for text people read as captions.
+        ruleset === '' || this.qualityPaused || this.fileType !== 'captions'
           ? null
           : {
               ruleset,

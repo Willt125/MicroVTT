@@ -226,3 +226,22 @@ export {
   wrapRange,
 } from './markup.ts';
 export type { MarkupEdit, MarkupKind, MarkupSpan, TextRange, TimestampTag } from './markup.ts';
+export {
+  chapterList,
+  chapterOutline,
+  chaptersFromList,
+  chapterTitleText,
+  formatListTime,
+  makeChaptersContinuous,
+  parseChapterList,
+  splitChapterAt,
+} from './chapters.ts';
+export type { ChapterEntry, ListedChapter } from './chapters.ts';
+export {
+  formatJson,
+  guessFileType,
+  jsonProblem,
+  looksLikeJson,
+  metadataPayloadProblems,
+} from './metadata.ts';
+export type { FileTypeGuess } from './metadata.ts';
