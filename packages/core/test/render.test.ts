@@ -131,7 +131,7 @@ describe('style sheets (§8)', () => {
       `${scope} c.yellow, ${scope} v[voice="Esme"] { color: yellow; font-size: 2em; }`,
     );
     expect(scopeCueStylesheet('::cue(#intro) { color: red }', scope, true)).toBe(
-      `${scope} [data-vtt-id="intro"] { color: red; }`,
+      `${scope} [data-vtt-id="intro"]:is(.vtt-cue, .vtt-node) { color: red; }`,
     );
     expect(scopeCueStylesheet('::cue(span) { color: red }', scope, true)).toBe(
       `${scope} vtt-none { color: red; }`,
@@ -141,9 +141,24 @@ describe('style sheets (§8)', () => {
     );
   });
 
+  it('limits selectors to the cue and its nodes, in the empty namespace', () => {
+    expect(scopeCueStylesheet('::cue(:not(:root)) { color: red }', scope, true)).toBe(
+      `${scope} :not(.vtt-cue:is(.vtt-cue, .vtt-node)):is(.vtt-cue, .vtt-node) { color: red; }`,
+    );
+    expect(scopeCueStylesheet('::cue(|c) { color: red }', scope, true)).toBe(
+      `${scope} c { color: red; }`,
+    );
+    expect(scopeCueStylesheet('::cue(*|*) { color: red }', scope, true)).toBe(
+      `${scope} :is(.vtt-cue, .vtt-node) { color: red; }`,
+    );
+    expect(scopeCueStylesheet('::cue(svg|c) { color: red }', scope, true)).toBe(
+      `${scope} c:not(*) { color: red; }`,
+    );
+  });
+
   it('keeps sizing properties out of :past and :future rules', () => {
     expect(scopeCueStylesheet('::cue(:past) { color: grey; font-size: 30px }', scope, true)).toBe(
-      `${scope} .vtt-past { color: grey; }`,
+      `${scope} .vtt-past:is(.vtt-cue, .vtt-node) { color: grey; }`,
     );
   });
 
@@ -152,6 +167,12 @@ describe('style sheets (§8)', () => {
       `${scope} .vtt-region[data-vtt-region-id="fred"] { color: red; }`,
     );
     expect(scopeCueStylesheet('::cue-region(.x) { color: red }', scope, true)).toBe('');
+    expect(scopeCueStylesheet('::cue-region(#\\31 2) { color: red }', scope, true)).toBe(
+      `${scope} .vtt-region[data-vtt-region-id="12"] { color: red; }`,
+    );
+    expect(scopeCueStylesheet('::cue(#\\31) { color: red }', scope, true)).toBe(
+      `${scope} [data-vtt-id="1"]:is(.vtt-cue, .vtt-node) { color: red; }`,
+    );
   });
 
   it('applies STYLE blocks only to the track, and page styles through the video', () => {

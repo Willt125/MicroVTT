@@ -63,12 +63,29 @@ function splitList(text: string): string[] {
 }
 
 /** Reads a CSS identifier at `i` (with escapes); returns it and the index after it. */
+/** An identifier with its CSS escapes (`\\31 `, `\\:`) resolved. */
+function unescapeIdent(text: string): string {
+  return text.replace(
+    /\\(?:([0-9a-fA-F]{1,6})[ \t\n]?|([\s\S]))/g,
+    (_, hex?: string, ch?: string) => {
+      if (hex === undefined) return ch ?? '';
+      const code = parseInt(hex, 16);
+      return code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)
+        ? '\ufffd'
+        : String.fromCodePoint(code);
+    },
+  );
+}
+
 function readIdent(text: string, i: number): [string, number] {
   let j = i;
   while (j < text.length) {
     const ch = text[j] as string;
-    if (ch === '\\') j += 2;
-    else if (/[\w-]/.test(ch) || ch.charCodeAt(0) > 0x7f) j++;
+    if (ch === '\\') {
+      // An escape: up to six hex digits and one white space, or any one character.
+      const hex = /^[0-9a-fA-F]{1,6}[ \t\n]?/.exec(text.slice(j + 1, j + 8));
+      j += 1 + (hex ? hex[0].length : 1);
+    } else if (/[\w-]/.test(ch) || ch.charCodeAt(0) > 0x7f) j++;
     else break;
   }
   return [text.slice(i, j), j];
@@ -105,8 +122,47 @@ const SELECTOR_ARGUMENTS = new Set(['not', 'is', 'where', 'has', 'matches']);
 function rewriteCueSelector(selector: string, state: { timed: boolean }): string | null {
   let out = '';
   let i = 0;
+  // Whether the current compound names its element (a type or universal selector). Compounds
+  // that do not are limited to the cue and its nodes, so that :not() and the like cannot reach
+  // the boxes the renderer adds around them.
+  let typed = false;
+  let compound = false;
+  // A named namespace prefix: node objects are in the empty namespace (§8), so it cannot match.
+  let foreign = false;
+  const endCompound = (): void => {
+    if (compound && !typed) out += ':is(.vtt-cue, .vtt-node)';
+    if (foreign) out += ':not(*)';
+    typed = false;
+    compound = false;
+    foreign = false;
+  };
+  const prefix = (at: number): boolean => selector[at] === '|' && selector[at + 1] !== '=';
   while (i < selector.length) {
     const ch = selector[i] as string;
+    if (/[\s>+~]/.test(ch)) {
+      endCompound();
+      out += ch;
+      i++;
+      continue;
+    }
+    compound = true;
+    // Namespace prefixes: `*|` and `|` (no namespace) match node objects.
+    if (prefix(i)) {
+      i++;
+      continue;
+    }
+    if (ch === '*' && prefix(i + 1)) {
+      i += 2;
+      continue;
+    }
+    if (/[A-Za-z_\\-]/.test(ch) || ch.charCodeAt(0) > 0x7f) {
+      const [, end] = readIdent(selector, i);
+      if (prefix(end)) {
+        foreign = true;
+        i = end + 1;
+        continue;
+      }
+    }
     if (ch === '"' || ch === "'") {
       const end = selector.indexOf(ch, i + 1);
       out += selector.slice(i, end === -1 ? selector.length : end + 1);
@@ -117,7 +173,7 @@ function rewriteCueSelector(selector: string, state: { timed: boolean }): string
       i = end;
     } else if (ch === '#') {
       const [id, end] = readIdent(selector, i + 1);
-      out += `[data-vtt-id=${cssString(id.replace(/\\(.)/g, '$1'))}]`;
+      out += `[data-vtt-id=${cssString(unescapeIdent(id))}]`;
       i = end;
     } else if (ch === '.') {
       const [name, end] = readIdent(selector, i + 1);
@@ -145,18 +201,79 @@ function rewriteCueSelector(selector: string, state: { timed: boolean }): string
       i = next;
     } else if (ch === '*') {
       out += ':is(.vtt-cue, .vtt-node)';
+      typed = true;
       i++;
     } else if (/[A-Za-z_\\-]/.test(ch) || ch.charCodeAt(0) > 0x7f) {
       // A type selector: WebVTT names match their elements; other names match nothing.
       const [name, end] = readIdent(selector, i);
       out += NODE_NAMES.has(name.toLowerCase()) ? name.toLowerCase() : 'vtt-none';
+      typed = true;
       i = end;
     } else {
       out += ch;
       i++;
     }
   }
+  endCompound();
   return out;
+}
+
+/**
+ * Whether a compound selector matches the element STYLE blocks apply to (§7.3): a single empty
+ * element with no name, no namespace, no attributes, classes or ID, and no parent or siblings.
+ * Universal selectors (`*`, `*|*`, `|*`), `:not()`, `:is()` and `:where()` can match it;
+ * names, namespaces, attributes, other pseudo-classes and combinators cannot.
+ */
+function matchesHypotheticalElement(selector: string): boolean {
+  let i = 0;
+  const text = selector.trim();
+  if (text === '') return true;
+  while (i < text.length) {
+    const rest = text.slice(i);
+    const universal = /^(?:\*\|\*|\|\*|\*)/.exec(rest);
+    if (universal) {
+      i += universal[0].length;
+      continue;
+    }
+    if (rest.startsWith(':')) {
+      const [name, end] = readIdent(text, i + 1);
+      const lower = name.toLowerCase();
+      if (text[end] !== '(' || !['not', 'is', 'where'].includes(lower)) return false;
+      const close = skipGroup(text, end);
+      const inner = splitList(text.slice(end + 1, close - 1)).map(matchesHypotheticalElement);
+      if (lower === 'not' ? inner.some(Boolean) : !inner.some(Boolean)) return false;
+      i = close;
+      continue;
+    }
+    // A name, a namespace, a class, an ID, an attribute or a combinator.
+    return false;
+  }
+  return true;
+}
+
+/**
+ * A declaration's value closed the way the end of a style sheet closes it (CSS Syntax: brackets
+ * and quotes left open at the end of the file are closed), so that it cannot swallow what the
+ * renderer writes after it; null when it has a stray closing bracket.
+ */
+function closeValue(value: string): string | null {
+  const open: string[] = [];
+  let quote = '';
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i] as string;
+    if (quote) {
+      if (ch === '\\') i++;
+      else if (ch === quote) quote = '';
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === '\\') i++;
+    else if (ch === '(') open.push(')');
+    else if (ch === '[') open.push(']');
+    else if (ch === ')' || ch === ']') {
+      if (open.pop() !== ch) return null;
+    }
+  }
+  if (open.length === 0 && !quote) return value;
+  return value.trimEnd() + quote + open.reverse().join('');
 }
 
 /** What a selector of the style sheet targets. */
@@ -167,22 +284,23 @@ type Target =
 
 /**
  * Parses `[prefix]::cue`, `::cue(…)`, `::cue-region` or `::cue-region(#id)`. Embedded style sheets
- * (STYLE blocks) apply to an element that matches no selector of its own, so any prefix there
- * means the rule matches nothing; a page's style sheet may name the video in front.
+ * (STYLE blocks) apply to an element that only universal selectors match (see
+ * matchesHypotheticalElement); a page's style sheet names the video, or nothing, in front.
  */
 function parseTarget(selector: string, embedded: boolean): Target | null {
   const m = /::cue(-region)?(?:\(([\s\S]*)\))?$/i.exec(selector);
   if (!m) return null;
   const prefix = selector.slice(0, m.index).trim();
-  if (embedded && prefix !== '') return null;
+  if (embedded && !matchesHypotheticalElement(prefix)) return null;
   // The argument is everything inside the outermost parentheses.
   const open = selector.indexOf('(', m.index);
   const argument =
     m[2] === undefined ? null : selector.slice(open + 1, skipGroup(selector, open) - 1).trim();
   if (m[1]) {
     if (argument === null) return { kind: 'region', id: null };
-    const id = /^#((?:[\w-]|\\.|[^\x20-\x7f])+)$/.exec(argument);
-    return id ? { kind: 'region', id: (id[1] as string).replace(/\\(.)/g, '$1') } : null;
+    if (!argument.startsWith('#')) return null;
+    const [id, end] = readIdent(argument, 1);
+    return id && end === argument.length ? { kind: 'region', id: unescapeIdent(id) } : null;
   }
   if (argument === null) return { kind: 'cue' };
   const state = { timed: false };
@@ -197,6 +315,8 @@ const blockedUrl = (value: string): boolean =>
     (m) => !/^data:/i.test((m[2] as string).trim()),
   );
 
+const IMPORTANT = /!\s*important\s*$/i;
+
 const declarationText = (declarations: CssDeclaration[]): string =>
   declarations.map((d) => `${d.name}: ${d.value};`).join(' ');
 
@@ -207,9 +327,15 @@ const scoped = (scope: string, selectors: string[]): string =>
 /**
  * A style sheet rewritten for the rendering DOM inside `scope` (a selector for the element
  * holding one track's cues and regions). `embedded`: a STYLE block of the track itself, rather
- * than a style sheet of the page the video is in.
+ * than a style sheet of the page the video is in. `importance`: keep only normal or only
+ * !important declarations (all by default).
  */
-export function scopeCueStylesheet(css: string, scope: string, embedded: boolean): string {
+export function scopeCueStylesheet(
+  css: string,
+  scope: string,
+  embedded: boolean,
+  importance?: 'normal' | 'important',
+): string {
   const sheet = parseStylesheet(css);
   const out: string[] = [];
   for (const rule of sheet.validRules) {
@@ -217,16 +343,22 @@ export function scopeCueStylesheet(css: string, scope: string, embedded: boolean
       const name = /^@([\w-]+)/.exec(rule.prelude)?.[1]?.toLowerCase();
       if (rule.body === null) continue; // @import (blocked), @charset, @namespace, @layer list.
       if (name === 'media' || name === 'supports' || name === 'layer' || name === 'container') {
-        const inner = scopeCueStylesheet(rule.body, scope, embedded);
+        const inner = scopeCueStylesheet(rule.body, scope, embedded, importance);
         if (inner) out.push(`${rule.prelude} { ${inner} }`);
-      } else if (name === 'keyframes' || name === 'font-face') {
+      } else if ((name === 'keyframes' || name === 'font-face') && importance !== 'important') {
         if (!(embedded && blockedUrl(rule.body))) out.push(`${rule.prelude} { ${rule.body} }`);
       }
       continue;
     }
-    const valid = rule.declarations.filter(
-      (d) => !sheet.invalidDeclarations.has(d) && !(embedded && blockedUrl(d.value)),
-    );
+    const valid = rule.declarations.flatMap((d) => {
+      const value = closeValue(d.value);
+      return sheet.invalidDeclarations.has(d) ||
+        value === null ||
+        (embedded && blockedUrl(value)) ||
+        (importance !== undefined && IMPORTANT.test(value) !== (importance === 'important'))
+        ? []
+        : [{ ...d, value }];
+    });
     const plain: string[] = [];
     const backgrounds: string[] = [];
     const regions: string[] = [];
