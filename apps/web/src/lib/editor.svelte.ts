@@ -351,6 +351,26 @@ export class Editor {
     );
   }
 
+  /** Applies `change` to every selected cue, as one undo step. */
+  updateSelection(change: (cue: Cue) => Cue, label: string): void {
+    const indices = this.selection;
+    if (indices.length === 0) return;
+    const body = [...this.doc.body];
+    for (const i of indices) {
+      const item = body[i];
+      if (item?.type === 'cue') body[i] = change(item);
+    }
+    this.apply(
+      { ...this.doc, body },
+      indices.length > 1 ? `${label} (${indices.length} cues)` : label,
+    );
+  }
+
+  /** Applies a change to the whole document (regions, for example), as one undo step. */
+  change(change: (doc: VttDocument) => VttDocument, label: string): void {
+    this.apply(change(this.doc), label);
+  }
+
   undo(): void {
     const entry = this.past.pop();
     if (!entry) return;

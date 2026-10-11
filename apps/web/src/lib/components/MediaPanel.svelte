@@ -6,13 +6,13 @@
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { srtToVtt, type Cue, type Region } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import { cueAt, loopTarget } from '../media.ts';
   import { RATES, type Player } from '../player.svelte.ts';
   import { formatTime } from '../time.ts';
   import { FRAME_RATES, rateLabel, standardRate } from '../frames.ts';
-  import { CueRenderer, type RenderTrack } from '../render/renderer.ts';
+  import { CueRenderer } from '../render/renderer.ts';
+  import { renderTrackOf } from '../render/track.ts';
 
   interface Props {
     editor: Editor;
@@ -68,16 +68,7 @@
   let picture = $state.raw({ left: 0, top: 0, width: 0, height: 0 });
   const specCaptions = $derived(player.captions && player.renderer === 'spec');
 
-  const renderTrack = $derived.by((): RenderTrack => {
-    // Formats other than WebVTT are drawn as their WebVTT conversion (SubRip's {\anN} as settings).
-    const doc = editor.format.id === 'srt' ? srtToVtt(editor.doc).document : editor.doc;
-    return {
-      cues: doc.body.filter((item): item is Cue => item.type === 'cue'),
-      regions: doc.head.filter((item): item is Region => item.type === 'region'),
-      styles: doc.head.flatMap((item) => (item.type === 'style' ? [item.css] : [])),
-      language: editor.language ?? undefined,
-    };
-  });
+  const renderTrack = $derived(renderTrackOf(editor.doc, editor.format.id, editor.language));
 
   function measure(): void {
     const v = player.element;

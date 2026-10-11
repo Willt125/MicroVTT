@@ -14,6 +14,7 @@
   import RulesDialog from './lib/components/RulesDialog.svelte';
   import Timeline from './lib/components/Timeline.svelte';
   import TimingDialog from './lib/components/TimingDialog.svelte';
+  import RegionsDialog from './lib/components/RegionsDialog.svelte';
   import Toolbar from './lib/components/Toolbar.svelte';
   import { Editor } from './lib/editor.svelte.ts';
   import { ACCEPT, canSaveInPlace, droppedHandle, pickSubtitleFile } from './lib/files.ts';
@@ -38,6 +39,7 @@
   let cleanupOpen = $state(false);
   let glossaryOpen = $state(false);
   let timingOpen = $state(false);
+  let regionsOpen = $state(false);
   let rulesOpen = $state(false);
   const waveform = new Waveform();
   /** The frame rate frame stepping uses: chosen, or measured from the video. */
@@ -140,6 +142,7 @@
       cleanupOpen ||
       glossaryOpen ||
       timingOpen ||
+      regionsOpen ||
       rulesOpen
     )
       return;
@@ -259,6 +262,7 @@
         cleanupOpen ||
         glossaryOpen ||
         timingOpen ||
+        regionsOpen ||
         rulesOpen
       )
         return;
@@ -404,7 +408,13 @@
       <section class="cues" aria-label="Cue list and editor">
         <FindBar {editor} bind:open={findOpen} />
         <CueTable {editor} onedit={focusText} />
-        <CueEditor {editor} bind:textarea />
+        <CueEditor
+          {editor}
+          bind:textarea
+          onregions={editor.format.cueSettings.includes('region')
+            ? () => (regionsOpen = true)
+            : undefined}
+        />
       </section>
       <div class="side">
         {#if player.hasMedia}
@@ -462,6 +472,7 @@
   <CleanupDialog {editor} bind:open={cleanupOpen} />
   <GlossaryDialog {editor} bind:open={glossaryOpen} />
   <TimingDialog {editor} {player} bind:open={timingOpen} />
+  <RegionsDialog {editor} bind:open={regionsOpen} />
   <RulesDialog {editor} bind:open={rulesOpen} />
 </div>
 

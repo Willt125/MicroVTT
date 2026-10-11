@@ -261,7 +261,12 @@ export class CueRenderer {
     this.built = [];
     if (width === 0 || height === 0) return;
 
-    const origin = this.container.getBoundingClientRect();
+    // Boxes are placed in the container's padding box: measure from there, not from its border.
+    const bounds = this.container.getBoundingClientRect();
+    const origin = {
+      left: bounds.left + this.container.clientLeft,
+      top: bounds.top + this.container.clientTop,
+    };
     const rectOf = (el: Element): Rect => {
       const r = el.getBoundingClientRect();
       return {
