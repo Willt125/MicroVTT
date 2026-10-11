@@ -678,6 +678,16 @@ Next, in this order (owner, 2026-10-11):
     `removeSpan`, `clearMarkup`, `spanTags`, `classProblem`, `languageProblem`,
     `timestampTags`, `setTimestamp`, `removeTimestamp(s)`, `insertTimestamp`,
     `timestampProblems`, `cueWords`, `timeWords`, `spreadWordTimes`.
+  - Paint-on and karaoke styling (added after Phase 6). `:past` and `:future` reach only the
+    cue's internal nodes (§8.2.2), never bare text, so timed words styled that way must be in a
+    span: "Wrap in <c>" (this cue, or all cues as one undo step) puts each run of bare text
+    beside a timestamp in `<c>`, whitespace outside (`wrapTimedParts`, `wrapTimedPartsInAll`).
+    The Styles dialog says when a sheet's `:past`/`:future` rules cannot reach some cues and
+    offers the same fix. Rule presets: "Words not yet spoken, greyed (karaoke)" and "…, hidden
+    (paint-on)" (`::cue(:future) { visibility: hidden; }`; hidden words keep their place, as the
+    layout does not change with time). `timeWords` puts a timing before the start tags of the
+    word it times, so re-timing keeps wrapped words wrapped. Firefox's own caption rendering
+    has no `:past`/`:future`, so there paint-on shows the whole cue at once.
 - [x] **6f: chapters and metadata modes** (2026-10-11):
   - The file type (captions, chapters, metadata, any) is chosen in the toolbar ("Type", WebVTT
     only) as well as in Export, and the editor follows it. A file opens as captions; when its

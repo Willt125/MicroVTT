@@ -3,6 +3,7 @@ import { checkStylesheet } from './css.ts';
 import { parseCueText, type CueNode } from './cuetext.ts';
 import { DIAGNOSTICS, type DiagnosticCode, type Severity } from './diagnostics.ts';
 import type { Style, VttDocument } from './document.ts';
+import { wrapTimedParts } from './markup.ts';
 
 /** A new STYLE block's starting text. */
 export const NEW_STYLE_SHEET = '::cue {\n  \n}';
@@ -118,7 +119,14 @@ export function ruleTemplates(selectors: CueSelectors): { label: string; css: st
     { label: 'Every cue', css: rule('::cue', 'color: white;') },
     { label: 'Italic text (<i>)', css: rule('::cue(i)', 'color: yellow;') },
     { label: 'Bold text (<b>)', css: rule('::cue(b)', 'color: yellow;') },
-    { label: 'Text still to be spoken (karaoke)', css: rule('::cue(:future)', 'color: grey;') },
+    {
+      label: 'Words not yet spoken, greyed (karaoke)',
+      css: rule('::cue(:future)', 'color: grey;'),
+    },
+    {
+      label: 'Words not yet spoken, hidden (paint-on)',
+      css: rule('::cue(:future)', 'visibility: hidden;'),
+    },
     { label: 'Every region', css: rule('::cue-region', 'background: transparent;') },
     ...[...selectors.classes.keys()].sort().map((c) => ({
       label: `Class .${c}`,
@@ -139,3 +147,23 @@ export function ruleTemplates(selectors: CueSelectors): { label: string; css: st
 }
 
 const CSS_IDENT = /^-?[_a-zA-Z][\w-]*$/;
+
+/**
+ * How many cues have timed text outside any tag, which `:past` and `:future` rules cannot reach
+ * (see `wrapTimedParts`).
+ */
+export const cuesWithUntaggedTiming = (doc: VttDocument): number =>
+  doc.body.filter((i) => i.type === 'cue' && wrapTimedParts(i.text) !== i.text).length;
+
+/** `doc` with every cue's timed text in tags (`wrapTimedParts`); the same document when none changes. */
+export function wrapTimedPartsInAll(doc: VttDocument): VttDocument {
+  let changed = false;
+  const body = doc.body.map((i) => {
+    if (i.type !== 'cue') return i;
+    const text = wrapTimedParts(i.text);
+    if (text === i.text) return i;
+    changed = true;
+    return { ...i, text };
+  });
+  return changed ? { ...doc, body } : doc;
+}

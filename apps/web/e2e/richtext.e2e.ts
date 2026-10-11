@@ -135,6 +135,57 @@ test('edits word timings without media', async ({ page }) => {
   await expect(cueText(page)).toHaveValue('One two three');
 });
 
+test('wraps timed text so the paint-on style hides words not yet spoken', async ({ page }) => {
+  await open(page, 'One two three');
+  const panel = page.locator('details.karaoke');
+  await panel.locator('summary').click();
+  await panel.getByRole('button', { name: 'Spread over words' }).click();
+  const wrap = panel.getByRole('group', { name: 'Wrap timed text' });
+  await expect(wrap).toContainText('Some timed text here is not in a tag');
+
+  // The Styles dialog's paint-on rule says it cannot reach the text yet, and offers the fix.
+  await page.getByRole('button', { name: 'Styles…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Styles' });
+  await dialog.getByRole('button', { name: 'Add style block' }).click();
+  const css = dialog.getByLabel('CSS');
+  await css.fill('');
+  await dialog
+    .getByLabel('Add a rule for')
+    .selectOption({ label: 'Words not yet spoken, hidden (paint-on)' });
+  await expect(css).toHaveValue('::cue(:future) {\n  visibility: hidden;\n}');
+  const note = dialog.getByRole('status').filter({ hasText: 'outside any tag' });
+  await expect(note).toContainText('1 cue has timed text outside any tag');
+  await note.getByRole('button', { name: 'Wrap it in <c>' }).click();
+  await expect(note).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  const wrapped = '<c>One</c> <00:00:01.818><c>two</c> <00:00:02.636><c>three</c>';
+  await expect(cueText(page)).toHaveValue(wrapped);
+  await expect(wrap).toHaveCount(0);
+
+  // The same from the word timing panel, as one undo step.
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(cueText(page)).toHaveValue('One <00:00:01.818>two <00:00:02.636>three');
+  await wrap.getByRole('button', { name: 'Wrap in <c>' }).click();
+  await expect(cueText(page)).toHaveValue(wrapped);
+
+  // Between the two timings, the last word is hidden and keeps its place.
+  await mediaInput(page).setInputFiles({
+    name: 'tone.wav',
+    mimeType: 'audio/wav',
+    buffer: wav(10),
+  });
+  await expect
+    .poll(() => page.locator('video').evaluate((v: HTMLVideoElement) => v.readyState), {
+      timeout: 10_000,
+    })
+    .toBeGreaterThanOrEqual(1);
+  await page.locator('video').evaluate((v: HTMLVideoElement) => (v.currentTime = 2.2));
+  const word = (w: string) => page.locator('.media .vtt-node', { hasText: w });
+  await expect(word('three')).toHaveCSS('visibility', 'hidden');
+  await expect(word('two')).toHaveCSS('visibility', 'visible');
+  await expect(word('One')).toHaveCSS('visibility', 'visible');
+});
+
 test('taps word timings while the media plays', async ({ page }) => {
   await open(page, 'One two three');
   await mediaInput(page).setInputFiles({
