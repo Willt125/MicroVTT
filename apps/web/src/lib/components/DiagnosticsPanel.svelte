@@ -151,6 +151,32 @@
     </details>
   {/if}
 
+  {#if editor.stylesMiss.cues.length > 0}
+    {@const miss = editor.stylesMiss}
+    <details class="fixes styles-miss" open>
+      <summary>Not reached by the styles ({miss.cues.length})</summary>
+      <p class="muted">
+        {#if miss.wrap === 'all'}
+          This file's styles put the background on <code>&lt;c&gt;</code> spans, so text outside one shows
+          without a background.
+        {:else}
+          This file's <code>:past</code> / <code>:future</code> styles reach only timed text in a
+          tag such as <code>&lt;c&gt;</code>.
+        {/if}
+      </p>
+      <ul class="cues">
+        {#each miss.cues.slice(0, MAX_SHOWN) as index (index)}
+          <li>
+            <button class="link" onclick={() => onjump(index)}>Cue {cueNumber(index)}</button>
+          </li>
+        {/each}
+      </ul>
+      <button onclick={() => editor.wrapForFileStyles()}
+        >Wrap in &lt;c&gt; ({miss.cues.length} {miss.cues.length === 1 ? 'cue' : 'cues'})</button
+      >
+    </details>
+  {/if}
+
   {#if editor.review.length > 0}
     <details class="review" open>
       <summary>
@@ -225,6 +251,15 @@
     margin: 0 0 0.4rem;
     padding: 0;
     font-size: 0.88rem;
+  }
+  .styles-miss .cues {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.6rem;
+  }
+  .styles-miss .cues li {
+    border-bottom: none;
+    padding: 0;
   }
   .fixes li {
     display: flex;

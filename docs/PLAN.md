@@ -698,7 +698,12 @@ hidden; }`; hidden words keep their place, as the layout does not change with ti
     (`wrapForBackground`, `cuesOutsideC`, `wrapForBackgroundInAll`; other spans of a timed cue
     get a `<c>` each, never one holding a timing, which would stay visible over hidden words).
     Captions only: chapter titles and metadata payloads are never wrapped. In Firefox every
-    word shows at once, on spans whose boxes meet, so it looks like the usual box.
+    word shows at once, on spans whose boxes meet, so it looks like the usual box. The preset's
+    `c` rules skip the spec's background colour classes (`c:not(.bg_white, …)`), which are
+    presentational hints below every sheet and would otherwise lose to it. Cues added or edited
+    later are caught too: the Problems panel lists the cues the file's styles cannot reach
+    ("Not reached by the styles", `cuesStylesMiss`) and wraps them in one step
+    (`wrapAsStylesNeed`).
   - Auto-caption cleanup drops YouTube's own `<c>` spans as it rebuilds the cues; its option
     "Put timed words in <c>" (`wrapInC`) wraps the new text as the file's style sheets need
     (`wrapForStyles`: all text when one backs `c` spans, timed text for `:past`/`:future`
