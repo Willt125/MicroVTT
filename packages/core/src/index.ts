@@ -180,3 +180,14 @@ export type {
   SrtStyle,
   SrtWriteResult,
 } from './srt/index.ts';
+export {
+  CUE_PLACEMENTS,
+  DEFAULT_CUE_SETTINGS,
+  addRegion,
+  deleteRegion,
+  nextRegionId,
+  regionIdProblem,
+  regionUse,
+  updateRegion,
+} from './regions.ts';
+export type { RegionUpdate } from './regions.ts';

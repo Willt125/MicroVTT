@@ -631,8 +631,24 @@ Next, in this order (owner, 2026-10-11):
     - Auto-caption cleanup stays WebVTT-only (it writes WebVTT word timings).
   - [ ] Check the import against real SubRip files from the owner (kept in
         `tests/private-fixtures/`), and fix what they show.
-- Editors for cue settings, regions and STYLE blocks. A rich cue-text editor for spans, voices,
-  ruby, lang, and karaoke timestamps.
+- [x] **6c: cue settings and regions editors** (2026-10-11):
+  - The cue editor's Settings panel has every WebVTT setting (line and its alignment, position
+    and its alignment, alignment, size, writing direction, region), with values checked as they
+    are typed. "Place" buttons set the cue at the top, in the middle or at the bottom, and
+    "Reset all" removes every setting. A preview draws the selected cue with the spec renderer,
+    with or without media. When several cues are selected, a change applies to all of them
+    (one undo step) unless "Apply to all" is unticked. The summary lists the settings that differ
+    from the defaults. SubRip keeps its one setting, Position.
+  - A Regions dialog (from the Region setting's "Edit…") adds, changes and deletes regions: id,
+    width, lines, region and viewport anchors, scroll. A frame shows where each region is.
+    Renaming a region renames it in its cues; deleting one used by cues asks first and leaves
+    them in no region. Values are checked as VTTRegion checks them. Core: `addRegion`,
+    `updateRegion`, `deleteRegion`, `regionIdProblem`, `regionUse`, `CUE_PLACEMENTS`,
+    `DEFAULT_CUE_SETTINGS`.
+  - The spec renderer now measures boxes from its container's padding box, so a bordered
+    container no longer pushes cues out of the area.
+- An editor for STYLE blocks. A rich cue-text editor for spans, voices, ruby, lang, and karaoke
+  timestamps.
 - Chapters and metadata file modes.
 - The scroll-up animation of regions (0.433s): scroll-up regions show their latest lines, but
   the renderer rebuilds the cues it draws whenever they change, so nothing moves smoothly yet.

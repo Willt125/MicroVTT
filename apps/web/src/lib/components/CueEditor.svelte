@@ -3,8 +3,24 @@
   `updateCue`, which applies VTTCue's rules (e.g. position and size must be 0–100%).
 -->
 <script lang="ts">
-  import type { AlignSetting, Cue, CueUpdate, DirectionSetting } from '@microvtt/core';
-  import { languageName, regionsOf, srtAnchor, updateCue, withSrtAnchor } from '@microvtt/core';
+  import type {
+    AlignSetting,
+    Cue,
+    CueUpdate,
+    DirectionSetting,
+    LineAlignSetting,
+    PositionAlignSetting,
+  } from '@microvtt/core';
+  import {
+    CUE_PLACEMENTS,
+    DEFAULT_CUE_SETTINGS,
+    languageName,
+    regionsOf,
+    srtAnchor,
+    updateCue,
+    withSrtAnchor,
+  } from '@microvtt/core';
+  import CuePreview from './CuePreview.svelte';
   import { tick } from 'svelte';
   import type { Editor } from '../editor.svelte.ts';
   import { INSERTS, insertAround, marksIn, withoutMark } from '../marks.ts';
@@ -14,9 +30,11 @@
   interface Props {
     editor: Editor;
     textarea?: HTMLTextAreaElement | undefined;
+    /** Opens the regions editor. */
+    onregions?: (() => void) | undefined;
   }
 
-  let { editor, textarea = $bindable() }: Props = $props();
+  let { editor, textarea = $bindable(), onregions }: Props = $props();
 
   const cue = $derived(editor.selectedCue);
   const problems = $derived(editor.diagnosticsByItem.get(editor.selected) ?? []);
@@ -36,6 +54,42 @@
   const settings = $derived(new Set(editor.format.cueSettings));
   const regions = $derived(regionsOf(editor.doc).map((r) => r.id));
   let fieldError = $state<string | null>(null);
+
+  /** Whether settings changes go to every selected cue (when several are selected). */
+  let toAll = $state(true);
+  let settingsOpen = $state(false);
+
+  /**
+   * Changes a setting: in the cue shown, or in every selected cue when several are selected and
+   * "Apply to all" is ticked. `change` may depend on the cue (SubRip's position is in its text).
+   */
+  function setting(change: CueUpdate | ((c: Cue) => CueUpdate), label: string): void {
+    const of = (c: Cue): CueUpdate => (typeof change === 'function' ? change(c) : change);
+    try {
+      if (editor.multiple && toAll) editor.updateSelection((c) => updateCue(c, of(c)), label);
+      else editor.updateSelected((c) => updateCue(c, of(c)), label);
+      fieldError = null;
+    } catch (error) {
+      fieldError = (error as Error).message;
+    }
+  }
+
+  /** The settings that differ from the defaults, for the summary. */
+  const changed = $derived.by(() => {
+    if (!cue) return [];
+    const names: string[] = [];
+    if (settings.has('anchor') && (srtAnchor(cue.text) ?? 2) !== 2) names.push('position');
+    if (!settings.has('line')) return names;
+    for (const [key, value] of Object.entries(DEFAULT_CUE_SETTINGS))
+      if (cue[key as keyof typeof DEFAULT_CUE_SETTINGS] !== value)
+        names.push(SETTING_NAMES[key] ?? key);
+    return [...new Set(names)];
+  });
+  const SETTING_NAMES: Record<string, string> = {
+    snapToLines: 'line',
+    lineAlign: 'line align',
+    positionAlign: 'position align',
+  };
 
   function update(change: CueUpdate, label: string, coalesce?: string): void {
     try {
@@ -73,29 +127,43 @@
     }
   }
 
-  /** "auto", a number (line number) or a percentage. */
-  function commitLine(value: string): void {
-    const v = value.trim();
-    if (v === '' || v === 'auto') return update({ line: 'auto', snapToLines: true }, 'Change line');
-    const pct = /^(-?[0-9.]+)%$/.exec(v);
-    const n = Number(pct ? pct[1] : v);
-    if (!Number.isFinite(n)) {
-      fieldError = `"${value}" is not a line: use auto, a line number (e.g. -1) or a percentage (e.g. 90%).`;
-      return;
-    }
-    update({ line: n, snapToLines: !pct }, 'Change line');
+  /** Marks a field invalid with a message, or valid. */
+  function invalid(input: HTMLInputElement, message: string | null): void {
+    if (message) input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
+    fieldError = message;
   }
 
-  function commitPercent(field: 'position' | 'size', value: string): void {
-    const v = value.trim().replace(/%$/, '');
-    if (field === 'position' && (v === '' || v === 'auto'))
-      return update({ position: 'auto' }, 'Change position');
-    const n = Number(v);
-    if (v === '' || !Number.isFinite(n)) {
-      fieldError = `"${value}" is not a percentage.`;
-      return;
+  /** "auto", a number (line number) or a percentage (0–100). */
+  function commitLine(input: HTMLInputElement): void {
+    const v = input.value.trim();
+    if (v === '' || v === 'auto') {
+      invalid(input, null);
+      return setting({ line: 'auto', snapToLines: true }, 'Change line');
     }
-    update({ [field]: n }, field === 'position' ? 'Change position' : 'Change size');
+    const pct = /^(-?[0-9.]+)\s*%$/.exec(v);
+    const n = Number(pct ? pct[1] : v);
+    if (!Number.isFinite(n) || (pct && (n < 0 || n > 100)) || (!pct && !Number.isInteger(n))) {
+      return invalid(
+        input,
+        `"${input.value}" is not a line: use auto, a whole line number (e.g. -1) or a percentage from 0 to 100 (e.g. 90%).`,
+      );
+    }
+    invalid(input, null);
+    setting({ line: n, snapToLines: !pct }, 'Change line');
+  }
+
+  function commitPercent(field: 'position' | 'size', input: HTMLInputElement): void {
+    const v = input.value.trim().replace(/\s*%$/, '');
+    if (field === 'position' && (v === '' || v === 'auto')) {
+      invalid(input, null);
+      return setting({ position: 'auto' }, 'Change position');
+    }
+    const n = Number(v);
+    if (v === '' || !Number.isFinite(n) || n < 0 || n > 100)
+      return invalid(input, `"${input.value}" is not a percentage from 0 to 100.`);
+    invalid(input, null);
+    setting({ [field]: n }, field === 'position' ? 'Change position' : 'Change size');
   }
 
   /** Languages offered in the language field (any BCP 47 tag can be typed). */
@@ -249,91 +317,165 @@
       </div>
 
       {#if settings.size > 0}
-        <details class="settings">
-          <summary>Settings</summary>
-          <div class="grid">
-            {#if settings.has('anchor')}
-              <label>
-                Position
-                <select
-                  value={String(srtAnchor(cue.text) ?? 2)}
-                  onchange={(e) =>
-                    update(
-                      { text: withSrtAnchor(cue.text, Number(e.currentTarget.value)) },
-                      'Change position',
-                    )}
+        <details class="settings" bind:open={settingsOpen}>
+          <summary
+            >Settings{#if changed.length > 0}<span class="muted changed"
+                >({changed.join(', ')})</span
+              >{/if}</summary
+          >
+          {#if editor.multiple}
+            <label class="check to-all">
+              <input type="checkbox" bind:checked={toAll} />
+              Apply to all {editor.selection.length} selected cues
+            </label>
+          {/if}
+          <div class="settings-body">
+            <div class="grid">
+              {#if settings.has('anchor')}
+                <label>
+                  Position
+                  <select
+                    value={String(srtAnchor(cue.text) ?? 2)}
+                    onchange={(e) => {
+                      const n = Number(e.currentTarget.value);
+                      setting((c) => ({ text: withSrtAnchor(c.text, n) }), 'Change position');
+                    }}
+                  >
+                    {#each ANCHORS as [n, label] (n)}<option value={String(n)}>{label}</option
+                      >{/each}
+                  </select>
+                </label>
+              {/if}
+              {#if settings.has('line')}
+                <label
+                  title="auto (the bottom), a line number (0 is the top, -1 the bottom), or a percentage of the height"
                 >
-                  {#each ANCHORS as [n, label] (n)}<option value={String(n)}>{label}</option>{/each}
-                </select>
-              </label>
-            {/if}
-            {#if settings.has('align')}
-              <label>
-                Align
-                <select
-                  value={cue.align}
-                  onchange={(e) =>
-                    update({ align: e.currentTarget.value as AlignSetting }, 'Change alignment')}
-                >
-                  {#each ['start', 'center', 'end', 'left', 'right'] as a (a)}<option value={a}
-                      >{a}</option
-                    >{/each}
-                </select>
-              </label>
-            {/if}
-            {#if settings.has('vertical')}
-              <label>
-                Vertical
-                <select
-                  value={cue.vertical}
-                  onchange={(e) =>
-                    update(
-                      { vertical: e.currentTarget.value as DirectionSetting },
-                      'Change direction',
-                    )}
-                >
-                  <option value="">horizontal</option>
-                  <option value="rl">rl (growing left)</option>
-                  <option value="lr">lr (growing right)</option>
-                </select>
-              </label>
-            {/if}
+                  Line
+                  <input value={lineText(cue)} onchange={(e) => commitLine(e.currentTarget)} />
+                </label>
+                <label title="Which edge of the cue the line puts there">
+                  Line align
+                  <select
+                    value={cue.lineAlign}
+                    onchange={(e) =>
+                      setting(
+                        { lineAlign: e.currentTarget.value as LineAlignSetting },
+                        'Change line alignment',
+                      )}
+                  >
+                    <option value="start">start (top edge)</option>
+                    <option value="center">center</option>
+                    <option value="end">end (bottom edge)</option>
+                  </select>
+                </label>
+              {/if}
+              {#if settings.has('align')}
+                <label title="How the text is aligned in the cue box">
+                  Align
+                  <select
+                    value={cue.align}
+                    onchange={(e) =>
+                      setting({ align: e.currentTarget.value as AlignSetting }, 'Change alignment')}
+                  >
+                    {#each ['start', 'center', 'end', 'left', 'right'] as a (a)}<option value={a}
+                        >{a}</option
+                      >{/each}
+                  </select>
+                </label>
+              {/if}
+              {#if settings.has('position')}
+                <label title="auto, or a percentage of the width where the cue box is placed">
+                  Position
+                  <input
+                    value={posText(cue)}
+                    onchange={(e) => commitPercent('position', e.currentTarget)}
+                  />
+                </label>
+                <label title="Which part of the cue box the position puts there">
+                  Position align
+                  <select
+                    value={cue.positionAlign}
+                    onchange={(e) =>
+                      setting(
+                        { positionAlign: e.currentTarget.value as PositionAlignSetting },
+                        'Change position alignment',
+                      )}
+                  >
+                    <option value="auto">auto (from align)</option>
+                    <option value="line-left">line-left</option>
+                    <option value="center">center</option>
+                    <option value="line-right">line-right</option>
+                  </select>
+                </label>
+              {/if}
+              {#if settings.has('size')}
+                <label title="The cue box's width, as a percentage of the video's">
+                  Size
+                  <input
+                    value={`${cue.size}%`}
+                    onchange={(e) => commitPercent('size', e.currentTarget)}
+                  />
+                </label>
+              {/if}
+              {#if settings.has('vertical')}
+                <label>
+                  Vertical
+                  <select
+                    value={cue.vertical}
+                    onchange={(e) =>
+                      setting(
+                        { vertical: e.currentTarget.value as DirectionSetting },
+                        'Change direction',
+                      )}
+                  >
+                    <option value="">horizontal</option>
+                    <option value="rl">rl (growing left)</option>
+                    <option value="lr">lr (growing right)</option>
+                  </select>
+                </label>
+              {/if}
+              {#if settings.has('region')}
+                <label>
+                  Region
+                  <span class="region">
+                    <select
+                      value={cue.region ?? ''}
+                      onchange={(e) =>
+                        setting({ region: e.currentTarget.value || null }, 'Change region')}
+                    >
+                      <option value="">(none)</option>
+                      {#each regions as id (id)}<option value={id}>{id}</option>{/each}
+                    </select>
+                    {#if onregions}
+                      <button
+                        class="small"
+                        onclick={onregions}
+                        title="Add, change or delete regions">Edit…</button
+                      >
+                    {/if}
+                  </span>
+                </label>
+              {/if}
+            </div>
             {#if settings.has('line')}
-              <label>
-                Line
-                <input value={lineText(cue)} onchange={(e) => commitLine(e.currentTarget.value)} />
-              </label>
-            {/if}
-            {#if settings.has('position')}
-              <label>
-                Position
-                <input
-                  value={posText(cue)}
-                  onchange={(e) => commitPercent('position', e.currentTarget.value)}
-                />
-              </label>
-            {/if}
-            {#if settings.has('size')}
-              <label>
-                Size
-                <input
-                  value={`${cue.size}%`}
-                  onchange={(e) => commitPercent('size', e.currentTarget.value)}
-                />
-              </label>
-            {/if}
-            {#if settings.has('region')}
-              <label>
-                Region
-                <select
-                  value={cue.region ?? ''}
-                  onchange={(e) =>
-                    update({ region: e.currentTarget.value || null }, 'Change region')}
+              <div class="presets" role="group" aria-label="Place the cue">
+                <span class="muted">Place:</span>
+                {#each CUE_PLACEMENTS as p (p.id)}
+                  <button
+                    class="small"
+                    onclick={() => setting(p.update, `Place at the ${p.label.toLowerCase()}`)}
+                    >{p.label}</button
+                  >
+                {/each}
+                <button
+                  class="small"
+                  onclick={() => setting(DEFAULT_CUE_SETTINGS, 'Reset settings')}
+                  title="Back to no settings (a centred cue at the bottom)">Reset all</button
                 >
-                  <option value="">(none)</option>
-                  {#each regions as id (id)}<option value={id}>{id}</option>{/each}
-                </select>
-              </label>
+              </div>
+            {/if}
+            {#if settingsOpen}
+              <CuePreview {editor} {cue} />
             {/if}
           </div>
         </details>
@@ -427,6 +569,34 @@
   }
   .settings summary {
     cursor: pointer;
+    font-size: 0.9rem;
+  }
+  .changed {
+    margin-left: 0.35rem;
+  }
+  .to-all {
+    display: block;
+    margin-top: 0.4rem;
+    font-size: 0.9rem;
+  }
+  .settings-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .region {
+    display: flex;
+    gap: 0.3rem;
+  }
+  .region select {
+    flex: 1;
+    min-width: 0;
+  }
+  .presets {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
     font-size: 0.9rem;
   }
   .grid {
