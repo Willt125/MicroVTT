@@ -256,3 +256,5 @@ export {
   metadataPayloadProblems,
 } from './metadata.ts';
 export type { FileTypeGuess } from './metadata.ts';
+export { DEFAULT_ROLL_UP, cueLines, makeRollUp } from './rollup.ts';
+export type { RollUpForm, RollUpLine, RollUpOptions, RollUpResult } from './rollup.ts';

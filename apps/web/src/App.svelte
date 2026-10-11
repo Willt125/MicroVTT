@@ -14,6 +14,7 @@
   import RulesDialog from './lib/components/RulesDialog.svelte';
   import Timeline from './lib/components/Timeline.svelte';
   import TimingDialog from './lib/components/TimingDialog.svelte';
+  import RollUpDialog from './lib/components/RollUpDialog.svelte';
   import RegionsDialog from './lib/components/RegionsDialog.svelte';
   import ChaptersPanel from './lib/components/ChaptersPanel.svelte';
   import StylesDialog from './lib/components/StylesDialog.svelte';
@@ -41,6 +42,7 @@
   let cleanupOpen = $state(false);
   let glossaryOpen = $state(false);
   let timingOpen = $state(false);
+  let rollUpOpen = $state(false);
   let regionsOpen = $state(false);
   let stylesOpen = $state(false);
   let rulesOpen = $state(false);
@@ -145,6 +147,7 @@
       cleanupOpen ||
       glossaryOpen ||
       timingOpen ||
+      rollUpOpen ||
       regionsOpen ||
       stylesOpen ||
       rulesOpen
@@ -266,6 +269,7 @@
         cleanupOpen ||
         glossaryOpen ||
         timingOpen ||
+        rollUpOpen ||
         regionsOpen ||
         stylesOpen ||
         rulesOpen
@@ -360,6 +364,7 @@
     onsplit={split}
     onfind={() => (findOpen = true)}
     ontiming={() => (timingOpen = true)}
+    onrollup={() => (rollUpOpen = true)}
     onstyles={() => (stylesOpen = true)}
     oncleanup={() => (cleanupOpen = true)}
     onglossary={() => (glossaryOpen = true)}
@@ -494,6 +499,7 @@
   <CleanupDialog {editor} bind:open={cleanupOpen} />
   <GlossaryDialog {editor} bind:open={glossaryOpen} />
   <TimingDialog {editor} {player} bind:open={timingOpen} />
+  <RollUpDialog {editor} bind:open={rollUpOpen} />
   <RegionsDialog {editor} bind:open={regionsOpen} />
   <StylesDialog {editor} bind:open={stylesOpen} />
   <RulesDialog {editor} bind:open={rulesOpen} />
