@@ -223,7 +223,7 @@
 
   function onloadedmetadata(event: Event): void {
     const media = event.currentTarget as HTMLVideoElement;
-    player.durationMs = Number.isFinite(media.duration) ? media.duration * 1000 : 0;
+    player.metadataLoaded(media);
     player.isAudio = media.videoWidth === 0;
     media.playbackRate = player.rate;
     player.error = null;
