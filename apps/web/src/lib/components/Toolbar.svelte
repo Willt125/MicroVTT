@@ -50,7 +50,7 @@
 <header class="toolbar">
   <div class="group">
     <button onclick={() => editor.newDocument()} title="Start an empty file">New</button>
-    <button onclick={onopen} title="Open a .vtt file ({mod}O)">Open…</button>
+    <button onclick={onopen} title="Open a .vtt or .srt file ({mod}O)">Open…</button>
     <button
       onclick={onmedia}
       disabled={!editor.hasDocument}
@@ -60,7 +60,7 @@
       class="primary"
       onclick={onexport}
       disabled={!editor.hasDocument}
-      title="Export a conforming .vtt ({mod}S)">Export…</button
+      title="Export a .vtt or .srt file ({mod}S)">Export…</button
     >
   </div>
   <div class="group" aria-label="Edit">
@@ -100,8 +100,10 @@
   <div class="group" aria-label="Auto-captions">
     <button
       onclick={oncleanup}
-      disabled={!editor.hasDocument}
-      title="De-roll YouTube auto-captions and re-segment them into readable cues">Clean up…</button
+      disabled={!editor.hasDocument || editor.format.id !== 'webvtt'}
+      title={editor.format.id === 'webvtt'
+        ? 'De-roll YouTube auto-captions and re-segment them into readable cues'
+        : 'Cleanup is for WebVTT auto-captions; export this file as WebVTT first'}>Clean up…</button
     >
     <button
       onclick={onglossary}

@@ -5,12 +5,12 @@
  */
 import type {
   Cue,
-  ExportOptions,
   FileType,
   LanguageGuess,
   LanguageHintSource,
   QualityFinding,
   QualityRuleId,
+  SrtStyle,
   SubtitleFormat,
   VttDocument,
 } from '@microvtt/core';
@@ -43,6 +43,7 @@ import type {
   CleanupOptions,
   CleanupResult,
   ExportedFile,
+  ExportRequest,
   ItemDiagnostic,
   ReviewMarker,
 } from './worker/protocol.ts';
@@ -89,6 +90,8 @@ export class Editor {
   fileName = $state('untitled.vtt');
   /** The format the document is edited in (it decides the cue text markup and settings). */
   format = $state.raw<SubtitleFormat>(WEBVTT);
+  /** How the opened file was written (line endings, byte order mark): saved the same way. */
+  style = $state.raw<SrtStyle>({ lineEnding: '\n', byteOrderMark: false });
   fileType = $state<FileType>('captions');
   /** Body index of the selected cue (the one being edited), or -1. */
   #selected = $state(-1);
@@ -410,7 +413,8 @@ export class Editor {
     this.fileName = name;
     this.fileHandle = handle;
     this.importDiagnostics = importDiagnostics;
-    this.autoCaptions = autoCaptions?.detected ? autoCaptions : null;
+    // Cleanup writes WebVTT word timings: offered for WebVTT documents only.
+    this.autoCaptions = autoCaptions?.detected && format.id === 'webvtt' ? autoCaptions : null;
     this.cleanupOffered = this.autoCaptions !== null;
     const hint = languageHint(doc, name);
     this.language = hint?.tag ?? null;
@@ -418,6 +422,7 @@ export class Editor {
     this.languageGuess = hint ? null : guessLanguage(sampleText(doc));
     this.encoding = 'utf-8';
     this.encodingGuessed = false;
+    this.style = { lineEnding: '\n', byteOrderMark: false };
     this.sourceBytes = null;
     this.review = [];
     this.quality = [];
@@ -443,8 +448,8 @@ export class Editor {
     await this.openBytes(await file.arrayBuffer(), file.name, handle);
   }
 
-  /** Opens pasted WebVTT text. */
-  async openText(text: string, name = 'pasted.vtt'): Promise<void> {
+  /** Opens pasted WebVTT or SubRip text. */
+  async openText(text: string, name = `pasted${formatOf('', text).extensions[0]}`): Promise<void> {
     await this.openBytes(new TextEncoder().encode(text).buffer as ArrayBuffer, name, null);
   }
 
@@ -460,12 +465,12 @@ export class Editor {
     const copy = bytes.slice(0);
     const format = formatOf(
       name,
-      new TextDecoder().decode(new Uint8Array(bytes, 0, Math.min(64, bytes.byteLength))),
+      new TextDecoder().decode(new Uint8Array(bytes, 0, Math.min(512, bytes.byteLength))),
     );
     try {
       const imported = await this.worker.import(bytes, format.id, encoding);
       if (!imported.ok) {
-        this.error = `${name} is not a WebVTT file: it does not start with "WEBVTT".`;
+        this.error = `${name} is not a WebVTT or SubRip file: it does not start with "WEBVTT" or a cue's times.`;
         return;
       }
       this.load(
@@ -478,6 +483,7 @@ export class Editor {
       );
       this.encoding = imported.encoding;
       this.encodingGuessed = imported.encodingGuessed;
+      this.style = imported.style;
       this.sourceBytes = copy;
     } catch (error) {
       this.error = `Could not open ${name}: ${(error as Error).message}`;
@@ -509,10 +515,13 @@ export class Editor {
   }
 
   /** Repairs, serializes and re-validates; does not save anything by itself. */
-  async export(options: ExportOptions): Promise<ExportedFile> {
+  async export(options: ExportRequest): Promise<ExportedFile> {
     this.busy = 'Preparing export…';
     try {
-      return await this.worker.export(this.doc, { ...options, fileType: this.fileType });
+      return await this.worker.export(this.doc, this.format.id, {
+        ...options,
+        fileType: this.fileType,
+      });
     } finally {
       this.busy = null;
     }
@@ -522,6 +531,7 @@ export class Editor {
   preview(window?: { fromMs: number; toMs: number }): Promise<string> {
     return this.worker.preview(
       window ? sliceDocument(this.doc, window.fromMs, window.toMs) : this.doc,
+      this.format.id,
     );
   }
 
@@ -639,7 +649,7 @@ export class Editor {
   /** Checks the current document for auto-caption structure (e.g. before offering cleanup). */
   async detectAutoCaptions(): Promise<AutoCaptionInfo> {
     const info = await this.worker.detect(this.doc);
-    this.autoCaptions = info.detected ? info : null;
+    this.autoCaptions = info.detected && this.format.id === 'webvtt' ? info : null;
     return info;
   }
 
@@ -681,6 +691,7 @@ export class Editor {
       formatById(save.meta.format ?? 'webvtt'),
     );
     this.fileType = save.meta.fileType;
+    if (save.meta.style) this.style = save.meta.style;
     if (save.meta.language !== undefined) {
       this.language = save.meta.language;
       this.languageSource = save.meta.languageSource ?? null;
@@ -709,6 +720,7 @@ export class Editor {
     const meta: AutosaveMeta = {
       fileName: this.fileName,
       format: this.format.id,
+      style: this.style,
       fileType: this.fileType,
       savedAt: Date.now(),
       cues: this.cueRows.length,

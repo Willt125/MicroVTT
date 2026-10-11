@@ -17,7 +17,10 @@ interface Case {
 }
 
 const CASES: Record<
-  Exclude<DiagnosticCode, 'cue-id-invalid' | 'region-id-invalid' | 'file-encoding'>,
+  Exclude<
+    DiagnosticCode,
+    'cue-id-invalid' | 'region-id-invalid' | 'file-encoding' | `srt-${string}`
+  >,
   Case
 > = {
   'signature-invalid': { bad: 'WEBVTT-\n', good: H },
@@ -205,12 +208,18 @@ describe('every diagnostic code', () => {
       'cue-id-invalid',
       'region-id-invalid',
       'file-encoding', // About bytes, reported on import (see legacy.test.ts).
+      // SubRip's, tested with SubRip files in srt.test.ts.
+      ...Object.keys(DIAGNOSTICS).filter((c) => c.startsWith('srt-')),
     ]);
     expect(Object.keys(DIAGNOSTICS).filter((c) => !covered.has(c))).toEqual([]);
   });
 
   it('links every code to a spec anchor', () => {
     for (const code of Object.keys(DIAGNOSTICS) as DiagnosticCode[]) {
+      if (code.startsWith('srt-')) {
+        expect(specUrl(code)).toBe(''); // SubRip has no specification.
+        continue;
+      }
       expect(specUrl(code)).toMatch(/^https:\/\/w3c\.github\.io\/webvtt\/#[a-z0-9-]+$/);
     }
   });

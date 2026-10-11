@@ -70,21 +70,25 @@ export async function pickSaveFile(
   }
 }
 
-/** Writes `text` to a file handle, asking for write permission first if needed. */
-export async function writeFile(handle: FileSystemFileHandle, text: string): Promise<boolean> {
+/** Writes text (as UTF-8) or bytes to a file handle, asking for write permission first if needed. */
+export async function writeFile(
+  handle: FileSystemFileHandle,
+  text: string | Uint8Array,
+): Promise<boolean> {
   const h = handle as PermissionHandle;
   if (h.queryPermission && (await h.queryPermission({ mode: 'readwrite' })) !== 'granted') {
     if ((await h.requestPermission?.({ mode: 'readwrite' })) !== 'granted') return false;
   }
   const writable = await handle.createWritable();
-  await writable.write(text);
+  await writable.write(text as FileSystemWriteChunkType);
   await writable.close();
   return true;
 }
 
-/** Saves a copy through the browser's downloads. */
-export function download(text: string, name: string, format: SubtitleFormat): void {
-  const url = URL.createObjectURL(new Blob([text], { type: `${format.mimeType};charset=utf-8` }));
+/** Saves a copy through the browser's downloads (text as UTF-8, or bytes as they are). */
+export function download(text: string | Uint8Array, name: string, format: SubtitleFormat): void {
+  const type = typeof text === 'string' ? `${format.mimeType};charset=utf-8` : format.mimeType;
+  const url = URL.createObjectURL(new Blob([text as BlobPart], { type }));
   const a = document.createElement('a');
   a.href = url;
   a.download = name;

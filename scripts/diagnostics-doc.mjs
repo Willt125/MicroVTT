@@ -9,7 +9,7 @@ const escape = (s) => s.replace(/\|/g, '\\|');
 export function render() {
   const rows = Object.entries(DIAGNOSTICS).map(
     ([code, d]) =>
-      `| \`${code}\` | ${d.severity} | ${escape(d.rule)} | ${escape(d.fix)} | [§](${SPEC}${d.spec}) |`,
+      `| \`${code}\` | ${d.severity} | ${escape(d.rule)} | ${escape(d.fix)} | ${d.spec === '' ? '—' : `[§](${SPEC}${d.spec})`} |`,
   );
   return `# Diagnostics
 
@@ -18,7 +18,8 @@ Every problem the validator reports, and what export does about it. Generated fr
 
 Codes are stable identifiers. Errors are conformance failures; warnings mark valid syntax that
 does not do what it looks like (for example a cue setting that user agents ignore); info is
-advisory. Export always produces a file with no errors.
+advisory. Export always produces a file with no errors. Codes starting \`srt-\` are for SubRip
+files, which have no specification: their rules are what players commonly read.
 
 | Code | Severity | Rule | Export | Spec |
 | --- | --- | --- | --- | --- |

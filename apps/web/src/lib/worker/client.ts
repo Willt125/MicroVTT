@@ -1,5 +1,5 @@
-/** Promise-based client for the WebVTT worker. */
-import type { ExportOptions, FileType, FormatId, VttDocument } from '@microvtt/core';
+/** Promise-based client for the worker. */
+import type { FileType, FormatId, VttDocument } from '@microvtt/core';
 import type {
   AutoCaptionInfo,
   Autosave,
@@ -8,6 +8,7 @@ import type {
   CleanupOptions,
   CleanupResult,
   ExportedFile,
+  ExportRequest,
   QualityRequest,
   ImportedFile,
   WorkerRequest,
@@ -71,13 +72,13 @@ export class VttWorker {
     return this.request({ type: 'cleanup', document, options });
   }
 
-  export(document: VttDocument, options: ExportOptions): Promise<ExportedFile> {
-    return this.request({ type: 'export', document, options });
+  export(document: VttDocument, format: FormatId, options: ExportRequest): Promise<ExportedFile> {
+    return this.request({ type: 'export', document, format, options });
   }
 
-  /** The document as it would be exported, for the player's caption preview. */
-  preview(document: VttDocument): Promise<string> {
-    return this.request({ type: 'preview', document });
+  /** The document as WebVTT, as it would be exported, for the player's caption preview. */
+  preview(document: VttDocument, format: FormatId): Promise<string> {
+    return this.request({ type: 'preview', document, format });
   }
 
   /** Resolves false where autosave storage (OPFS) is unavailable. */

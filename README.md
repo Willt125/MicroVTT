@@ -11,7 +11,10 @@ accessibility checks follow a chosen guide (Netflix, BBC, WCAG 2.2, or loose def
 [docs/QUALITY-RULES.md](docs/QUALITY-RULES.md)). YouTube auto-captions are detected
 and can be cleaned up into readable cues (de-rolled and re-segmented, keeping word timings), with
 a glossary for recurring corrections. Files written to older drafts or by other tools (SRT-style times, `<br>`, `<font>`, old
-settings, non-UTF-8 encodings) open as they were meant. Export can work around players that
+settings, non-UTF-8 encodings) open as they were meant. SubRip (.srt) files are edited as
+SubRip and saved the way they were written, and either format exports as the other, listing what
+the other cannot hold. Captions are previewed with a renderer that follows the spec's rendering
+rules. Export can work around players that
 misread valid files
 (browsers, ffmpeg, video.js, Shaka Player) and lists what YouTube may not keep. Autosave keeps
 unsaved work in the browser. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { FILE_ENCODINGS, languageName } from '@microvtt/core';
+  import { FILE_ENCODINGS, FORMATS, languageName } from '@microvtt/core';
   import CleanupDialog from './lib/components/CleanupDialog.svelte';
   import CueEditor from './lib/components/CueEditor.svelte';
   import CueTable from './lib/components/CueTable.svelte';
@@ -144,9 +144,10 @@
     )
       return;
     const text = event.clipboardData?.getData('text/plain') ?? '';
-    if (!/^\uFEFF?WEBVTT(?:[ \t\r\n]|$)/.test(text)) {
+    if (!FORMATS.some((f) => f.sniff(text))) {
       if (!editor.hasDocument && text.trim() !== '')
-        editor.error = 'The pasted text is not WebVTT: it does not start with "WEBVTT".';
+        editor.error =
+          'The pasted text is not WebVTT or SubRip: it does not start with "WEBVTT" or a cue’s times.';
       return;
     }
     event.preventDefault();
@@ -441,8 +442,8 @@
         </div>
       {/if}
       <p>
-        Open a WebVTT (.vtt) file, drop one anywhere on this page, paste WebVTT text, or start a new
-        one.
+        Open a WebVTT (.vtt) or SubRip (.srt) file, drop one anywhere on this page, paste its text,
+        or start a new one.
       </p>
       <p class="actions">
         <button class="primary" onclick={openPicker}>Open a file…</button>
@@ -453,7 +454,7 @@
   {/if}
 
   {#if dragging}
-    <div class="drop" aria-hidden="true">Drop a .vtt file to open it, or media to play</div>
+    <div class="drop" aria-hidden="true">Drop a .vtt or .srt file to open it, or media to play</div>
   {/if}
 
   <ExportDialog {editor} bind:open={exportOpen} />

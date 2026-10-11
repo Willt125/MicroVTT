@@ -104,13 +104,17 @@
           <span class="muted">{where(d)}</span>
         {/if}
         <span class="message">{d.message}</span>
-        <a
-          class="spec"
-          href={specUrl(d.code)}
-          target="_blank"
-          rel="noreferrer"
-          title={DIAGNOSTICS[d.code].rule}>spec</a
-        >
+        {#if specUrl(d.code)}
+          <a
+            class="spec"
+            href={specUrl(d.code)}
+            target="_blank"
+            rel="noreferrer"
+            title={DIAGNOSTICS[d.code].rule}>spec</a
+          >
+        {:else}
+          <span class="spec muted" title={DIAGNOSTICS[d.code].rule}>rule</span>
+        {/if}
       </li>
     {/each}
   </ul>

@@ -4,29 +4,22 @@ import type {
   CleanupOptions,
   CleanupResult,
   CompatibilityId,
-  DiagnosticCode,
+  ConversionLoss,
   FeatureId,
   ReviewMarker,
   ExportOptions,
   FileType,
   FormatId,
+  ItemDiagnostic,
   LanguageHintSource,
   QualityFinding,
   RepairEntry,
   RuleOverrides,
-  Severity,
+  SrtStyle,
   VttDocument,
 } from '@microvtt/core';
 
-/** A diagnostic attached to a document item rather than a text offset. */
-export interface ItemDiagnostic {
-  code: DiagnosticCode;
-  severity: Severity;
-  message: string;
-  /** Where it applies: an index into `head` or `body`, or the file as a whole. */
-  list: 'head' | 'body' | 'file';
-  index: number;
-}
+export type { ItemDiagnostic };
 
 export interface ImportedFile {
   /** False when the file is not WebVTT (bad signature). */
@@ -40,6 +33,8 @@ export interface ImportedFile {
   encoding: string;
   /** True when a non-UTF-8 encoding was guessed rather than chosen. */
   encodingGuessed: boolean;
+  /** How the file was written (line endings, byte order mark), to save it the same way. */
+  style: SrtStyle;
 }
 
 /** Background checks of the current document. */
@@ -61,8 +56,22 @@ export interface QualityRequest {
 
 export type { AutoCaptionInfo, CleanupOptions, CleanupResult, ReviewMarker };
 
+/** What to write: the format, and its options (WebVTT's, or line endings, BOM, encoding). */
+export interface ExportRequest extends ExportOptions {
+  /** The format to write; another than the document's is a conversion. */
+  to: FormatId;
+  /** The encoding to write; UTF-8 when absent or when the text does not fit in it. */
+  encoding?: string;
+}
+
 export interface ExportedFile {
   text: string;
+  /** The text encoded, when not UTF-8. */
+  bytes: Uint8Array | null;
+  /** The encoding written. */
+  encoding: string;
+  /** What a conversion to another format could not carry over (empty when none was made). */
+  lost: ConversionLoss[];
   report: RepairEntry[];
   /** Validation of the exported text: no errors by construction. */
   diagnostics: ItemDiagnostic[];
@@ -79,6 +88,8 @@ export interface AutosaveMeta {
   fileName: string;
   /** The document's format (absent in older saves, which are WebVTT). */
   format?: FormatId;
+  /** How the opened file was written (absent in older saves). */
+  style?: SrtStyle;
   fileType: FileType;
   /** `Date.now()` when saved. */
   savedAt: number;
@@ -109,8 +120,14 @@ export type WorkerRequest =
       fileType: FileType;
       quality: QualityRequest | null;
     }
-  | { id: number; type: 'export'; document: VttDocument; options: ExportOptions }
-  | { id: number; type: 'preview'; document: VttDocument }
+  | {
+      id: number;
+      type: 'export';
+      document: VttDocument;
+      format: FormatId;
+      options: ExportRequest;
+    }
+  | { id: number; type: 'preview'; document: VttDocument; format: FormatId }
   | { id: number; type: 'detect'; document: VttDocument }
   | {
       id: number;
