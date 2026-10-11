@@ -192,3 +192,149 @@ export const NOT_APPLICABLE: Record<string, string> = {
   'selectors/default_styles/inherit_as_default_value_inherits_values_from_media_element':
     'Styles the video element itself, which the harness does not draw.',
 };
+
+/** The browsers the harness runs in. */
+export type Browser = 'chromium' | 'firefox' | 'webkit';
+
+/** Two adjustments at once: both CSS changes, both reasons, the larger tolerance. */
+export const combined = (a: Adjustment, b: Adjustment): Adjustment => {
+  const tolerance = Math.max(a.tolerance ?? 0, b.tolerance ?? 0);
+  return {
+    reason: `${a.reason} ${b.reason}`,
+    css: `${a.css} ${b.css}`,
+    ...(tolerance ? { tolerance } : {}),
+  };
+};
+
+const FIREFOX_LINE_HEIGHT: Adjustment = {
+  reason:
+    'In Firefox a line of 9px Ahem with line-height: normal (the spec’s, §7.4) is 10px tall, not the 9px the font’s metrics give; the reference sets line-height: 1. With line-height: 1, it matches.',
+  css: '.vtt-cue { line-height: 1 !important; }',
+};
+
+/** A difference of rounding in one browser, with the pixels it accounts for. */
+const ROUNDING = (tolerance: number, reason: string): Adjustment => ({
+  reason,
+  css: '',
+  tolerance,
+});
+
+/**
+ * References that differ from the rendering in one browser only, in one stated way, applied as
+ * in ADJUSTED (and on top of any general adjustment).
+ */
+export const BROWSER_ADJUSTED: Partial<Record<Browser, Record<string, Adjustment>>> = {
+  firefox: {
+    ...Object.fromEntries(
+      [
+        '2_cues_overlapping_partially_move_down',
+        'align_center',
+        'align_center_position_50',
+        'align_center_position_gt_50',
+        'align_center_position_gt_50_size_gt_maximum_size',
+        'align_center_position_lt_50',
+        'align_center_position_lt_50_size_gt_maximum_size',
+        'align_center_wrapped',
+        'align_end',
+        'align_end_wrapped',
+        'align_start',
+        'align_start_wrapped',
+        'basic',
+      ].map((name) => [name, FIREFOX_LINE_HEIGHT]),
+    ),
+    ...Object.fromEntries(
+      [
+        '2_cues_overlapping_completely_move_up',
+        '2_cues_overlapping_partially_move_up',
+        '2_tracks',
+        '3_tracks',
+      ].map((name) => [
+        name,
+        combined(
+          FIREFOX_LINE_HEIGHT,
+          ROUNDING(
+            name === '3_tracks' ? 400 : 200,
+            'Then one row of glyph pixels, where one cue’s box meets the next, still differs in Firefox (175–356 pixels): the reference stacks the lines in one block, where Firefox puts that line’s glyphs a pixel apart.',
+          ),
+        ),
+      ]),
+    ),
+    ...Object.fromEntries(
+      [
+        'evil/9_cues_overlapping_completely',
+        'evil/9_cues_overlapping_completely_all_cues_have_same_timestamp',
+      ].map((name) => [
+        name,
+        combined(FIREFOX_LINE_HEIGHT, {
+          reason:
+            'Then CENTRED_ON_LINE’s half-pixel (4.5px) rounds the other way in Firefox: everything is 1px higher. Moved down 1px, it matches.',
+          css: '#video { translate: 0 1px; }',
+        }),
+      ]),
+    ),
+    line_1_wrapped_cue_grow_downwards: {
+      reason:
+        'The reference puts line 1 at 9px, one font size down; the spec puts it one line box down (§7.2), and Firefox’s line box is 10px (see FIREFOX_LINE_HEIGHT; the reference leaves line-height normal here). Moved up 1px, it matches.',
+      css: '#video { translate: 0 -1px; }',
+    },
+    'line_-2_wrapped_cue_grow_upwards': {
+      reason:
+        'The reference puts line -2 one font size (9px) above the last line; the spec counts in line boxes (§7.2), and Firefox’s are 10px (the reference leaves line-height normal here). Moved down 1px, it matches.',
+      css: '#video { translate: 0 1px; }',
+    },
+  },
+  webkit: {
+    ...Object.fromEntries(
+      [
+        '2_cues_overlapping_completely_move_up',
+        '2_cues_overlapping_partially_move_up',
+        'one_line_cue_plus_wrapped_cue',
+      ].map((name) => [
+        name,
+        ROUNDING(
+          60,
+          'In WebKit one row of pixels, where one line box meets the next, differs from the reference in the glyphs crossing it (18–54 pixels): the second line sits a fraction of a pixel apart.',
+        ),
+      ]),
+    ),
+    ...Object.fromEntries(
+      ['regions/basic', 'regions/viewportanchor_y_50_percent'].map((name) => [
+        name,
+        ROUNDING(
+          360,
+          'The row REGION_SUBPIXEL describes: WebKit rounds the 0.2px so that the whole row of the line’s top edge differs (342 pixels).',
+        ),
+      ]),
+    ),
+    ...Object.fromEntries(
+      objects
+        .filter((o) => o !== 'bold')
+        .flatMap((o) =>
+          [`${o}_outline_properties`, `${o}_outline_shorthand`].map(
+            (t) => `selectors/cue_function/${o}_object/${t}`,
+          ),
+        )
+        .map((name) => [
+          name,
+          ROUNDING(
+            45,
+            'The reference draws the outline as an inline-block’s border pulled out by negative margins; in WebKit its left edge lands one device pixel from the real outline’s (39 pixels at 2× scale).',
+          ),
+        ]),
+    ),
+  },
+};
+
+/** Expected failures whose reason does not hold in one browser, where the test passes. */
+export const PASSES_IN: Partial<Record<Browser, Record<string, string>>> = {
+  webkit: {
+    'bidi/u002E_u2028_u05D0':
+      'WebKit breaks the line at U+2028 LINE SEPARATOR, as the reference does.',
+    ...Object.fromEntries(
+      objects.map((o) => [
+        `selectors/cue_function/${o}_object/${o}_white-space_pre-wrap_wrapped`,
+        'Matches the reference in WebKit (0 pixels differ): there, white space hanging at the end of a wrapped line inside the styled object takes up room as the reference’s white-space: pre gives it.',
+      ]),
+    ),
+  },
+};

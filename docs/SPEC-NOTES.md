@@ -249,14 +249,31 @@ Interpretations where the spec leaves a gap or disagrees with browsers (and WPT)
 - **Controls.** The browser's renderer moves captions above the video's controls while they
   show; the spec renderer does not (the controls are not part of the video's rendering area).
 
-WPT's rendering reftests (`tests/wpt/rendering`) run against the renderer in Chromium
-(`apps/web/e2e/wpt-rendering.e2e.ts`). Where a reference contradicts the spec, the test is
+WPT's rendering reftests (`tests/wpt/rendering`) run against the renderer in Chromium, Firefox
+and WebKit in CI (`apps/web/e2e/wpt-rendering.e2e.ts`; locally Chromium only, unless
+`WPT_ALL_BROWSERS=1`; `WPT_REPORT=1` logs each result, and for unexpected failures where the
+pixels differ). Where a reference contradicts the spec, the test is
 listed with its reason in `wpt-rendering-expectations.ts`. The main groups: references that
 wrap greedily where §7.4 balances lines, clip the cue box, leave out the background of regions
 or ruby text, place vertical cues at the bottom, ignore the region's unused height, or follow
 tentative proposals (5vmin font size, w3c/webvtt#529 and #530); and a few broken references
 (two tracks with no blank lines, so their STYLE block is part of a NOTE; animation references
 copied from the bold test).
+
+Firefox and WebKit differ from Chromium in a few stated ways, recorded per browser
+(`BROWSER_ADJUSTED`, `PASSES_IN`):
+
+- **Firefox line boxes.** A line of 9px Ahem with `line-height: normal` (the spec's) is 10px
+  tall in Firefox, not 9px. References that set `line-height: 1` match with it; references
+  that place a line one font size (9px) away, where the spec counts line boxes, are 1px off.
+- **Rounding.** One row of pixels where two line boxes meet (Firefox and WebKit), the 0.2px
+  region row rounded across the whole row (WebKit), and the outline the references imitate
+  with a border (WebKit, at 2× scale).
+- **Chromium-only failures.** WebKit breaks lines at U+2028 and lays out hanging white space
+  inside styled objects as those references expect, so they pass there.
+- **A renderer bug they found:** Firefox reports one line of mixed-direction text as one box
+  per direction run, and snap-to-lines took the line pitch from the second box (0), leaving
+  such cues at the top of the video. The pitch now comes from the next line's box.
 
 ### SubRip (.srt), which has no spec
 

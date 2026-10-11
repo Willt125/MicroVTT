@@ -52,6 +52,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @microvtt/web exec playwright install --with-deps ${{ matrix.browser }}
       - run: pnpm e2e --project=${{ matrix.browser }}
+        env:
+          # The WPT rendering reftests in every browser, with one result line per test.
+          WPT_ALL_BROWSERS: '1'
+          WPT_REPORT: '1'
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

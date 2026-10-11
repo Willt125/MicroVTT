@@ -456,14 +456,15 @@ export class CueRenderer {
     };
 
     if (cue.snapToLines) {
-      // The line pitch: from one line box to the next, or the one line's extent.
+      // The line pitch: from one line box to the next, or the one line's extent. A line of
+      // mixed-direction text can be several boxes (one per direction run, as Firefox reports
+      // it), so the next line is the first box that does not start where the first does.
+      const along = (r: DOMRect): number => (horizontal ? r.top : r.left);
       const first = lines[0] as DOMRect;
-      const second = lines[1];
+      const second = [...lines].find((r) => Math.abs(along(r) - along(first)) > 0.5);
       const bounds = box();
       const extent = end(bounds) - start(bounds);
-      let step = second
-        ? Math.abs(horizontal ? second.top - first.top : second.left - first.left)
-        : extent;
+      let step = second ? Math.abs(along(second) - along(first)) : extent;
       if (step > 0) {
         // Vertical lines count from the right (rl) or left (lr); "auto" is the first line there.
         // (The spec's steps for vertical cues put them on the opposite side; browsers and WPT
