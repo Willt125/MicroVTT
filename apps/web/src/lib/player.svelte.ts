@@ -5,6 +5,23 @@
 
 export const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 
+/**
+ * What draws the captions: MicroVTT's renderer, which follows the WebVTT spec's rendering rules
+ * (§7, §8) the same way in every browser, or the browser's own.
+ */
+export type CaptionRenderer = 'spec' | 'browser';
+
+const RENDERER_KEY = 'microvtt.renderer';
+
+function loadRenderer(): CaptionRenderer {
+  try {
+    if (localStorage.getItem(RENDERER_KEY) === 'browser') return 'browser';
+  } catch {
+    // Storage can be unavailable; the default applies.
+  }
+  return 'spec';
+}
+
 export class Player {
   url = $state<string | null>(null);
   /** The media file itself, for the waveform (read in chunks, never whole). */
@@ -21,6 +38,8 @@ export class Player {
   sync = $state(true);
   /** Show the document as captions over the media. */
   captions = $state(true);
+  /** What draws the captions. */
+  renderer = $state<CaptionRenderer>(loadRenderer());
   /** The frame rate for frame stepping: 'auto' (measured from the file) or a chosen rate. */
   fpsChoice = $state<number | 'auto'>('auto');
   /** True when the file has no video track. */
@@ -49,6 +68,15 @@ export class Player {
     this.paused = true;
     this.isAudio = false;
     this.error = null;
+  }
+
+  setRenderer(renderer: CaptionRenderer): void {
+    this.renderer = renderer;
+    try {
+      localStorage.setItem(RENDERER_KEY, renderer);
+    } catch {
+      // Not persisted; the choice still applies for this session.
+    }
   }
 
   toggle(): void {

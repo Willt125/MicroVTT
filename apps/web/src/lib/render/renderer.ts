@@ -61,7 +61,38 @@ const DEFAULT_CSS = `@layer vtt-default, vtt-important, vtt-page, vtt-normal;
     flex-flow: column; justify-content: flex-end;
   }
   .vtt-region > .vtt-cue { position: relative; width: auto; font: inherit; color: inherit; }
+  .vtt-node[data-vtt-color] { color: var(--vtt-color); }
+  .vtt-node[data-vtt-background] { background: var(--vtt-background); }
 }`;
+
+/** The default text and background colour classes (§5), as presentational hints. */
+const CLASS_COLORS = new Map(
+  Object.entries({
+    white: 'rgba(255,255,255,1)',
+    lime: 'rgba(0,255,0,1)',
+    cyan: 'rgba(0,255,255,1)',
+    red: 'rgba(255,0,0,1)',
+    yellow: 'rgba(255,255,0,1)',
+    magenta: 'rgba(255,0,255,1)',
+    blue: 'rgba(0,0,255,1)',
+    black: 'rgba(0,0,0,1)',
+  }),
+);
+
+/**
+ * Sets the colour classes' presentational hints on a node: below every style sheet (they are in
+ * the default layer), and the later class wins when several apply.
+ */
+function colorHints(el: HTMLElement, classes: readonly string[]): void {
+  for (const name of classes) {
+    const background = name.startsWith('bg_');
+    const value = CLASS_COLORS.get(background ? name.slice(3) : name);
+    if (value === undefined) continue;
+    const key = background ? 'background' : 'color';
+    el.dataset[background ? 'vttBackground' : 'vttColor'] = '';
+    el.style.setProperty(`--vtt-${key}`, value);
+  }
+}
 
 interface Rect {
   left: number;
@@ -132,6 +163,7 @@ function buildCue(cue: Cue, language: string | undefined): BuiltCue {
       }
       const el = document.createElement(node.type);
       el.classList.add('vtt-node', ...node.classes);
+      colorHints(el, node.classes);
       if (node.type === 'v') el.setAttribute('voice', node.annotation);
       if (node.type === 'lang' && node.language) el.setAttribute('lang', node.language);
       parent.append(el);

@@ -202,13 +202,57 @@ change with the validator's diagnostic code. The full list of rules and fixes is
 Import also reports what the parser discards (junk lines, invalid settings, late STYLE/REGION
 blocks), because by export it no longer exists in parser terms.
 
-### Renderer (`web/render`), spec §7 "Rendering" and §8 "CSS extensions"
+### Renderer, spec §7 "Rendering" and §8 "CSS extensions"
 
-- §7.1 processing model, §7.2 processing cue settings (line/position computation,
-  snap-to-lines collision avoidance), §7.3 obtaining CSS boxes, §7.4 applying CSS properties.
-- `::cue`, `::cue(selector)`, `::cue-region`, `:past`, `:future`, and the default color classes
-  (`.white .lime .cyan .red .yellow .magenta .blue .black` and `.bg_*`, §5).
-- Region scroll-up roll-up behavior (§4.3 notes and §7).
+Core computes what needs no layout (`render.ts`: computed line, position and position
+alignment, box size and offsets, region boxes, active cues in text track cue order;
+`cue-css.ts`: style sheets rewritten for the renderer's DOM). The DOM part is
+`apps/web/src/lib/render/renderer.ts`.
+
+- §7.1 processing model, §7.2 processing cue settings (snap-to-lines stepping and switching
+  direction; for percentage lines, the closest free position on both axes, the higher and then
+  the more leftward winning a tie), §7.3 obtaining CSS boxes, §7.4 applying CSS properties,
+  regions (6vh lines, anchors, moved down by the height their cues leave unused).
+- `::cue`, `::cue(selector)`, `::cue-region`, `::cue-region(#id)`, `:past` and `:future`, with
+  only the properties §8 allows for each; `:past`/`:future` rules lose the sizing ones.
+  Selectors in `::cue()` match the cue and its nodes only (WebVTT names; other type selectors
+  match nothing; node objects are in the empty namespace). A page-level prefix in a STYLE
+  block applies only if it matches §7.3's hypothetical element (`*`, `*|*`, `|*`, `:not()` of
+  something else). `@import` and non-`data:` URLs in STYLE blocks are dropped.
+- The default colour classes (`.white` … `.black`, `.bg_white` … `.bg_black`, §5) are
+  presentational hints: below every style sheet, the later class winning.
+
+Interpretations where the spec leaves a gap or disagrees with browsers (and WPT):
+
+- **Negative snap-to-lines lines.** §7.2 measures them from the "maximum dimension", which it
+  does not define. We use the full height (or width) minus the box's extent less one line step,
+  so that line −1 puts the last line at the bottom and a wrapped cue grows upwards, as browsers
+  and WPT do.
+- **Vertical cues** count lines from the right (`rl`) or left (`lr`), and `line: auto` is the
+  first line on that side, as browsers and WPT do; read literally, the spec's steps start on the
+  opposite side.
+- **No clipping.** The cue box does not clip its text (the spec does not ask for it). Regions do
+  (§7.4, `overflow: hidden`).
+- **Cascade.** STYLE blocks come after the page's style sheets (§8), and win over the page's
+  `!important` rules even inside cascade layers, as WPT expects: the renderer puts their normal
+  declarations in a layer after the page's and their `!important` ones in a layer before it.
+- **Broken CSS.** A value left open at the end of a STYLE block (an unterminated `url(` or
+  string) is closed as the end of a style sheet closes it, and each sheet is its own `<style>`,
+  so one block cannot spill into the next.
+- **Scroll-up regions** show their latest lines (older ones are pushed out of the region's
+  top), but without the 0.433s transition the spec asks for: the renderer rebuilds the cues it draws
+  whenever the set changes. Planned.
+- **Controls.** The browser's renderer moves captions above the video's controls while they
+  show; the spec renderer does not (the controls are not part of the video's rendering area).
+
+WPT's rendering reftests (`tests/wpt/rendering`) run against the renderer in Chromium
+(`apps/web/e2e/wpt-rendering.e2e.ts`). Where a reference contradicts the spec, the test is
+listed with its reason in `wpt-rendering-expectations.ts`. The main groups: references that
+wrap greedily where §7.4 balances lines, clip the cue box, leave out the background of regions
+or ruby text, place vertical cues at the bottom, ignore the region's unused height, or follow
+tentative proposals (5vmin font size, w3c/webvtt#529 and #530); and a few broken references
+(two tracks with no blank lines, so their STYLE block is part of a NOTE; animation references
+copied from the bold test).
 
 ### MIME (`text/vtt`), spec §10
 

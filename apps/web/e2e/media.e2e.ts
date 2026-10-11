@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   SAMPLE_CUES,
   cueList,
+  cueText,
   mediaInput,
   mediaTime,
   openSample,
@@ -28,7 +29,35 @@ async function openWithMedia(page: Page): Promise<void> {
 
 test.beforeEach(async ({ page }) => openWithMedia(page));
 
-test('shows the document as captions', async ({ page }) => {
+test('draws the captions with the spec renderer', async ({ page }) => {
+  await rows(page).nth(2).click(); // 3.08–5.53 s
+  const captions = page.getByTestId('spec-captions');
+  await expect(captions.locator('.vtt-cue')).toHaveCount(1);
+  await expect(captions).toContainText('Welcome back to the workshop. Today we');
+  await expect(captions).toContainText('bench from A&B lumber.');
+  // Text after the playhead is in the future (::cue(:future)).
+  await expect(captions.locator('.vtt-future').first()).toBeAttached();
+  // The browser draws none.
+  expect(
+    await page
+      .locator('video')
+      .evaluate((v: HTMLVideoElement) => [...v.textTracks].some((t) => t.mode === 'showing')),
+  ).toBe(false);
+});
+
+test('updates the spec renderer as you edit, with the default colour classes', async ({ page }) => {
+  await rows(page).nth(2).click();
+  await cueText(page).fill('<c.red.yellow.bg_blue>Edited</c>');
+  const node = page.getByTestId('spec-captions').locator('c');
+  await expect(node).toHaveText('Edited');
+  // The later class wins (§5); both are presentational hints.
+  await expect(node).toHaveCSS('color', 'rgb(255, 255, 0)');
+  await expect(node).toHaveCSS('background-color', 'rgb(0, 0, 255)');
+});
+
+test('shows the document with the browser’s renderer instead', async ({ page }) => {
+  await page.getByLabel('Caption renderer').selectOption('browser');
+  await expect(page.getByTestId('spec-captions')).toHaveCount(0);
   await expect
     .poll(() =>
       page.locator('video').evaluate((v: HTMLVideoElement) => {
@@ -37,6 +66,10 @@ test('shows the document as captions', async ({ page }) => {
       }),
     )
     .toBe(`showing/${SAMPLE_CUES}`);
+  // The choice is kept.
+  await page.reload();
+  await openWithMedia(page);
+  await expect(page.getByLabel('Caption renderer')).toHaveValue('browser');
 });
 
 test('seeks to the cue you select', async ({ page }) => {
