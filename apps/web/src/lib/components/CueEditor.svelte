@@ -585,6 +585,10 @@
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
+    /* Shrinks and scrolls rather than squeezing the cue list. */
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
   }
   .times {
     display: flex;

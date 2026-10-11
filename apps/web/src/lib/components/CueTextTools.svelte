@@ -193,7 +193,11 @@
           input?.removeAttribute('aria-invalid');
         }}
         onkeydown={(e) => {
-          if (e.key === 'Escape') {
+          if (e.key === 'Enter' && !e.isComposing) {
+            // Submitted here: with suggestions, Safari's list can take the Enter key.
+            e.preventDefault();
+            e.currentTarget.form?.requestSubmit();
+          } else if (e.key === 'Escape') {
             e.preventDefault();
             e.stopPropagation();
             cancel();
@@ -215,9 +219,7 @@
 {@render children()}
 
 <nav class="crumbs" aria-label="Markup at the cursor">
-  {#if at.length === 0}
-    <span class="muted">No markup at the cursor.</span>
-  {:else}
+  {#if at.length > 0}
     <span class="muted">In:</span>
     {#each at as span, i (span.open.start)}
       {#if i > 0}<span class="muted" aria-hidden="true">›</span>{/if}

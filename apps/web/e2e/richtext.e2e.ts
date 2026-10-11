@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { cueText, mediaInput, status, vttInput, wav } from './support.ts';
+import { cueText, mediaInput, openSample, rows, status, vttInput, wav } from './support.ts';
 
 async function open(page: Page, text: string): Promise<void> {
   await page.goto('/');
@@ -167,4 +167,18 @@ test('taps word timings while the media plays', async ({ page }) => {
   expect(times).toHaveLength(2);
   expect(times[0]).toBeGreaterThan(1);
   expect(times[1]).toBeGreaterThan(times[0] as number);
+});
+
+test('the cue list stays usable in a short window, with the editor scrolling', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 560 });
+  await openSample(page);
+  await mediaInput(page).setInputFiles({
+    name: 'tone.wav',
+    mimeType: 'audio/wav',
+    buffer: wav(20),
+  });
+  const list = await page.getByRole('listbox', { name: 'Cues' }).boundingBox();
+  expect(list?.height).toBeGreaterThan(60);
+  await rows(page).nth(2).click();
+  await expect(rows(page).nth(2)).toHaveAttribute('aria-selected', 'true');
 });
