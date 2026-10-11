@@ -14,6 +14,7 @@
     onsplit: () => void;
     onfind: () => void;
     ontiming: () => void;
+    onrollup: () => void;
     onstyles: () => void;
     oncleanup: () => void;
     onglossary: () => void;
@@ -30,6 +31,7 @@
     onsplit,
     onfind,
     ontiming,
+    onrollup,
     onstyles,
     oncleanup,
     onglossary,
@@ -113,6 +115,11 @@
       onclick={ontiming}
       disabled={editor.cueRows.length === 0}
       title="Shift, resync or change the frame rate of all or the selected cues">Timing…</button
+    >
+    <button
+      onclick={onrollup}
+      disabled={editor.cueRows.length === 0}
+      title="Make roll-up captions from the cues' lines (all or the selected cues)">Roll-up…</button
     >
     <button
       onclick={onstyles}

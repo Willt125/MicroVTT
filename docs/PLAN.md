@@ -735,6 +735,15 @@ hidden; }`; hidden words keep their place, as the layout does not change with ti
 - [x] **6g: scroll-up animation** (2026-10-11): lines in a `scroll:up` region slide up over
       0.433s as a new line comes in (§7.2), in the spec renderer, while playing on; not when seeking
       or for viewers who prefer reduced motion. See `SPEC-NOTES.md`.
+  - Making roll-up captions (added after Phase 6, "Roll-up…" in the toolbar): each line of the
+    selected cues (a run of them) or of every cue becomes a roll-up line, starting at the word
+    timing before its first word, or spread over its cue by length (`cueLines`; spans are closed
+    and reopened at line breaks). Two forms (`makeRollUp`): one-line cues overlapping in a new
+    `scroll:up` region, each shown until the line `lines` places later pushes it out; or cues
+    that repeat the last `lines` lines (YouTube's form). A pause of a second or more clears the
+    screen. Regions are WebVTT only; SubRip gets repeated lines. Chrome's own caption rendering
+    ignores regions and stacks the lines newest on top; YouTube drops regions. Repeated lines
+    look like YouTube auto-captions, so a file saved that way is offered cleanup when reopened.
 - [x] **6h: renderer review in Firefox and WebKit** (2026-10-11): the WPT rendering reftests
       run in all three browsers in CI, each difference recorded per browser with its reason (see
       `SPEC-NOTES.md`). They found one renderer bug (mixed-direction cues placed at the top in
@@ -930,6 +939,8 @@ hidden; }`; hidden words keep their place, as the layout does not change with ti
 - **2026-10-11 (owner):** Rich cue-text editing is markup tools over the raw text field (with a
   breadcrumb of the spans at the cursor), not a formatted editor. Word timing includes editing,
   spreading and tap timing in the same PR.
+- **2026-10-11 (owner):** Roll-up captions come in both forms, chosen per use (a scrolling
+  region by default, or repeated lines), from the cues' own lines, three lines by default.
 - **2026-10-11 (owner):** Timed text is wrapped in `<c>` only when asked (a button), not every
   time timings are written. For paint-on with a box that grows with the words, untimed cues are
   wrapped whole in `<c>` too, so no cue is left without a background.
