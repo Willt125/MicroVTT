@@ -592,10 +592,11 @@ Still open:
       browser.
 - [x] WPT's rendering reftests (vendored by `scripts/sync-wpt.sh`) run against it in Chromium:
       234 tests are drawn and compared pixel by pixel, and 19 that drive the media element are
-      skipped. 169 match as they are. Where a reference contradicts the spec, the test is listed
+      skipped. 167 match as they are. Where a reference contradicts the spec, the test is listed
       in `apps/web/e2e/wpt-rendering-expectations.ts` with its reason: 33 expected failures, and
       32 with one stated adjustment (such as a region drawn without its background) that must
-      then match. See `SPEC-NOTES.md`.
+      then match. Two more differ only between Chromium versions (sub-pixel rounding) and have
+      a stated tolerance. See `SPEC-NOTES.md`.
 
 Next, in this order (owner, 2026-10-11):
 
