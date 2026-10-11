@@ -212,6 +212,13 @@ const FIREFOX_LINE_HEIGHT: Adjustment = {
   css: '.vtt-cue { line-height: 1 !important; }',
 };
 
+/** A difference of rounding in one browser, with the pixels it accounts for. */
+const ROUNDING = (tolerance: number, reason: string): Adjustment => ({
+  reason,
+  css: '',
+  tolerance,
+});
+
 /**
  * References that differ from the rendering in one browser only, in one stated way, applied as
  * in ADJUSTED (and on top of any general adjustment).
@@ -242,6 +249,46 @@ export const BROWSER_ADJUSTED: Partial<Record<Browser, Record<string, Adjustment
       'line_1_wrapped_cue_grow_downwards',
     ].map((name) => [name, FIREFOX_LINE_HEIGHT]),
   ),
+  webkit: {
+    ...Object.fromEntries(
+      [
+        '2_cues_overlapping_completely_move_up',
+        '2_cues_overlapping_partially_move_up',
+        'one_line_cue_plus_wrapped_cue',
+      ].map((name) => [
+        name,
+        ROUNDING(
+          60,
+          'In WebKit one row of pixels, where one line box meets the next, differs from the reference in the glyphs crossing it (18–54 pixels): the second line sits a fraction of a pixel apart.',
+        ),
+      ]),
+    ),
+    ...Object.fromEntries(
+      ['regions/basic', 'regions/viewportanchor_y_50_percent'].map((name) => [
+        name,
+        ROUNDING(
+          360,
+          'The row REGION_SUBPIXEL describes: WebKit rounds the 0.2px so that the whole row of the line’s top edge differs (342 pixels).',
+        ),
+      ]),
+    ),
+    ...Object.fromEntries(
+      objects
+        .filter((o) => o !== 'bold')
+        .flatMap((o) =>
+          [`${o}_outline_properties`, `${o}_outline_shorthand`].map(
+            (t) => `selectors/cue_function/${o}_object/${t}`,
+          ),
+        )
+        .map((name) => [
+          name,
+          ROUNDING(
+            45,
+            'The reference draws the outline as an inline-block’s border pulled out by negative margins; in WebKit its left edge lands one device pixel from the real outline’s (39 pixels at 2× scale).',
+          ),
+        ]),
+    ),
+  },
 };
 
 /** Expected failures whose reason does not hold in one browser, where the test passes. */
