@@ -187,6 +187,74 @@ async function diffPixels(page: Page, a: Buffer, b: Buffer): Promise<number> {
   );
 }
 
+/** Where two screenshots differ, for WPT_REPORT: bounding boxes and a coarse map. */
+async function diffDetails(page: Page, a: Buffer, b: Buffer): Promise<string> {
+  return page.evaluate(
+    async ([x, y]: [string, string]) => {
+      const load = async (data: string) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${data}`;
+        await img.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+        ctx.drawImage(img, 0, 0);
+        return {
+          w: img.width,
+          h: img.height,
+          d: ctx.getImageData(0, 0, img.width, img.height).data,
+        };
+      };
+      const [p, q] = await Promise.all([load(x), load(y)]);
+      const { w, h } = p;
+      type Box = [number, number, number, number];
+      const box = (test: (i: number) => boolean): Box | null => {
+        let b: Box | null = null;
+        for (let yy = 0; yy < h; yy++)
+          for (let xx = 0; xx < w; xx++)
+            if (test((yy * w + xx) * 4)) {
+              b = b
+                ? [Math.min(b[0], xx), Math.min(b[1], yy), Math.max(b[2], xx), Math.max(b[3], yy)]
+                : [xx, yy, xx, yy];
+            }
+        return b;
+      };
+      const dark = (d: Uint8ClampedArray) => (i: number) =>
+        (d[i] as number) + (d[i + 1] as number) + (d[i + 2] as number) < 384;
+      const differs = (i: number) =>
+        [0, 1, 2].some((c) => Math.abs((p.d[i + c] as number) - (q.d[i + c] as number)) > 24);
+      const fmt = (b: Box | null) => (b ? `${b[0]},${b[1]}-${b[2]},${b[3]}` : 'none');
+      // One character per 4×4 cell: '#' some pixel differs, 'o' only ours is dark, 'r' only the reference.
+      const rows: string[] = [];
+      for (let cy = 0; cy < h; cy += 4) {
+        let row = '';
+        for (let cx = 0; cx < w; cx += 4) {
+          let diff = false;
+          let ours = false;
+          let ref = false;
+          for (let yy = cy; yy < Math.min(h, cy + 4); yy++)
+            for (let xx = cx; xx < Math.min(w, cx + 4); xx++) {
+              const i = (yy * w + xx) * 4;
+              if (differs(i)) {
+                diff = true;
+                if (dark(p.d)(i)) ours = true;
+                if (dark(q.d)(i)) ref = true;
+              }
+            }
+          row += !diff ? '.' : ours && !ref ? 'o' : ref && !ours ? 'r' : '#';
+        }
+        if (/[#or]/.test(row)) rows.push(`${String(cy).padStart(3)} ${row}`);
+      }
+      return [
+        `ours dark ${fmt(box(dark(p.d)))}; reference dark ${fmt(box(dark(q.d)))}; differing ${fmt(box(differs))}`,
+        ...rows,
+      ].join('\n');
+    },
+    [a.toString('base64'), b.toString('base64')] as [string, string],
+  );
+}
+
 /** Pixels allowed to differ (anti-aliasing at glyph and box edges). */
 const TOLERANCE = 12;
 
@@ -238,6 +306,13 @@ for (const path of testPages().sort()) {
       const limit = adjusted?.tolerance ?? TOLERANCE;
       const verdict = failure ? 'expected-failure' : differing <= limit ? 'pass' : 'FAIL';
       console.log(`WPT-RESULT\t${browserName}\t${name}\t${differing}\t${verdict}`);
+      if (verdict === 'FAIL')
+        console.log(
+          (await diffDetails(page, actual, expected))
+            .split('\n')
+            .map((line) => `WPT-DETAIL\t${browserName}\t${name}\t${line}`)
+            .join('\n'),
+        );
     }
     if (adjusted) test.info().annotations.push({ type: 'adjusted', description: adjusted.reason });
     if (failure) {
