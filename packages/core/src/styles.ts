@@ -133,6 +133,8 @@ export function ruleTemplates(selectors: CueSelectors): { label: string; css: st
       label: 'Words not yet spoken, hidden, box growing with them (paint-on)',
       css: [
         rule('::cue', 'background: transparent;'),
+        // A region's own box would cover the words not yet shown.
+        rule('::cue-region', 'background: transparent;'),
         rule(`::cue(${PLAIN_C})`, 'background: rgba(0, 0, 0, 0.8);'),
         rule(`::cue(c ${PLAIN_C})`, 'background: transparent;'),
         rule('::cue(:future)', 'visibility: hidden;'),

@@ -19,6 +19,8 @@
   let form = $state<RollUpForm>('region');
   let lines = $state(3);
   let pauseSeconds = $state(1);
+  /** A background behind each line, as pop-on cues have, rather than the region's own box. */
+  let lineBackgrounds = $state(true);
   let selectedOnly = $state(false);
 
   /** Regions are WebVTT only; SubRip gets repeated lines. */
@@ -46,7 +48,12 @@
       return makeRollUp(
         editor.doc,
         indices,
-        { form: regions ? form : 'repeat', lines, clearAfterMs: Math.round(pauseSeconds * 1000) },
+        {
+          form: regions ? form : 'repeat',
+          lines,
+          clearAfterMs: Math.round(pauseSeconds * 1000),
+          lineBackgrounds,
+        },
         editor.format.text,
       );
     } catch (error) {
@@ -102,6 +109,13 @@
       Clear after a pause of (s)
       <input type="number" min="0" step="0.1" bind:value={pauseSeconds} />
     </label>
+    {#if regions && form === 'region'}
+      <label
+        class="check"
+        title="Without this, the region draws its own box, the region's full width and every line high, behind the lines (the WebVTT default)"
+        ><input type="checkbox" bind:checked={lineBackgrounds} /> Background behind each line (like pop-on)</label
+      >
+    {/if}
     {#if editor.multiple}
       <label class="check"
         ><input type="checkbox" bind:checked={selectedOnly} /> Only the {editor.selection.length} selected
@@ -119,8 +133,11 @@
       {result.cues}
       {result.cues === 1 ? 'cue' : 'cues'} ({result.lines} roll-up {result.lines === 1
         ? 'line'
-        : 'lines'}){result.region ? `, in a new region "${result.region}"` : ''}. Cue settings and
-      ids are not kept{form === 'region' && regions ? '; the region places the lines' : ''}.
+        : 'lines'}){result.region
+        ? `, in a new region "${result.region}"${lineBackgrounds ? ' with a style block giving each line its own background' : ''}`
+        : ''}. Cue settings and ids are not kept{form === 'region' && regions
+        ? '; the region places the lines'
+        : ''}.
     </p>
   {/if}
 

@@ -121,7 +121,7 @@ export class Editor {
   autosaveStatus = $state<'idle' | 'saved' | 'unsupported' | 'failed'>('idle');
   /** Unsaved work from an earlier session, offered for restore on the start screen. */
   restorable = $state.raw<AutosaveMeta | null>(null);
-  /** Set when the open file looks like YouTube auto-captions (cleared by cleanup or "New"). */
+  /** Set when the open file looks like roll-up auto-captions (cleared by cleanup or "New"). */
   autoCaptions = $state.raw<AutoCaptionInfo | null>(null);
   /** Whether to show the offer to clean up (until used or dismissed). */
   cleanupOffered = $state(false);

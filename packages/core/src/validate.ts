@@ -439,6 +439,9 @@ export function validateImport(imp: ImportResult, options: ValidateOptions = {})
   const definedRegions = new Set(imp.parsed.regions.map((r) => r.id).filter((id) => id !== ''));
   const regionIds = new Map<string, number>();
   const cueIds = new Map<string, number>();
+  /** Regions some cue is placed in (a cue taken out by a line or vertical setting does not count). */
+  const usedRegions = new Set<string>();
+  let cueCount = 0;
   const ctx: CueContext = { definedRegions, out };
   let previousStart = -Infinity;
 
@@ -580,6 +583,8 @@ export function validateImport(imp: ImportResult, options: ValidateOptions = {})
 
       case 'cue': {
         const cue = block.cue as ParsedCue;
+        cueCount++;
+        if (cue.region) usedRegions.add(cue.region.id);
         const timingIndex = first.text.includes('-->') ? 0 : 1;
         const timing = lines[timingIndex] as Line;
         if (timingIndex === 1 && cue.id !== '') {
@@ -652,6 +657,16 @@ export function validateImport(imp: ImportResult, options: ValidateOptions = {})
   }
 
   if (fileType === 'chapters') checkNesting(imp.parsed.cues, out);
+
+  if (cueCount > 0)
+    for (const [id, start] of regionIds)
+      if (!usedRegions.has(id))
+        out.add(
+          'region-unused',
+          `No cue is placed in region "${id}", so it has no effect.`,
+          start,
+          start + 3 + id.length,
+        );
 
   const last = blocks[blocks.length - 1];
   if (last && last.kind !== 'signature' && !normalized.endsWith('\n')) {

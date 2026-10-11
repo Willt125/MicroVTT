@@ -418,8 +418,9 @@
 
   {#if editor.hasDocument && editor.cleanupOffered && editor.autoCaptions}
     <p class="banner offer" role="status">
-      This looks like YouTube auto-captions ({editor.autoCaptions.lines.toLocaleString()} caption lines
-      in {editor.autoCaptions.cues.toLocaleString()} rolling cues).
+      This looks like roll-up captions, as YouTube's auto-captions are ({editor.autoCaptions.lines.toLocaleString()}
+      caption lines in {editor.autoCaptions.cues.toLocaleString()} rolling cues). Clean up makes ordinary
+      cues of them; keep them as they are if you rolled them up on purpose.
       <button class="primary" onclick={() => (cleanupOpen = true)}>Clean up…</button>
       <button onclick={() => (editor.cleanupOffered = false)}>Not now</button>
     </p>
