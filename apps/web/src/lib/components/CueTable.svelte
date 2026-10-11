@@ -156,7 +156,8 @@
   .table {
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    /* The header and a few rows stay visible however tall the cue editor gets. */
+    min-height: 8rem;
     flex: 1;
     border: 1px solid var(--border);
     border-radius: var(--radius);

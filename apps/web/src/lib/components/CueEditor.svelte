@@ -21,6 +21,11 @@
     withSrtAnchor,
   } from '@microvtt/core';
   import CuePreview from './CuePreview.svelte';
+  import CueTextTools from './CueTextTools.svelte';
+  import KaraokePanel from './KaraokePanel.svelte';
+  import type { MarkupEdit } from '@microvtt/core';
+  import type { Player } from '../player.svelte.ts';
+  import { toggleSpan, type SimpleSpan } from '../richtext.ts';
   import { tick } from 'svelte';
   import type { Editor } from '../editor.svelte.ts';
   import { INSERTS, insertAround, marksIn, withoutMark } from '../marks.ts';
@@ -32,9 +37,11 @@
     textarea?: HTMLTextAreaElement | undefined;
     /** Opens the regions editor. */
     onregions?: (() => void) | undefined;
+    /** The media player, for word timing at the playhead. */
+    player?: Player | undefined;
   }
 
-  let { editor, textarea = $bindable(), onregions }: Props = $props();
+  let { editor, textarea = $bindable(), onregions, player }: Props = $props();
 
   const cue = $derived(editor.selectedCue);
   const problems = $derived(editor.diagnosticsByItem.get(editor.selected) ?? []);
@@ -191,6 +198,47 @@
 
   const marks = $derived(cue ? marksIn(cue.text) : []);
 
+  // The selection in the text field, for the markup tools.
+  let selStart = $state(0);
+  let selEnd = $state(0);
+  const markupKind = $derived(editor.format.id === 'srt' ? 'srt' : 'webvtt');
+  const wordTiming = $derived(editor.format.text.timestampMarkup(0) !== '');
+
+  function readSelection(): void {
+    if (!textarea) return;
+    selStart = textarea.selectionStart;
+    selEnd = textarea.selectionEnd;
+  }
+
+  async function select(start: number, end: number): Promise<void> {
+    await tick();
+    if (!textarea) return;
+    textarea.focus();
+    textarea.setSelectionRange(start, end);
+    readSelection();
+  }
+
+  function applyMarkup(edit: MarkupEdit, label: string): void {
+    if (cue && edit.text !== cue.text) update({ text: edit.text }, label);
+    void select(edit.start, edit.end);
+  }
+
+  const SHORTCUT_SPANS: Record<string, [SimpleSpan, string]> = {
+    i: ['i', 'Italic'],
+    b: ['b', 'Bold'],
+    u: ['u', 'Underline'],
+  };
+
+  /** Ctrl/⌘+I, B, U toggle italic, bold and underline. */
+  function textKeydown(event: KeyboardEvent): void {
+    const span = SHORTCUT_SPANS[event.key.toLowerCase()];
+    if (!span || !cue || !textarea || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+    if (event.shiftKey) return;
+    event.preventDefault();
+    readSelection();
+    applyMarkup(toggleSpan(cue.text, selStart, selEnd, markupKind, span[0]), span[1]);
+  }
+
   /** Inserts a mark at the caret, or an isolate around the selection, and keeps the caret. */
   async function insertMark(select: HTMLSelectElement): Promise<void> {
     const ins = INSERTS[Number(select.value)];
@@ -282,15 +330,33 @@
             >{/each}
         </datalist>
       </div>
-      <textarea
-        id="cue-text"
-        bind:this={textarea}
-        value={cue.text}
-        rows="3"
-        lang={editor.language ?? undefined}
-        dir="auto"
-        spellcheck="true"
-        oninput={(e) => update({ text: e.currentTarget.value }, 'Edit text', 'text')}></textarea>
+      <CueTextTools
+        {editor}
+        text={cue.text}
+        kind={markupKind}
+        start={selStart}
+        end={selEnd}
+        onedit={applyMarkup}
+        onselect={(a, b) => void select(a, b)}
+      >
+        <textarea
+          id="cue-text"
+          bind:this={textarea}
+          value={cue.text}
+          rows="3"
+          lang={editor.language ?? undefined}
+          dir="auto"
+          spellcheck="true"
+          onkeydown={textKeydown}
+          onkeyup={readSelection}
+          onmouseup={readSelection}
+          onselect={readSelection}
+          onfocus={readSelection}
+          oninput={(e) => {
+            update({ text: e.currentTarget.value }, 'Edit text', 'text');
+            readSelection();
+          }}></textarea>
+      </CueTextTools>
 
       <div class="marks">
         {#if marks.length > 0}
@@ -315,6 +381,16 @@
           {#each INSERTS as ins, i (ins.label)}<option value={i}>{ins.label}</option>{/each}
         </select>
       </div>
+
+      {#if wordTiming}
+        <KaraokePanel
+          {editor}
+          {cue}
+          {player}
+          caret={selEnd}
+          onchange={(text, label, coalesce) => update({ text }, label, coalesce)}
+        />
+      {/if}
 
       {#if settings.size > 0}
         <details class="settings" bind:open={settingsOpen}>
@@ -509,6 +585,10 @@
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
+    /* Shrinks and scrolls rather than squeezing the cue list. */
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
   }
   .times {
     display: flex;

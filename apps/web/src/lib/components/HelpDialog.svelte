@@ -25,6 +25,7 @@
     ['Delete (in the list)', 'Delete the selected cues'],
     [`${mod}click, Shift+click`, 'Add a cue to the selection, select a range'],
     [`${mod}A`, 'Select all cues (outside text fields)'],
+    [`${mod}I, ${mod}B, ${mod}U`, 'Italic, bold, underline on or off (in the cue text)'],
     ['Drag on the timeline', 'Move a cue (and the others selected), or drag its edge'],
     ['Alt while dragging', 'Do not snap to cue edges, word timings or the playhead'],
     ['↑ ↓ (in a time field)', 'Nudge by 0.1 s (with Shift: 1 s)'],
