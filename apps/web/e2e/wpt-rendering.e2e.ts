@@ -233,6 +233,12 @@ for (const path of testPages().sort()) {
 
     const differing = await diffPixels(page, actual, expected);
     const failure = EXPECTED_FAILURES[name];
+    // WPT_REPORT=1: one line per test, for comparing browsers from a CI log.
+    if (process.env['WPT_REPORT'] === '1') {
+      const limit = adjusted?.tolerance ?? TOLERANCE;
+      const verdict = failure ? 'expected-failure' : differing <= limit ? 'pass' : 'FAIL';
+      console.log(`WPT-RESULT\t${browserName}\t${name}\t${differing}\t${verdict}`);
+    }
     if (adjusted) test.info().annotations.push({ type: 'adjusted', description: adjusted.reason });
     if (failure) {
       test.info().annotations.push({ type: 'expected failure', description: failure });
