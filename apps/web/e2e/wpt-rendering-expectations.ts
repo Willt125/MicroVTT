@@ -192,3 +192,68 @@ export const NOT_APPLICABLE: Record<string, string> = {
   'selectors/default_styles/inherit_as_default_value_inherits_values_from_media_element':
     'Styles the video element itself, which the harness does not draw.',
 };
+
+/** The browsers the harness runs in. */
+export type Browser = 'chromium' | 'firefox' | 'webkit';
+
+/** Two adjustments at once: both CSS changes, both reasons, the larger tolerance. */
+export const combined = (a: Adjustment, b: Adjustment): Adjustment => {
+  const tolerance = Math.max(a.tolerance ?? 0, b.tolerance ?? 0);
+  return {
+    reason: `${a.reason} ${b.reason}`,
+    css: `${a.css} ${b.css}`,
+    ...(tolerance ? { tolerance } : {}),
+  };
+};
+
+const FIREFOX_LINE_HEIGHT: Adjustment = {
+  reason:
+    'In Firefox a line of 9px Ahem with line-height: normal (the spec’s, §7.4) is 10px tall, not the 9px the font’s metrics give; the reference sets line-height: 1. With line-height: 1, it matches.',
+  css: '.vtt-cue { line-height: 1 !important; }',
+};
+
+/**
+ * References that differ from the rendering in one browser only, in one stated way, applied as
+ * in ADJUSTED (and on top of any general adjustment).
+ */
+export const BROWSER_ADJUSTED: Partial<Record<Browser, Record<string, Adjustment>>> = {
+  firefox: Object.fromEntries(
+    [
+      '2_cues_overlapping_completely_move_up',
+      '2_cues_overlapping_partially_move_down',
+      '2_cues_overlapping_partially_move_up',
+      '2_tracks',
+      '3_tracks',
+      'align_center',
+      'align_center_position_50',
+      'align_center_position_gt_50',
+      'align_center_position_gt_50_size_gt_maximum_size',
+      'align_center_position_lt_50',
+      'align_center_position_lt_50_size_gt_maximum_size',
+      'align_center_wrapped',
+      'align_end',
+      'align_end_wrapped',
+      'align_start',
+      'align_start_wrapped',
+      'basic',
+      'evil/9_cues_overlapping_completely',
+      'evil/9_cues_overlapping_completely_all_cues_have_same_timestamp',
+      'line_-2_wrapped_cue_grow_upwards',
+      'line_1_wrapped_cue_grow_downwards',
+    ].map((name) => [name, FIREFOX_LINE_HEIGHT]),
+  ),
+};
+
+/** Expected failures whose reason does not hold in one browser, where the test passes. */
+export const PASSES_IN: Partial<Record<Browser, Record<string, string>>> = {
+  webkit: {
+    'bidi/u002E_u2028_u05D0':
+      'WebKit breaks the line at U+2028 LINE SEPARATOR, as the reference does.',
+    ...Object.fromEntries(
+      objects.map((o) => [
+        `selectors/cue_function/${o}_object/${o}_white-space_pre-wrap_wrapped`,
+        'Matches the reference in WebKit (0 pixels differ): there, white space hanging at the end of a wrapped line inside the styled object takes up room as the reference’s white-space: pre gives it.',
+      ]),
+    ),
+  },
+};

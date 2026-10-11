@@ -14,7 +14,15 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import { build } from 'vite';
-import { ADJUSTED, EXPECTED_FAILURES, NOT_APPLICABLE } from './wpt-rendering-expectations.ts';
+import {
+  ADJUSTED,
+  BROWSER_ADJUSTED,
+  EXPECTED_FAILURES,
+  NOT_APPLICABLE,
+  PASSES_IN,
+  combined,
+  type Browser,
+} from './wpt-rendering-expectations.ts';
 
 const ROOT = fileURLToPath(new URL('../../../tests/wpt/rendering/', import.meta.url));
 const HOST = 'http://wpt.test';
@@ -273,7 +281,10 @@ for (const path of testPages().sort()) {
     if (!wpt) return;
     await serve(page);
     const clip = { x: 0, y: 0, width: wpt.width, height: wpt.height };
-    const adjusted = ADJUSTED[name];
+    const browser = browserName as Browser;
+    const general = ADJUSTED[name];
+    const own = BROWSER_ADJUSTED[browser]?.[name];
+    const adjusted = general && own ? combined(general, own) : (own ?? general);
 
     /** Our rendering of a page's tracks, with its ::cue styles, at its screenshot time. */
     const render = async (t: WptTest, adjustment = ''): Promise<Buffer> => {
@@ -300,7 +311,9 @@ for (const path of testPages().sort()) {
     const actual = await render(wpt, adjusted?.css);
 
     const differing = await diffPixels(page, actual, expected);
-    const failure = EXPECTED_FAILURES[name];
+    const passes = PASSES_IN[browser]?.[name];
+    const failure = passes === undefined ? EXPECTED_FAILURES[name] : undefined;
+    if (passes) test.info().annotations.push({ type: `passes in ${browser}`, description: passes });
     // WPT_REPORT=1: one line per test, for comparing browsers from a CI log.
     if (process.env['WPT_REPORT'] === '1') {
       const limit = adjusted?.tolerance ?? TOLERANCE;
