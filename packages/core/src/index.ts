@@ -191,3 +191,13 @@ export {
   updateRegion,
 } from './regions.ts';
 export type { RegionUpdate } from './regions.ts';
+export {
+  NEW_STYLE_SHEET,
+  addStyle,
+  cueSelectors,
+  deleteStyle,
+  ruleTemplates,
+  styleSheetProblems,
+  updateStyle,
+} from './styles.ts';
+export type { CueSelectors, StyleProblem } from './styles.ts';

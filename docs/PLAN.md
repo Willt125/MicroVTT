@@ -647,8 +647,17 @@ Next, in this order (owner, 2026-10-11):
     `DEFAULT_CUE_SETTINGS`.
   - The spec renderer now measures boxes from its container's padding box, so a bordered
     container no longer pushes cues out of the area.
-- An editor for STYLE blocks. A rich cue-text editor for spans, voices, ruby, lang, and karaoke
-  timestamps.
+- [x] **6d: STYLE block editor** (2026-10-11):
+  - A Styles dialog (toolbar "Styles…", WebVTT only: `SubtitleFormat.styleSheets`) lists the
+    STYLE blocks with their rule counts, and adds, edits and deletes them. Typing in a block is
+    one undo step. Problems show as you type, with their line (click to select it): CSS syntax,
+    rules that select no cue, properties cues ignore, and the blank lines and `-->` that export
+    removes. "Add a rule for" starts a rule for every cue, `i`, `b`, `:future`, `::cue-region`,
+    and each class, voice and language the cues use, placed after the rule the caret is in. A
+    preview draws the selected (or first) cue with the styles.
+  - Core: `addStyle`, `updateStyle`, `deleteStyle`, `styleSheetProblems`, `cueSelectors`,
+    `ruleTemplates`, `NEW_STYLE_SHEET`.
+- A rich cue-text editor for spans, voices, ruby, lang, and karaoke timestamps.
 - Chapters and metadata file modes.
 - The scroll-up animation of regions (0.433s): scroll-up regions show their latest lines, but
   the renderer rebuilds the cues it draws whenever they change, so nothing moves smoothly yet.

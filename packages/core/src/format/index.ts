@@ -28,6 +28,8 @@ export interface SubtitleFormat {
   cueSettings: readonly CueSettingId[];
   /** Whether cues have identifiers (SubRip numbers its cues instead). */
   cueIds: boolean;
+  /** Whether the format has style sheets (WebVTT's STYLE blocks). */
+  styleSheets: boolean;
   /** Whether a file starting with this text is in this format. */
   sniff(start: string): boolean;
 }
@@ -40,6 +42,7 @@ export const WEBVTT: SubtitleFormat = {
   text: WEBVTT_TEXT,
   cueSettings: ['align', 'vertical', 'line', 'position', 'size', 'region'],
   cueIds: true,
+  styleSheets: true,
   sniff: (start) => /^\uFEFF?WEBVTT(?:[ \t\r\n]|$)/.test(start),
 };
 
@@ -51,6 +54,7 @@ export const SRT: SubtitleFormat = {
   text: SRT_TEXT,
   cueSettings: ['anchor'],
   cueIds: false,
+  styleSheets: false,
   sniff: looksLikeSrt,
 };
 
