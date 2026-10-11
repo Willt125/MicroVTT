@@ -15,6 +15,7 @@
   import Timeline from './lib/components/Timeline.svelte';
   import TimingDialog from './lib/components/TimingDialog.svelte';
   import RegionsDialog from './lib/components/RegionsDialog.svelte';
+  import ChaptersPanel from './lib/components/ChaptersPanel.svelte';
   import StylesDialog from './lib/components/StylesDialog.svelte';
   import Toolbar from './lib/components/Toolbar.svelte';
   import { Editor } from './lib/editor.svelte.ts';
@@ -399,6 +400,17 @@
     </p>
   {/if}
 
+  {#if editor.hasDocument && editor.fileTypeGuess}
+    {@const guess = editor.fileTypeGuess}
+    <p class="banner offer" role="status">
+      This looks like a {guess.type} file: {guess.reason}. Edit it as {guess.type}?
+      <button class="primary" onclick={() => editor.setFileType(guess.type)}
+        >Edit as {guess.type}</button
+      >
+      <button onclick={() => (editor.fileTypeGuess = null)}>No, it is captions</button>
+    </p>
+  {/if}
+
   {#if editor.hasDocument && editor.cleanupOffered && editor.autoCaptions}
     <p class="banner offer" role="status">
       This looks like YouTube auto-captions ({editor.autoCaptions.lines.toLocaleString()} caption lines
@@ -434,7 +446,11 @@
           />
         {/if}
         <DiagnosticsPanel {editor} onjump={jumpTo} />
-        <QualityPanel {editor} onjump={jumpTo} onrules={() => (rulesOpen = true)} />
+        {#if editor.fileType === 'chapters'}
+          <ChaptersPanel {editor} {player} onjump={jumpTo} />
+        {:else if editor.fileType === 'captions'}
+          <QualityPanel {editor} onjump={jumpTo} onrules={() => (rulesOpen = true)} />
+        {/if}
       </div>
     </main>
     {#if player.hasMedia}
@@ -507,9 +523,13 @@
     flex-direction: column;
     gap: 0.75rem;
     min-height: 0;
+    /* When the media and the panels do not fit, the column scrolls. */
+    overflow-y: auto;
   }
-  .side > :global(.panel) {
-    flex: 1;
+  .side > :global(aside.panel) {
+    flex: 1 1 0;
+    /* Panels share what is left but never shrink to nothing (they scroll inside). */
+    min-height: 9rem;
   }
   .cues {
     display: flex;

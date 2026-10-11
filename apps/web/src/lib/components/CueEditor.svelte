@@ -23,6 +23,7 @@
   import CuePreview from './CuePreview.svelte';
   import CueTextTools from './CueTextTools.svelte';
   import KaraokePanel from './KaraokePanel.svelte';
+  import MetadataTools from './MetadataTools.svelte';
   import type { MarkupEdit } from '@microvtt/core';
   import type { Player } from '../player.svelte.ts';
   import { toggleSpan, type SimpleSpan } from '../richtext.ts';
@@ -202,7 +203,10 @@
   let selStart = $state(0);
   let selEnd = $state(0);
   const markupKind = $derived(editor.format.id === 'srt' ? 'srt' : 'webvtt');
-  const wordTiming = $derived(editor.format.text.timestampMarkup(0) !== '');
+  /** What the cues hold: caption text (markup, settings, word timing), chapter titles or data. */
+  const mode = $derived(editor.format.id === 'webvtt' ? editor.fileType : 'captions');
+  const captionText = $derived(mode === 'captions' || mode === 'any');
+  const wordTiming = $derived(captionText && editor.format.text.timestampMarkup(0) !== '');
 
   function readSelection(): void {
     if (!textarea) return;
@@ -307,47 +311,46 @@
 
       <div class="text-head">
         <label class="text-label" for="cue-text"
-          >Text <span class="muted">({editor.format.text.markupHint})</span></label
+          >{#if mode === 'chapters'}Title <span class="muted"
+              >(plain text; write &amp; and &lt; as &amp;amp; and &amp;lt;)</span
+            >{:else if mode === 'metadata'}Payload <span class="muted"
+              >(data for scripts, e.g. JSON)</span
+            >{:else}Text <span class="muted">({editor.format.text.markupHint})</span>{/if}</label
         >
-        <label
-          class="language"
-          title={editor.language && editor.languageSource
-            ? `${languageName(editor.language) ?? editor.language}, ${SOURCE_LABEL[editor.languageSource]}`
-            : 'The text’s language, for spelling and line breaking (a BCP 47 tag, e.g. fi)'}
-        >
-          Language
-          <input
-            value={editor.language ?? ''}
-            list="language-tags"
-            size="7"
-            placeholder="unknown"
-            autocomplete="off"
-            onchange={(e) => commitLanguage(e.currentTarget)}
-          />
-        </label>
-        <datalist id="language-tags">
-          {#each LANGUAGES as tag (tag)}<option value={tag}>{languageName(tag) ?? tag}</option
-            >{/each}
-        </datalist>
+        {#if mode !== 'metadata'}
+          <label
+            class="language"
+            title={editor.language && editor.languageSource
+              ? `${languageName(editor.language) ?? editor.language}, ${SOURCE_LABEL[editor.languageSource]}`
+              : 'The text’s language, for spelling and line breaking (a BCP 47 tag, e.g. fi)'}
+          >
+            Language
+            <input
+              value={editor.language ?? ''}
+              list="language-tags"
+              size="7"
+              placeholder="unknown"
+              autocomplete="off"
+              onchange={(e) => commitLanguage(e.currentTarget)}
+            />
+          </label>
+          <datalist id="language-tags">
+            {#each LANGUAGES as tag (tag)}<option value={tag}>{languageName(tag) ?? tag}</option
+              >{/each}
+          </datalist>
+        {/if}
       </div>
-      <CueTextTools
-        {editor}
-        text={cue.text}
-        kind={markupKind}
-        start={selStart}
-        end={selEnd}
-        onedit={applyMarkup}
-        onselect={(a, b) => void select(a, b)}
-      >
+      {#snippet field()}
         <textarea
           id="cue-text"
+          class:data={mode === 'metadata'}
           bind:this={textarea}
           value={cue.text}
-          rows="3"
-          lang={editor.language ?? undefined}
-          dir="auto"
-          spellcheck="true"
-          onkeydown={textKeydown}
+          rows={mode === 'metadata' ? 6 : mode === 'chapters' ? 2 : 3}
+          lang={mode === 'metadata' ? undefined : (editor.language ?? undefined)}
+          dir={mode === 'metadata' ? 'ltr' : 'auto'}
+          spellcheck={mode !== 'metadata'}
+          onkeydown={captionText ? textKeydown : undefined}
           onkeyup={readSelection}
           onmouseup={readSelection}
           onselect={readSelection}
@@ -356,31 +359,50 @@
             update({ text: e.currentTarget.value }, 'Edit text', 'text');
             readSelection();
           }}></textarea>
-      </CueTextTools>
-
-      <div class="marks">
-        {#if marks.length > 0}
-          <span class="muted">Invisible characters:</span>
-          {#each marks as { mark, count } (mark.char)}
-            <button
-              class="small mark"
-              title="{mark.name}{count > 1 ? ` (${count})` : ''}: click to remove"
-              aria-label="Remove {mark.name}{count > 1 ? ` (${count})` : ''}"
-              onclick={() =>
-                update({ text: withoutMark(cue.text, mark.char) }, `Remove ${mark.abbr}`)}
-              >{mark.abbr}{count > 1 ? ` ×${count}` : ''}</button
-            >
-          {/each}
-        {/if}
-        <select
-          class="insert-mark"
-          aria-label="Insert an invisible character"
-          onchange={(e) => void insertMark(e.currentTarget)}
+      {/snippet}
+      {#if captionText}
+        <CueTextTools
+          {editor}
+          text={cue.text}
+          kind={markupKind}
+          start={selStart}
+          end={selEnd}
+          onedit={applyMarkup}
+          onselect={(a, b) => void select(a, b)}
         >
-          <option value="">Insert mark…</option>
-          {#each INSERTS as ins, i (ins.label)}<option value={i}>{ins.label}</option>{/each}
-        </select>
-      </div>
+          {@render field()}
+        </CueTextTools>
+      {:else}
+        {@render field()}
+      {/if}
+
+      {#if mode === 'metadata'}
+        <MetadataTools text={cue.text} onchange={(text, label) => update({ text }, label)} />
+      {:else}
+        <div class="marks">
+          {#if marks.length > 0}
+            <span class="muted">Invisible characters:</span>
+            {#each marks as { mark, count } (mark.char)}
+              <button
+                class="small mark"
+                title="{mark.name}{count > 1 ? ` (${count})` : ''}: click to remove"
+                aria-label="Remove {mark.name}{count > 1 ? ` (${count})` : ''}"
+                onclick={() =>
+                  update({ text: withoutMark(cue.text, mark.char) }, `Remove ${mark.abbr}`)}
+                >{mark.abbr}{count > 1 ? ` ×${count}` : ''}</button
+              >
+            {/each}
+          {/if}
+          <select
+            class="insert-mark"
+            aria-label="Insert an invisible character"
+            onchange={(e) => void insertMark(e.currentTarget)}
+          >
+            <option value="">Insert mark…</option>
+            {#each INSERTS as ins, i (ins.label)}<option value={i}>{ins.label}</option>{/each}
+          </select>
+        </div>
+      {/if}
 
       {#if wordTiming}
         <KaraokePanel
@@ -392,7 +414,7 @@
         />
       {/if}
 
-      {#if settings.size > 0}
+      {#if settings.size > 0 && captionText}
         <details class="settings" bind:open={settingsOpen}>
           <summary
             >Settings{#if changed.length > 0}<span class="muted changed"

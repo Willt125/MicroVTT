@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { FileType } from '@microvtt/core';
+  import { FILE_TYPES } from '../filetypes.ts';
   import type { Editor } from '../editor.svelte.ts';
   import { SYSTEM, THEMES } from '../themes.ts';
 
@@ -64,6 +66,20 @@
       disabled={!editor.hasDocument}
       title="Export a .vtt or .srt file ({mod}S)">Export…</button
     >
+    {#if editor.hasDocument && editor.format.id === 'webvtt'}
+      <label
+        class="type"
+        title="What the file holds: captions or subtitles, chapter titles, or metadata for scripts. Checks, tools and export follow it."
+      >
+        Type
+        <select
+          value={editor.fileType}
+          onchange={(e) => editor.setFileType(e.currentTarget.value as FileType)}
+        >
+          {#each FILE_TYPES as t (t.value)}<option value={t.value}>{t.label}</option>{/each}
+        </select>
+      </label>
+    {/if}
   </div>
   <div class="group" aria-label="Edit">
     <button onclick={() => editor.undo()} disabled={!editor.canUndo} title="Undo ({mod}Z)"
@@ -170,6 +186,11 @@
   .group {
     display: flex;
     gap: 0.35rem;
+  }
+  .type {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
   }
   .status {
     margin: 0;

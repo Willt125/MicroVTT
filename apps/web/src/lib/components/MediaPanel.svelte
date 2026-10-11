@@ -11,6 +11,7 @@
   import { RATES, type Player } from '../player.svelte.ts';
   import { formatTime } from '../time.ts';
   import { FRAME_RATES, rateLabel, standardRate } from '../frames.ts';
+  import { extractChapterTitle } from '@microvtt/core';
   import { CueRenderer } from '../render/renderer.ts';
   import { renderTrackOf } from '../render/track.ts';
 
@@ -66,7 +67,23 @@
   let overlay = $state.raw<HTMLDivElement | null>(null);
   /** Where the picture is inside the video element (it is letterboxed to fit). */
   let picture = $state.raw({ left: 0, top: 0, width: 0, height: 0 });
-  const specCaptions = $derived(player.captions && player.renderer === 'spec');
+  /** Chapters and metadata are not shown as captions (players do not render those tracks). */
+  const captionFile = $derived(
+    editor.format.id !== 'webvtt' || editor.fileType === 'captions' || editor.fileType === 'any',
+  );
+  const specCaptions = $derived(captionFile && player.captions && player.renderer === 'spec');
+  /** In chapters mode, the innermost chapter at the playhead. */
+  const chapter = $derived.by(() => {
+    if (editor.fileType !== 'chapters') return null;
+    let best: { title: string; length: number } | null = null;
+    for (const item of editor.doc.body) {
+      if (item.type !== 'cue' || player.currentMs < item.startMs || player.currentMs >= item.endMs)
+        continue;
+      const length = item.endMs - item.startMs;
+      if (!best || length <= best.length) best = { title: extractChapterTitle(item.text), length };
+    }
+    return best?.title ?? null;
+  });
 
   const renderTrack = $derived(renderTrackOf(editor.doc, editor.format.id, editor.language));
 
@@ -247,12 +264,15 @@
       {onloadedmetadata}
       {onerror}
     >
-      {#if trackUrl && player.captions && player.renderer === 'browser'}
+      {#if trackUrl && captionFile && player.captions && player.renderer === 'browser'}
         {#key trackUrl}
           <track kind="captions" label="Preview" src={trackUrl} use:showTrack />
         {/key}
       {/if}
     </video>
+    {#if chapter !== null}
+      <p class="chapter" role="status" aria-label="Chapter at the playhead">{chapter}</p>
+    {/if}
     {#if specCaptions}
       <div
         class="captions"
@@ -324,7 +344,7 @@
       ><input type="checkbox" bind:checked={player.sync} /> Sync list</label
     >
     <label title="Show the document as captions over the media"
-      ><input type="checkbox" bind:checked={player.captions} /> Captions</label
+      ><input type="checkbox" bind:checked={player.captions} disabled={!captionFile} /> Captions</label
     >
     <label
       title="What draws the captions: MicroVTT, following the WebVTT spec’s rendering rules the same way in every browser, or this browser’s own renderer"
@@ -381,6 +401,22 @@
   }
   .stage {
     position: relative;
+  }
+  .chapter {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    margin: 0;
+    max-width: calc(100% - 1rem);
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--radius);
+    background: rgb(0 0 0 / 0.7);
+    color: #fff;
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
   }
   .captions {
     position: absolute;

@@ -3,6 +3,7 @@
   real export in the worker, so what is listed is what gets written.
 -->
 <script lang="ts">
+  import { FILE_TYPES } from '../filetypes.ts';
   import type { CompatibilityFix, CompatibilityId, FileType, FormatId } from '@microvtt/core';
   import {
     COMPATIBILITY_FIXES,
@@ -71,13 +72,6 @@
   function toggle(id: CompatibilityId, on: boolean): void {
     compatibility = on ? [...compatibility, id] : compatibility.filter((x) => x !== id);
   }
-
-  const FILE_TYPES: { value: FileType; label: string }[] = [
-    { value: 'captions', label: 'Captions / subtitles' },
-    { value: 'chapters', label: 'Chapters' },
-    { value: 'metadata', label: 'Metadata' },
-    { value: 'any', label: 'Any (structure only)' },
-  ];
 
   const target = $derived(formatById(to));
   const converting = $derived(to !== editor.format.id);
