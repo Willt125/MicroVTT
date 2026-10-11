@@ -333,6 +333,12 @@ export const DIAGNOSTICS = {
     rule: 'Each region setting has a fixed set of valid values.',
     fix: 'Invalid values are dropped (parsers ignore them).',
   },
+  'region-unused': {
+    severity: 'warning',
+    spec: 'webvtt-region-cue-setting',
+    rule: 'A region holds only the cues placed in it with a "region:" setting; a cue with a line or vertical setting is taken out of it.',
+    fix: 'None automatically: give the cues a "region:" setting, or delete the region.',
+  },
   // Style sheets (§4.1, §8)
   'style-css-syntax': {
     severity: 'error',

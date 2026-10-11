@@ -42,7 +42,7 @@ const CASES: Record<
   },
   'region-after-cue': {
     bad: `${H}${CUE}x\n\nREGION\nid:r\n`,
-    good: `${H}REGION\nid:r\n\n${CUE}x\n`,
+    good: `${H}REGION\nid:r\n\n00:00.000 --> 00:01.000 region:r\nx\n`,
   },
   'block-keyword-whitespace': {
     bad: `${H}STYLE\f\n::cue { color: red }\n`,
@@ -157,6 +157,10 @@ const CASES: Record<
     fileType: 'chapters',
   },
   'region-id-missing': { bad: `${H}REGION\nwidth:40%\n`, good: `${H}REGION\nid:r width:40%\n` },
+  'region-unused': {
+    bad: `${H}${REGION}${CUE}x\n`,
+    good: `${H}${REGION}00:00.000 --> 00:01.000 region:r\nx\n`,
+  },
   'region-id-duplicate': { bad: `${H}${REGION}${REGION}`, good: `${H}${REGION}REGION\nid:s\n` },
   'region-settings-whitespace': {
     bad: `${H}REGION\nid:r width:40% \n`,
