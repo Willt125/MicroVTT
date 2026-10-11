@@ -2,7 +2,8 @@
  * Editing operations. All are pure: they return a new document and leave the input unchanged.
  *
  * Operations that move times also move the timestamp tags inside cue text (word timings), so
- * karaoke-style and auto-caption cues stay in sync.
+ * karaoke-style and auto-caption cues stay in sync. Operations that read or change cue text take
+ * the format's text dialect (WebVTT by default).
  */
 import type {
   AlignSetting,
@@ -11,34 +12,10 @@ import type {
   PositionAlignSetting,
 } from './parser.ts';
 import type { BodyItem, Cue, VttDocument } from './document.ts';
-import { formatTimestamp, parseTimestamp } from './timestamp.ts';
+import type { TextDialect } from './format/dialect.ts';
+import { WEBVTT_TEXT } from './format/webvtt-text.ts';
 
-/**
- * Calls `fn` for every timestamp tag in raw cue text and splices in its result (a new time in
- * ms, or null to remove the tag). Tags are found the way the cue text tokenizer finds them, so
- * text inside other tags' annotations is never touched.
- */
-export function mapTextTimestamps(text: string, fn: (ms: number) => number | null): string {
-  let out = '';
-  let pos = 0;
-  while (pos < text.length) {
-    const lt = text.indexOf('<', pos);
-    if (lt === -1) break;
-    const gt = text.indexOf('>', lt + 1);
-    const tagEnd = gt === -1 ? text.length : gt + 1;
-    const inner = text.slice(lt + 1, gt === -1 ? text.length : gt);
-    out += text.slice(pos, lt);
-    const ts = /^[0-9]/.test(inner) ? parseTimestamp(inner) : null;
-    if (ts?.ok && ts.end === inner.length) {
-      const mapped = fn(ts.ms);
-      if (mapped !== null) out += `<${formatTimestamp(Math.max(0, Math.round(mapped)))}>`;
-    } else {
-      out += text.slice(lt, tagEnd);
-    }
-    pos = tagEnd;
-  }
-  return out + text.slice(pos);
-}
+export { mapTextTimestamps } from './format/webvtt-text.ts';
 
 type CueFilter = (cue: Cue, bodyIndex: number) => boolean;
 
@@ -59,7 +36,8 @@ const toTime = (ms: number): number => Math.max(0, Math.round(ms));
 function retimeCues(
   doc: VttDocument,
   map: (ms: number) => number,
-  filter?: CueFilter,
+  filter: CueFilter | undefined,
+  dialect: TextDialect,
 ): VttDocument {
   return mapCues(
     doc,
@@ -67,15 +45,20 @@ function retimeCues(
       ...cue,
       startMs: toTime(map(cue.startMs)),
       endMs: toTime(map(cue.endMs)),
-      text: mapTextTimestamps(cue.text, map),
+      text: dialect.mapTimestamps(cue.text, map),
     }),
     filter,
   );
 }
 
 /** Moves cues (all, or those matching `filter`) by `deltaMs`, clamping at zero. */
-export function shiftCues(doc: VttDocument, deltaMs: number, filter?: CueFilter): VttDocument {
-  return retimeCues(doc, (ms) => ms + deltaMs, filter);
+export function shiftCues(
+  doc: VttDocument,
+  deltaMs: number,
+  filter?: CueFilter,
+  dialect: TextDialect = WEBVTT_TEXT,
+): VttDocument {
+  return retimeCues(doc, (ms) => ms + deltaMs, filter, dialect);
 }
 
 /**
@@ -87,10 +70,11 @@ export function scaleCues(
   factor: number,
   anchorMs = 0,
   filter?: CueFilter,
+  dialect: TextDialect = WEBVTT_TEXT,
 ): VttDocument {
   if (!Number.isFinite(factor) || factor <= 0)
     throw new RangeError(`Invalid scale factor: ${factor}`);
-  return retimeCues(doc, (ms) => anchorMs + (ms - anchorMs) * factor, filter);
+  return retimeCues(doc, (ms) => anchorMs + (ms - anchorMs) * factor, filter, dialect);
 }
 
 /** A correction for resync: what is at `fromMs` now should be at `toMs`. */
@@ -125,70 +109,9 @@ export function resyncCues(
   a: SyncPoint,
   b: SyncPoint,
   filter?: CueFilter,
+  dialect: TextDialect = WEBVTT_TEXT,
 ): VttDocument {
-  return retimeCues(doc, syncMap(a, b).map, filter);
-}
-
-/** Elements that can be open across a split point (the cue text parser's element names). */
-const ELEMENTS = new Set(['c', 'i', 'b', 'u', 'ruby', 'rt', 'v', 'lang']);
-
-interface OpenTag {
-  name: string;
-  /** The start tag as written, e.g. `<v.loud Bob>`. */
-  tag: string;
-  at: number;
-}
-
-/**
- * Finds where raw cue text can be divided near `offset`: never inside a tag or a character
- * reference, and never just inside an element's start or end tag. Returns the adjusted offset and
- * the elements open there, outermost first.
- */
-function splitPoint(text: string, offset: number): { at: number; open: OpenTag[] } {
-  let at = Math.max(0, Math.min(text.length, offset));
-  // Not inside a character reference ("&amp;" split as "&am" + "p;").
-  const amp = text.lastIndexOf('&', at - 1);
-  if (amp !== -1 && /^&[#0-9A-Za-z]*$/.test(text.slice(amp, at))) at = amp;
-  const open: OpenTag[] = [];
-  let pos = 0;
-  while (pos < at) {
-    const lt = text.indexOf('<', pos);
-    if (lt === -1 || lt >= at) break;
-    const gt = text.indexOf('>', lt + 1);
-    const end = gt === -1 ? text.length : gt + 1;
-    if (at < end) {
-      at = lt; // Inside a tag: split before it.
-      break;
-    }
-    const inner = text.slice(lt + 1, gt === -1 ? text.length : gt);
-    if (inner.startsWith('/')) {
-      const name = inner.slice(1).trim();
-      if (open.at(-1)?.name === name) open.pop();
-      else if (name === 'ruby' && open.at(-1)?.name === 'rt' && open.at(-2)?.name === 'ruby')
-        open.splice(-2);
-    } else {
-      const name = /^[^\s./>]*/.exec(inner)?.[0] ?? '';
-      if (ELEMENTS.has(name)) open.push({ name, tag: text.slice(lt, end), at: lt });
-    }
-    pos = end;
-  }
-  for (;;) {
-    const top = open.at(-1);
-    if (top && top.at + top.tag.length === at) {
-      // Right after a start tag: the element belongs wholly to the second cue.
-      at = top.at;
-      open.pop();
-      continue;
-    }
-    const close = top && new RegExp(`^</${top.name}\\s*>`).exec(text.slice(at));
-    if (top && close) {
-      // Right before an end tag: the element belongs wholly to the first cue.
-      at += close[0].length;
-      open.pop();
-      continue;
-    }
-    return { at, open };
-  }
+  return retimeCues(doc, syncMap(a, b).map, filter, dialect);
 }
 
 /**
@@ -204,28 +127,23 @@ export function splitCue(
   bodyIndex: number,
   atMs: number,
   textOffset: number,
+  dialect: TextDialect = WEBVTT_TEXT,
 ): VttDocument {
   const cue = doc.body[bodyIndex];
   if (cue?.type !== 'cue') throw new RangeError(`No cue at body index ${bodyIndex}`);
   if (!(atMs > cue.startMs && atMs < cue.endMs))
     throw new RangeError('Split time must be inside the cue');
-  const { at, open } = splitPoint(cue.text, textOffset);
-  const closers = open
-    .map((t) => `</${t.name}>`)
-    .reverse()
-    .join('');
-  const before = cue.text.slice(0, at).replace(/[ \t\n]+$/, '') + closers;
-  const after = open.map((t) => t.tag).join('') + cue.text.slice(at).replace(/^[ \t\n]+/, '');
+  const [before, after] = dialect.splitText(cue.text, textOffset);
   const first: Cue = {
     ...cue,
     endMs: atMs,
-    text: mapTextTimestamps(before, (ms) => (ms < atMs ? ms : null)),
+    text: dialect.mapTimestamps(before, (ms) => (ms < atMs ? ms : null)),
   };
   const second: Cue = {
     ...cue,
     id: '',
     startMs: atMs,
-    text: mapTextTimestamps(after, (ms) => (ms > atMs ? ms : null)),
+    text: dialect.mapTimestamps(after, (ms) => (ms > atMs ? ms : null)),
   };
   delete first.source;
   delete second.source;
@@ -238,7 +156,12 @@ export function splitCue(
  * after the merged cue). Settings and id come from the first cue. Each later cue's start time is
  * kept as a timestamp tag at the join, so word timing survives the merge.
  */
-export function mergeCues(doc: VttDocument, from: number, to: number): VttDocument {
+export function mergeCues(
+  doc: VttDocument,
+  from: number,
+  to: number,
+  dialect: TextDialect = WEBVTT_TEXT,
+): VttDocument {
   const items = doc.body.slice(from, to + 1);
   const cues = items.filter((i): i is Cue => i.type === 'cue');
   const notes = items.filter((i) => i.type === 'note');
@@ -249,7 +172,7 @@ export function mergeCues(doc: VttDocument, from: number, to: number): VttDocume
   let text = head.text;
   for (const cue of cues.slice(1)) {
     const join =
-      cue.startMs > startMs && cue.startMs < endMs ? `<${formatTimestamp(cue.startMs)}>` : '';
+      cue.startMs > startMs && cue.startMs < endMs ? dialect.timestampMarkup(cue.startMs) : '';
     text += `\n${join}${cue.text}`;
   }
   const merged: Cue = { ...head, startMs, endMs, text };

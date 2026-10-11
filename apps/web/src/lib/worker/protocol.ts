@@ -1,4 +1,4 @@
-/** Messages between the editor and the WebVTT worker. */
+/** Messages between the editor and the worker. */
 import type {
   AutoCaptionInfo,
   CleanupOptions,
@@ -9,6 +9,7 @@ import type {
   ReviewMarker,
   ExportOptions,
   FileType,
+  FormatId,
   LanguageHintSource,
   QualityFinding,
   RepairEntry,
@@ -76,6 +77,8 @@ export interface ExportedFile {
 /** What an autosave records besides the document. */
 export interface AutosaveMeta {
   fileName: string;
+  /** The document's format (absent in older saves, which are WebVTT). */
+  format?: FormatId;
   fileType: FileType;
   /** `Date.now()` when saved. */
   savedAt: number;
@@ -97,11 +100,12 @@ export interface AutosaveRequest {
 }
 
 export type WorkerRequest =
-  | { id: number; type: 'import'; bytes: ArrayBuffer; encoding?: string }
+  | { id: number; type: 'import'; bytes: ArrayBuffer; format: FormatId; encoding?: string }
   | {
       id: number;
       type: 'validate';
       document: VttDocument;
+      format: FormatId;
       fileType: FileType;
       quality: QualityRequest | null;
     }

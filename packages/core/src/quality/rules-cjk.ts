@@ -3,6 +3,7 @@
  * Traditional), Japanese and Korean Timed Text Style Guides. Fixes change only the text outside
  * tags, and are offered where the right change is clear.
  */
+import { markupPattern } from './markup.ts';
 import type { CueInfo, RuleDefinition } from './rules.ts';
 
 const plain = (info: CueInfo): string => info.lines.join('\n');
@@ -11,10 +12,10 @@ const plain = (info: CueInfo): string => info.lines.join('\n');
 const CJ = '\\p{Script=Han}\\p{Script=Hiragana}\\p{Script=Katakana}ー';
 const HAS_CJ = new RegExp(`[${CJ}]`, 'u');
 
-/** Applies `fn` to the text between tags, leaving tags as they are. */
-const outsideTags = (raw: string, fn: (text: string) => string): string =>
+/** Applies `fn` to the text between tags of the cue's markup, leaving tags as they are. */
+const outsideTags = (info: CueInfo, raw: string, fn: (text: string) => string): string =>
   raw
-    .split(/(<[^>]*>)/)
+    .split(markupPattern(info.dialect, (T) => `(${T})`))
     .map((part, i) => (i % 2 === 1 ? part : fn(part)))
     .join('');
 
@@ -99,13 +100,13 @@ export const CJK_RULES: RuleDefinition[] = [
     params: [],
     defaults: {},
     cue(info, _, emit) {
-      if (!/<i[\s.>]/.test(info.cue.text)) return;
+      if (!info.dialect.hasItalics(info.cue.text)) return;
       emit({
         index: info.index,
         message: 'Italics are not used.',
         fix: {
           label: 'Remove the italics',
-          change: { kind: 'text', text: info.cue.text.replace(/<\/?i(?:[\s.][^>]*)?>/g, '') },
+          change: { kind: 'text', text: info.dialect.removeItalics(info.cue.text) },
         },
       });
     },
@@ -128,7 +129,7 @@ export const CJK_RULES: RuleDefinition[] = [
         problems.push('half-width punctuation next to Chinese (use ？ ！ ：)');
       if (DOUBLED_MARKS.test(text)) problems.push('doubled marks (?? !! ?! !?) are not used');
       if (/"/.test(text)) problems.push('straight quotes (use “” and ‘’)');
-      let fixed = outsideTags(info.cue.text, (t) =>
+      let fixed = outsideTags(info, info.cue.text, (t) =>
         tidySpaces(
           t
             .replace(COMMA_PERIOD, ' ')
@@ -157,7 +158,7 @@ export const CJK_RULES: RuleDefinition[] = [
         problems.push('half-width punctuation next to Chinese (use full-width)');
       if (DOUBLED_MARKS.test(text)) problems.push('doubled marks (?? !! ?! !?) are not used');
       if (/["“”‘’]/.test(text)) problems.push('quotes are written 「」, and 『』 inside them');
-      let fixed = outsideTags(info.cue.text, (t) =>
+      let fixed = outsideTags(info, info.cue.text, (t) =>
         tidySpaces(
           t
             .replace(/(?:[。．]|(?<![A-Za-z\p{N}.])\.(?![\p{N}.]))(?=\s*$)/gmu, '')
@@ -187,7 +188,7 @@ export const CJK_RULES: RuleDefinition[] = [
         problems.push('a digit for a day of the week (星期二, not 星期2)');
       if (/[一二三四五六七八九十百千][0-9]|[0-9][十百千]/.test(text))
         problems.push('Arabic digits mixed with Chinese numerals');
-      const fixed = outsideTags(info.cue.text, (t) =>
+      const fixed = outsideTags(info, info.cue.text, (t) =>
         t
           .replace(/[０-９]/g, (c) => toHalfWidth(c))
           .replace(/(?<![\d,.])(\d),(\d{3})(?![\d,])/g, '$1$2')
@@ -218,7 +219,7 @@ export const CJK_RULES: RuleDefinition[] = [
         problems.push('a full-width space follows ？ and ！ before the next sentence');
       if (/(?<=\p{Script=Katakana})・(?=\p{Script=Katakana})/u.test(text))
         problems.push('foreign names are separated with a half-width nakaguro (･)');
-      const fixed = outsideTags(info.cue.text, (t) =>
+      const fixed = outsideTags(info, info.cue.text, (t) =>
         t
           .split(/(「[^」]*」)/)
           .map((part, i) =>
@@ -260,7 +261,7 @@ export const CJK_RULES: RuleDefinition[] = [
       if (new RegExp(commas.source).test(text)) problems.push('numbers take no commas');
       if (new RegExp(long.source).test(text) || /\d{9,}/.test(text))
         problems.push('numbers over four digits use 万 (１万2345)');
-      const fixed = outsideTags(info.cue.text, (t) =>
+      const fixed = outsideTags(info, info.cue.text, (t) =>
         t
           .replace(commas, (m) => m.replace(/,/g, ''))
           .replace(long, (m) => withMan(Number(m)))
@@ -296,7 +297,7 @@ export const CJK_RULES: RuleDefinition[] = [
         .split('\n')
         .map((line) =>
           HAS_CJ.test(line)
-            ? outsideTags(line, (t) =>
+            ? outsideTags(info, line, (t) =>
                 t.replace(acronym, (m) => toFullWidth(m)).replace(wideWord, (m) => toHalfWidth(m)),
               )
             : line,
@@ -323,7 +324,7 @@ export const CJK_RULES: RuleDefinition[] = [
           label: 'Use full-width',
           change: {
             kind: 'text',
-            text: outsideTags(info.cue.text, (t) =>
+            text: outsideTags(info, info.cue.text, (t) =>
               t.replace(halfKana, (m) => m.normalize('NFKC')),
             ),
           },
@@ -349,7 +350,7 @@ export const CJK_RULES: RuleDefinition[] = [
       if (new RegExp(between.source, 'u').test(text))
         problems.push('sentences in one subtitle are separated with a comma');
       if (/!\?/.test(text)) problems.push('?! is preferred to !?');
-      const fixed = outsideTags(info.cue.text, (t) =>
+      const fixed = outsideTags(info, info.cue.text, (t) =>
         t.replace(lineEnd, '').replace(between, ',').replace(/!\?/g, '?!'),
       );
       report(info, problems, fixed, 'Fix the punctuation', emit);

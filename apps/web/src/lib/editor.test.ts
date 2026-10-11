@@ -42,6 +42,7 @@ function fakeWorker(store: { save: Autosave | null } = { save: null }): VttWorke
     },
     validate: async (
       doc: VttDocument,
+      _format: unknown,
       _fileType: unknown,
       quality: { ruleset: string; overrides: object; fps?: number } | null = null,
     ) => {

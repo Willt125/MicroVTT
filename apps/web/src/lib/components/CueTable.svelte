@@ -135,7 +135,8 @@
               class="text"
               lang={editor.language ?? undefined}
               dir="auto"
-              title={plainText(cue.text)}>{plainText(cue.text)}</span
+              title={plainText(cue.text, editor.format.text)}
+              >{plainText(cue.text, editor.format.text)}</span
             >
             <span class="flag">
               {#if worst}

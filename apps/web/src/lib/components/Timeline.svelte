@@ -8,7 +8,7 @@
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { mapTextTimestamps, type Cue } from '@microvtt/core';
+  import { textTimestamps, type Cue } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import type { Player } from '../player.svelte.ts';
   import {
@@ -231,7 +231,11 @@
         ctx.rect(x1 + 3, laneTop, x2 - x1 - 6, CUE_LANE_PX);
         ctx.clip();
         ctx.fillStyle = c.text;
-        ctx.fillText(plainText(cue.text).replace(/\n/g, ' '), x1 + 4, laneTop + 17);
+        ctx.fillText(
+          plainText(cue.text, editor.format.text).replace(/\n/g, ' '),
+          x1 + 4,
+          laneTop + 17,
+        );
         ctx.restore();
       }
     }
@@ -358,7 +362,7 @@
       if (!moves) targets.push(cue.startMs, cue.endMs);
       // A cue's own word timings stay put while one of its edges is dragged.
       if (!moves || (kind !== 'move' && i === dragged))
-        mapTextTimestamps(cue.text, (ms) => (targets.push(ms), ms));
+        targets.push(...textTimestamps(editor.format.text, cue.text));
     }
     return targets;
   }

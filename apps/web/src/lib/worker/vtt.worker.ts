@@ -11,6 +11,7 @@ import {
   detectAutoCaptions,
   exportDocument,
   findReviewMarkers,
+  formatById,
   importDocument,
   rulesetById,
   validate,
@@ -40,6 +41,7 @@ let current: VttDocument | null = null;
 async function handle(request: WorkerRequest): Promise<unknown> {
   switch (request.type) {
     case 'import': {
+      // Every format is WebVTT so far; each will import (and validate, export) its own way.
       // WebVTT is UTF-8 (spec §6.1); a file that is not is read in the encoding it was saved in.
       const decoded = decodeFile(new Uint8Array(request.bytes), request.encoding);
       const imported = importDocument(decoded.text);
@@ -71,12 +73,10 @@ async function handle(request: WorkerRequest): Promise<unknown> {
         diagnostics: locateInSerialized(result.diagnostics, spans),
         review: findReviewMarkers(request.document),
         quality: ruleset
-          ? checkQuality(
-              request.document,
-              ruleset,
-              request.quality?.overrides,
-              request.quality?.fps ? { fps: request.quality.fps } : {},
-            )
+          ? checkQuality(request.document, ruleset, request.quality?.overrides, {
+              dialect: formatById(request.format).text,
+              ...(request.quality?.fps ? { fps: request.quality.fps } : {}),
+            })
           : [],
       } satisfies Checked;
     }

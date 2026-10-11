@@ -32,7 +32,9 @@
   let status = $state<string | null>(null);
   let input: HTMLInputElement | undefined = $state();
 
-  const pattern = $derived(buildPattern({ query, matchCase, wholeWord, regex, acrossTimings }));
+  const pattern = $derived(
+    buildPattern({ query, matchCase, wholeWord, regex, acrossTimings }, editor.format.text),
+  );
   const matches = $derived(
     pattern instanceof RegExp ? findAll(editor.doc, editor.cueRows, pattern) : [],
   );

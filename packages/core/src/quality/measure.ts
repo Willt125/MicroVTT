@@ -3,34 +3,15 @@
  * ruby annotations left out, and characters counted as graphemes (what a reader sees as one
  * character), so combining marks and emoji count once.
  */
-import { parseCueText, type CueNode } from '../cuetext.ts';
+import { WEBVTT_TEXT } from '../format/webvtt-text.ts';
 import { hasUnspaced } from '../script.ts';
 
-const lineCache = new Map<string, string[]>();
 const lengthCache = new Map<string, number>();
 const CACHE_LIMIT = 100_000;
 
-/** The text a viewer reads, line by line. Cached by cue text (most cues are unchanged between checks). */
+/** The text a viewer reads of WebVTT cue text, line by line (see `TextDialect.readableLines`). */
 export function readableLines(text: string): string[] {
-  let lines = lineCache.get(text);
-  if (lines) return lines;
-  if (!/[<&]/.test(text)) {
-    lines = text.split('\n');
-  } else {
-    let out = '';
-    const walk = (nodes: CueNode[]): void => {
-      for (const node of nodes) {
-        if (node.type === 'text') out += node.value;
-        else if (node.type === 'timestamp' || node.type === 'rt') continue;
-        else walk(node.children);
-      }
-    };
-    walk(parseCueText(text).children);
-    lines = out.split('\n');
-  }
-  if (lineCache.size >= CACHE_LIMIT) lineCache.clear();
-  lineCache.set(text, lines);
-  return lines;
+  return WEBVTT_TEXT.readableLines(text);
 }
 
 const segmenter =

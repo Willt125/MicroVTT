@@ -107,12 +107,14 @@
 
   const warnings = $derived(result?.diagnostics.filter((d) => d.severity !== 'error').length ?? 0);
 
-  const exportName = $derived(editor.fileName.replace(/\.[^.]*$/, '') + '.vtt');
+  const exportName = $derived(
+    editor.fileName.replace(/\.[^.]*$/, '') + (editor.format.extensions[0] ?? ''),
+  );
 
   /** Saves through the browser's downloads. */
   function saveDownload(): void {
     if (!result) return;
-    download(result.text, exportName);
+    download(result.text, exportName, editor.format);
     editor.markSaved();
     open = false;
   }
@@ -123,7 +125,7 @@
     saving = true;
     saveError = null;
     try {
-      const target = handle ?? (await pickSaveFile(exportName));
+      const target = handle ?? (await pickSaveFile(exportName, editor.format));
       if (!target) return; // Cancelled.
       if (!(await writeFile(target, result.text))) {
         saveError = `Permission to write ${target.name} was not given.`;

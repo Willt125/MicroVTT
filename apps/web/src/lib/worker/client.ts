@@ -1,5 +1,5 @@
 /** Promise-based client for the WebVTT worker. */
-import type { ExportOptions, FileType, VttDocument } from '@microvtt/core';
+import type { ExportOptions, FileType, FormatId, VttDocument } from '@microvtt/core';
 import type {
   AutoCaptionInfo,
   Autosave,
@@ -45,19 +45,22 @@ export class VttWorker {
   }
 
   /** Transfers `bytes` to the worker (the caller's buffer becomes unusable). */
-  import(bytes: ArrayBuffer, encoding?: string): Promise<ImportedFile> {
+  import(bytes: ArrayBuffer, format: FormatId, encoding?: string): Promise<ImportedFile> {
     return this.request(
-      encoding === undefined ? { type: 'import', bytes } : { type: 'import', bytes, encoding },
+      encoding === undefined
+        ? { type: 'import', bytes, format }
+        : { type: 'import', bytes, format, encoding },
       [bytes],
     );
   }
 
   validate(
     document: VttDocument,
+    format: FormatId,
     fileType: FileType,
     quality: QualityRequest | null = null,
   ): Promise<Checked> {
-    return this.request({ type: 'validate', document, fileType, quality });
+    return this.request({ type: 'validate', document, format, fileType, quality });
   }
 
   detect(document: VttDocument): Promise<AutoCaptionInfo> {

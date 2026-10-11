@@ -3,7 +3,7 @@
  * gets wrong). Kept in this browser's local storage; it can be copied out and pasted back as text,
  * one "find => replace" per line.
  */
-import type { VttDocument } from '@microvtt/core';
+import { WEBVTT_TEXT, type TextDialect, type VttDocument } from '@microvtt/core';
 import { buildPattern, findAll, replaceAll } from './find.ts';
 
 export interface GlossaryEntry {
@@ -56,14 +56,17 @@ export function formatGlossary(entries: GlossaryEntry[]): string {
   return entries.map((e) => `${e.find}${ARROW}${e.replace}`).join('\n');
 }
 
-const patternFor = (e: GlossaryEntry): RegExp | null => {
-  const p = buildPattern({
-    query: e.find,
-    matchCase: e.matchCase,
-    wholeWord: e.wholeWord,
-    regex: false,
-    acrossTimings: true,
-  });
+const patternFor = (e: GlossaryEntry, dialect: TextDialect): RegExp | null => {
+  const p = buildPattern(
+    {
+      query: e.find,
+      matchCase: e.matchCase,
+      wholeWord: e.wholeWord,
+      regex: false,
+      acrossTimings: true,
+    },
+    dialect,
+  );
   return p instanceof RegExp ? p : null;
 };
 
@@ -72,9 +75,10 @@ export function countGlossary(
   doc: VttDocument,
   rows: readonly number[],
   entries: GlossaryEntry[],
+  dialect: TextDialect = WEBVTT_TEXT,
 ): number[] {
   return entries.map((e) => {
-    const p = patternFor(e);
+    const p = patternFor(e, dialect);
     return p ? findAll(doc, rows, p).length : 0;
   });
 }
@@ -84,10 +88,11 @@ export function applyGlossary(
   doc: VttDocument,
   rows: readonly number[],
   entries: GlossaryEntry[],
+  dialect: TextDialect = WEBVTT_TEXT,
 ): { doc: VttDocument; counts: number[] } {
   let current = doc;
   const counts = entries.map((e) => {
-    const p = patternFor(e);
+    const p = patternFor(e, dialect);
     if (!p) return 0;
     const result = replaceAll(current, rows, p, e.replace, false);
     current = result.doc;

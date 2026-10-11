@@ -601,7 +601,21 @@ Still open:
 Next, in this order (owner, 2026-10-11):
 
 - **6b: format seam with SRT**, moved up from Phase 8 (see there), before the rich editor, so
-  that the cue-text editor is built on the seam.
+  that the cue-text editor is built on the seam. Two PRs (owner, 2026-10-11):
+  - [x] The seam, with no visible change. `packages/core/src/format/` describes each format
+        (`SubtitleFormat`: name, extensions, MIME type, which cue settings it has, how its
+        files are recognised) and its cue text (`TextDialect`: its markup as a pattern, the text
+        a viewer reads, display text, italics, splitting, word timings). Splitting, merging and
+        retiming, the quality rules (measuring and their fixes), find and the glossary, the cue
+        table and timeline, split offsets, the cue editor's settings panel and file pickers go
+        through it; the editor and autosave record the document's format. Tests run the shared
+        code with a second, brace-tag dialect. WebVTT is the only format.
+  - [ ] SRT: import (encoding detection, its quirks), its dialect (`<b>` `<i>` `<u>`
+        `<font color>`, `{\an1}`–`{\an9}`, other brace blocks kept as found), export keeping
+        the file's line endings and BOM, renumbering, UTF-8 (the original encoding when every
+        character fits), conversion to and from WebVTT with a report of what was lost, and the
+        preview through the spec renderer (positions from `{\an}`). Real files from the owner
+        will be checked first, kept in `tests/private-fixtures/`.
 - Editors for cue settings, regions and STYLE blocks. A rich cue-text editor for spans, voices,
   ruby, lang, and karaoke timestamps.
 - Chapters and metadata file modes.
@@ -783,6 +797,10 @@ Next, in this order (owner, 2026-10-11):
   can reasonably detect.
 
 - **2026-10-11 (owner):** The SRT format seam comes before the rich cue-text editor (Phase 6b).
+- **2026-10-11 (owner):** SRT in two PRs, seam first. SRT saves keep the file's line endings and
+  BOM, renumber, and write UTF-8 (the original encoding when every character fits). Its editable
+  markup is `<b>` `<i>` `<u>` `<font color>` and `{\an1}`–`{\an9}`; other brace blocks are kept
+  as found. The preview converts SRT to WebVTT for the spec renderer.
 - **2026-10-11 (Phase 6a):** The spec renderer is the default preview: it draws the same in
   every browser and follows the spec where browsers differ. Where WPT's references contradict the
   spec, the spec wins, and each case is listed with its reason.
