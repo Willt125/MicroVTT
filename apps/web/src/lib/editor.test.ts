@@ -10,6 +10,7 @@ import {
   exportDocument,
   findReviewMarkers,
   importDocument,
+  parseSrt,
   rulesetById,
   validate,
 } from '@microvtt/core';
@@ -31,13 +32,15 @@ function fakeWorker(store: { save: Autosave | null } = { save: null }): VttWorke
     clearAutosave: async () => {
       store.save = null;
     },
-    import: async (bytes: ArrayBuffer) => {
-      const imported = importDocument(new TextDecoder().decode(bytes));
+    import: async (bytes: ArrayBuffer, format: string) => {
+      const text = new TextDecoder().decode(bytes);
+      const imported = format === 'srt' ? { ok: true, ...parseSrt(text) } : importDocument(text);
       return {
         ok: imported.ok,
         document: imported.document,
         diagnostics: [],
         autoCaptions: detectAutoCaptions(imported.document),
+        style: { lineEnding: '\n', byteOrderMark: false },
       };
     },
     validate: async (
@@ -83,11 +86,22 @@ describe('Editor', () => {
     expect(editor.dirty).toBe(false);
   });
 
-  it('refuses files that are not WebVTT', async () => {
+  it('refuses files that are neither WebVTT nor SubRip', async () => {
     const editor = new Editor(fakeWorker());
-    await editor.open(file('1\n00:00:00,000 --> 00:00:01,000\nhi\n', 'a.srt'));
+    await editor.open(file('hello\n', 'a.txt'));
     expect(editor.hasDocument).toBe(false);
-    expect(editor.error).toMatch(/not a WebVTT file/);
+    expect(editor.error).toMatch(/not a WebVTT or SubRip file/);
+  });
+
+  it('opens SubRip files as SubRip, and edits them in its markup', async () => {
+    const editor = new Editor(fakeWorker());
+    await editor.open(file('1\n00:00:00,000 --> 00:00:02,000\n{\\an8}<i>one two</i>\n', 'a.srt'));
+    expect(editor.format.id).toBe('srt');
+    editor.splitSelected(1000, 13);
+    expect(editor.doc.body.map((c) => c.type === 'cue' && c.text)).toEqual([
+      '{\\an8}<i>one</i>',
+      '{\\an8}<i>two</i>',
+    ]);
   });
 
   it('undoes and redoes, coalescing typing into one step', async () => {

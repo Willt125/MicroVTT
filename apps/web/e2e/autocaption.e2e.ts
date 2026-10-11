@@ -83,7 +83,7 @@ test('takes line limits from the chosen guide, or the language', async ({ page }
   );
   await page.goto('/');
   await page
-    .locator('input[accept=".vtt,text/vtt"]')
+    .locator('input[type="file"][accept*=".vtt"]')
     .setInputFiles({ name: 'ja.vtt', mimeType: 'text/vtt', buffer: Buffer.from(text) });
   const offer = page.getByRole('status').filter({ hasText: 'auto-captions' });
   await offer.getByRole('button', { name: 'Clean up…' }).click();

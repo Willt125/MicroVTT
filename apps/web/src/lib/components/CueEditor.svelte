@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
   import type { AlignSetting, Cue, CueUpdate, DirectionSetting } from '@microvtt/core';
-  import { languageName, regionsOf, updateCue } from '@microvtt/core';
+  import { languageName, regionsOf, srtAnchor, updateCue, withSrtAnchor } from '@microvtt/core';
   import { tick } from 'svelte';
   import type { Editor } from '../editor.svelte.ts';
   import { INSERTS, insertAround, marksIn, withoutMark } from '../marks.ts';
@@ -20,6 +20,18 @@
 
   const cue = $derived(editor.selectedCue);
   const problems = $derived(editor.diagnosticsByItem.get(editor.selected) ?? []);
+  /** SubRip positions (`{\anN}`, numeric keypad layout), top row first. */
+  const ANCHORS: [number, string][] = [
+    [7, 'top left'],
+    [8, 'top'],
+    [9, 'top right'],
+    [4, 'middle left'],
+    [5, 'middle'],
+    [6, 'middle right'],
+    [1, 'bottom left'],
+    [2, 'bottom (default)'],
+    [3, 'bottom right'],
+  ];
   /** The cue settings the document's format has. */
   const settings = $derived(new Set(editor.format.cueSettings));
   const regions = $derived(regionsOf(editor.doc).map((r) => r.id));
@@ -159,14 +171,16 @@
           />
         </label>
         <span class="muted duration">Duration {formatDuration(cue.endMs - cue.startMs)}</span>
-        <label class="id">
-          ID
-          <input
-            value={cue.id}
-            placeholder="(none)"
-            oninput={(e) => update({ id: e.currentTarget.value }, 'Change id', 'id')}
-          />
-        </label>
+        {#if editor.format.cueIds}
+          <label class="id">
+            ID
+            <input
+              value={cue.id}
+              placeholder="(none)"
+              oninput={(e) => update({ id: e.currentTarget.value }, 'Change id', 'id')}
+            />
+          </label>
+        {/if}
       </div>
 
       {#if editor.multiple}
@@ -238,6 +252,21 @@
         <details class="settings">
           <summary>Settings</summary>
           <div class="grid">
+            {#if settings.has('anchor')}
+              <label>
+                Position
+                <select
+                  value={String(srtAnchor(cue.text) ?? 2)}
+                  onchange={(e) =>
+                    update(
+                      { text: withSrtAnchor(cue.text, Number(e.currentTarget.value)) },
+                      'Change position',
+                    )}
+                >
+                  {#each ANCHORS as [n, label] (n)}<option value={String(n)}>{label}</option>{/each}
+                </select>
+              </label>
+            {/if}
             {#if settings.has('align')}
               <label>
                 Align

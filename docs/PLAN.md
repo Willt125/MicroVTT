@@ -610,12 +610,27 @@ Next, in this order (owner, 2026-10-11):
         table and timeline, split offsets, the cue editor's settings panel and file pickers go
         through it; the editor and autosave record the document's format. Tests run the shared
         code with a second, brace-tag dialect. WebVTT is the only format.
-  - [ ] SRT: import (encoding detection, its quirks), its dialect (`<b>` `<i>` `<u>`
-        `<font color>`, `{\an1}`–`{\an9}`, other brace blocks kept as found), export keeping
-        the file's line endings and BOM, renumbering, UTF-8 (the original encoding when every
-        character fits), conversion to and from WebVTT with a report of what was lost, and the
-        preview through the spec renderer (positions from `{\an}`). Real files from the owner
-        will be checked first, kept in `tests/private-fixtures/`.
+  - [x] SRT (2026-10-11), built on synthetic files (`packages/core/test/fixtures/srt/`)
+        while real ones are gathered:
+    - Import reads what players read: blocks with no number or no blank line before them,
+      loose times (`0:00:01.5`, a full stop for the comma), box coordinates after the times, and
+      legacy encodings (detected as for WebVTT). Lines it cannot read are left out and
+      reported; codes `srt-…` in `DIAGNOSTICS.md`. SubRip files are recognised by their
+      content first, so one named `.vtt` opens as SubRip.
+    - Its dialect: `<b>` `<i>` `<u>` `<s>` `<font>` and brace blocks (`{\an8}`, `{\i1}`);
+      `&` and a stray `<` are text. Splitting closes and reopens spans and keeps the position.
+      The cue editor's one setting, Position, writes `{\an1}`–`{\an9}`. No cue ids.
+    - Export keeps the file's line endings and BOM, numbers cues from 1, writes times
+      HH:MM:SS,mmm, leaves out blank lines and "-->" in text (listed), and writes UTF-8, or
+      the file's own encoding when chosen and every character fits (`encodeText`, checked by
+      reading back).
+    - Either format exports as the other (`srtToVtt`, `vttToSrt`), with a list of what was
+      left out or flattened (strikethrough, voices, ruby, word timings, regions, styles other
+      than colours…); colours become classes and a STYLE block, and `{\anN}` becomes line
+      and alignment settings, and back. SubRip is previewed through its WebVTT conversion.
+    - Auto-caption cleanup stays WebVTT-only (it writes WebVTT word timings).
+  - [ ] Check the import against real SubRip files from the owner (kept in
+        `tests/private-fixtures/`), and fix what they show.
 - Editors for cue settings, regions and STYLE blocks. A rich cue-text editor for spans, voices,
   ruby, lang, and karaoke timestamps.
 - Chapters and metadata file modes.
@@ -638,7 +653,7 @@ Next, in this order (owner, 2026-10-11):
   find), its settings, its validator or linter, its serializer, and the cue editor's settings
   panel. Each format is then edited natively, not converted to WebVTT and back. Auto-caption
   cleanup and the export compatibility options stay WebVTT-only.
-- **SRT** (Phase 6b): native editing on the seam, keeping SRT's own conventions (numbering, `<font>`,
+- **SRT** (done in Phase 6b): native editing on the seam, keeping SRT's own conventions (numbering, `<font>`,
   `{\an8}`). Import with encoding detection (SRT is often Windows-1252 or similar, unlike `.vtt`)
   and its common quirks (comma decimal separator); conversion to and from WebVTT with the features
   the other lacks flattened and a report of what was lost.

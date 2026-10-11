@@ -36,7 +36,7 @@ export function wav(seconds: number, sampleRate = 16_000): Buffer {
   return buffer;
 }
 
-export const vttInput = (page: Page): Locator => page.locator('input[accept=".vtt,text/vtt"]');
+export const vttInput = (page: Page): Locator => page.locator('input[type="file"][accept*=".vtt"]');
 export const mediaInput = (page: Page): Locator => page.locator('input[accept="audio/*,video/*"]');
 export const cueList = (page: Page): Locator => page.getByRole('listbox', { name: 'Cues' });
 export const rows = (page: Page): Locator => cueList(page).getByRole('option');

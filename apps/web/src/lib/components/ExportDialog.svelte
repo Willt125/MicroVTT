@@ -3,13 +3,16 @@
   real export in the worker, so what is listed is what gets written.
 -->
 <script lang="ts">
-  import type { CompatibilityFix, CompatibilityId, FileType } from '@microvtt/core';
+  import type { CompatibilityFix, CompatibilityId, FileType, FormatId } from '@microvtt/core';
   import {
     COMPATIBILITY_FIXES,
     DIAGNOSTICS,
     FEATURES,
+    FILE_ENCODINGS,
+    FORMATS,
     YOUTUBE,
     YOUTUBE_FIXES,
+    formatById,
   } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import type { ExportedFile } from '../worker/protocol.ts';
@@ -25,7 +28,12 @@
   let dialog: HTMLDialogElement | undefined = $state();
   const LF = '\n';
   const CRLF = '\r\n';
+  /** The format to write (another than the document's converts it). */
+  let to = $state<FormatId>('webvtt');
   let lineEnding = $state<typeof LF | typeof CRLF>(LF);
+  let byteOrderMark = $state(false);
+  /** For SubRip: write in the file's own encoding instead of UTF-8. */
+  let keepEncoding = $state(false);
   let omitZeroHours = $state(false);
   let headerLines = $state(false);
   let result = $state.raw<ExportedFile | null>(null);
@@ -71,9 +79,22 @@
     { value: 'any', label: 'Any (structure only)' },
   ];
 
+  const target = $derived(formatById(to));
+  const converting = $derived(to !== editor.format.id);
+  const encodingName = $derived(
+    FILE_ENCODINGS.find((e) => e.label === editor.encoding)?.name ?? editor.encoding,
+  );
+
   $effect(() => {
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      // Each time it opens: the document's format, written the way the file was.
+      to = editor.format.id;
+      lineEnding = editor.format.id === 'srt' ? editor.style.lineEnding : LF;
+      byteOrderMark = editor.format.id === 'srt' && editor.style.byteOrderMark;
+      keepEncoding = false;
+      dialog.showModal();
+    }
     if (!open && dialog.open) dialog.close();
   });
 
@@ -81,11 +102,15 @@
   $effect(() => {
     if (!open) return;
     const options = {
+      to,
       lineEnding,
       omitZeroHours,
       headerLines,
       fileType: editor.fileType,
       compatibility: [...compatibility],
+      ...(to === 'srt'
+        ? { byteOrderMark, ...(keepEncoding ? { encoding: editor.encoding } : {}) }
+        : {}),
     };
     void editor.doc; // Also when the document changes underneath.
     result = null;
@@ -108,13 +133,13 @@
   const warnings = $derived(result?.diagnostics.filter((d) => d.severity !== 'error').length ?? 0);
 
   const exportName = $derived(
-    editor.fileName.replace(/\.[^.]*$/, '') + (editor.format.extensions[0] ?? ''),
+    editor.fileName.replace(/\.[^.]*$/, '') + (target.extensions[0] ?? ''),
   );
 
   /** Saves through the browser's downloads. */
   function saveDownload(): void {
     if (!result) return;
-    download(result.text, exportName, editor.format);
+    download(result.bytes ?? result.text, exportName, target);
     editor.markSaved();
     open = false;
   }
@@ -125,13 +150,13 @@
     saving = true;
     saveError = null;
     try {
-      const target = handle ?? (await pickSaveFile(exportName, editor.format));
-      if (!target) return; // Cancelled.
-      if (!(await writeFile(target, result.text))) {
-        saveError = `Permission to write ${target.name} was not given.`;
+      const file = handle ?? (await pickSaveFile(exportName, target));
+      if (!file) return; // Cancelled.
+      if (!(await writeFile(file, result.bytes ?? result.text))) {
+        saveError = `Permission to write ${file.name} was not given.`;
         return;
       }
-      editor.markSaved(target);
+      editor.markSaved(file);
       open = false;
     } catch (error) {
       saveError = `Could not save: ${(error as Error).message}`;
@@ -151,14 +176,24 @@
   <fieldset>
     <legend>Options</legend>
     <label>
-      File type
-      <select
-        value={editor.fileType}
-        onchange={(e) => editor.setFileType(e.currentTarget.value as FileType)}
-      >
-        {#each FILE_TYPES as t (t.value)}<option value={t.value}>{t.label}</option>{/each}
+      Format
+      <select bind:value={to}>
+        {#each FORMATS as f (f.id)}<option value={f.id}
+            >{f.name} ({f.extensions[0]}){f.id === editor.format.id ? '' : ', converted'}</option
+          >{/each}
       </select>
     </label>
+    {#if to === 'webvtt'}
+      <label>
+        File type
+        <select
+          value={editor.fileType}
+          onchange={(e) => editor.setFileType(e.currentTarget.value as FileType)}
+        >
+          {#each FILE_TYPES as t (t.value)}<option value={t.value}>{t.label}</option>{/each}
+        </select>
+      </label>
+    {/if}
     <label>
       Line endings
       <select bind:value={lineEnding}>
@@ -166,11 +201,41 @@
         <option value={CRLF}>CRLF (Windows)</option>
       </select>
     </label>
-    <label class="check">
-      <input type="checkbox" bind:checked={omitZeroHours} />
-      Short timestamps (omit "00:" hours)
-    </label>
+    {#if to === 'webvtt'}
+      <label class="check">
+        <input type="checkbox" bind:checked={omitZeroHours} />
+        Short timestamps (omit "00:" hours)
+      </label>
+    {:else}
+      <label class="check">
+        <input type="checkbox" bind:checked={byteOrderMark} />
+        Byte order mark (some Windows players need it to read UTF-8)
+      </label>
+      {#if editor.encoding !== 'utf-8' && !converting}
+        <label class="check">
+          <input type="checkbox" bind:checked={keepEncoding} />
+          Write in {encodingName}, as the file was (UTF-8 otherwise)
+        </label>
+      {/if}
+    {/if}
   </fieldset>
+
+  {#if result && result.lost.length > 0}
+    <section class="lost" aria-label="Not converted">
+      <p class="warning-text">
+        {target.name} cannot hold everything in this {editor.format.name} file; these are left out or
+        flattened:
+      </p>
+      <ul>
+        {#each result.lost as l (l.what)}<li>{l.what}: {l.count.toLocaleString()}</li>{/each}
+      </ul>
+    </section>
+  {/if}
+  {#if result && keepEncoding && result.encoding === 'utf-8'}
+    <p class="warning-text">
+      Some characters cannot be written in {encodingName}, so the file is written in UTF-8.
+    </p>
+  {/if}
 
   <section aria-live="polite">
     {#if failure}
@@ -178,7 +243,11 @@
     {:else if !result}
       <p class="muted">Checking…</p>
     {:else if grouped.length === 0}
-      <p>The document already conforms; it is written as is.</p>
+      <p>
+        {converting
+          ? `Converted to ${target.name}.`
+          : 'The document already conforms; it is written as is.'}
+      </p>
     {:else}
       <p>
         Export makes {result.report.length}

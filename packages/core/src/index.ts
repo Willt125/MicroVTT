@@ -151,6 +151,7 @@ export * from './render.ts';
 export { scopeCueStylesheet } from './cue-css.ts';
 export {
   FORMATS,
+  SRT,
   WEBVTT,
   WEBVTT_TEXT,
   formatById,
@@ -158,3 +159,24 @@ export {
   textTimestamps,
 } from './format/index.ts';
 export type { CueSettingId, FormatId, SubtitleFormat, TextDialect } from './format/index.ts';
+export { encodeText } from './encode.ts';
+export {
+  SRT_TEXT,
+  srtAnchor,
+  withSrtAnchor,
+  looksLikeSrt,
+  parseSrt,
+  validateSrt,
+  writeSrt,
+  formatSrtTime,
+  srtToVtt,
+  vttToSrt,
+} from './srt/index.ts';
+export type {
+  Conversion,
+  ConversionLoss,
+  ItemDiagnostic,
+  SrtImport,
+  SrtStyle,
+  SrtWriteResult,
+} from './srt/index.ts';

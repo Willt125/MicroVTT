@@ -11,7 +11,7 @@ export type Severity = 'error' | 'warning' | 'info';
 
 export interface DiagnosticInfo {
   severity: Severity;
-  /** Anchor in the WebVTT spec (https://w3c.github.io/webvtt/#…). */
+  /** Anchor in the WebVTT spec (https://w3c.github.io/webvtt/#…); '' for SubRip, which has none. */
   spec: string;
   /** One-line description of the rule. */
   rule: string;
@@ -352,6 +352,61 @@ export const DIAGNOSTICS = {
     rule: 'This property does not apply to ::cue or ::cue-region and is ignored.',
     fix: 'None: the declaration is kept as written.',
   },
+  // SubRip (.srt). It has no specification; the rules are what players commonly read.
+  'srt-block-unreadable': {
+    severity: 'error',
+    spec: '',
+    rule: 'Each SubRip block is a number, a timing line ("00:00:01,000 --> 00:00:02,500") and text. Lines that are not part of such a block are skipped by players.',
+    fix: 'The lines are left out: they are not in the document.',
+  },
+  'srt-encoding': {
+    severity: 'info',
+    spec: '',
+    rule: 'SubRip files have no set encoding, and players guess it. UTF-8 is read most widely.',
+    fix: "Export writes UTF-8, or the file's own encoding when you choose it and every character fits.",
+  },
+  'srt-timing-format': {
+    severity: 'warning',
+    spec: '',
+    rule: 'SubRip times are written HH:MM:SS,mmm. Other forms (a full stop for the comma, missing hours, one-digit fields) are read by some players and not others.',
+    fix: 'Times are written HH:MM:SS,mmm.',
+  },
+  'srt-numbering': {
+    severity: 'info',
+    spec: '',
+    rule: 'SubRip cues are numbered from 1 in order. Players ignore the numbers, but some tools need them.',
+    fix: 'Cues are numbered from 1.',
+  },
+  'srt-coordinates': {
+    severity: 'warning',
+    spec: '',
+    rule: 'Box coordinates after the times ("X1:100 X2:600 Y1:400 Y2:450", from DVD rips) are not read by most players.',
+    fix: 'The coordinates are left out.',
+  },
+  'srt-end-before-start': {
+    severity: 'warning',
+    spec: '',
+    rule: 'A cue must end after it starts; players skip or misplace cues that do not.',
+    fix: 'None: the times are written as they are.',
+  },
+  'srt-blank-line': {
+    severity: 'error',
+    spec: '',
+    rule: 'A blank line ends a SubRip cue, so cue text cannot contain one.',
+    fix: 'Blank lines in cue text are left out.',
+  },
+  'srt-arrow': {
+    severity: 'error',
+    spec: '',
+    rule: 'A line of cue text containing "-->" is read as the timing line of a new cue.',
+    fix: '"-->" in cue text is written as "->".',
+  },
+  'srt-unknown-tag': {
+    severity: 'warning',
+    spec: '',
+    rule: 'Players know <b>, <i>, <u>, <s>, <font color/face/size> and override blocks such as {\\an8} and {\\i1}; others are shown as text by some players and hidden by others.',
+    fix: 'None: the markup is kept as written.',
+  },
 } as const satisfies Record<string, DiagnosticInfo>;
 
 export type DiagnosticCode = keyof typeof DIAGNOSTICS;
@@ -364,7 +419,9 @@ export interface Diagnostic {
   range: SourceRange;
 }
 
-export const specUrl = (code: DiagnosticCode): string => SPEC + DIAGNOSTICS[code].spec;
+/** The spec section a code's rule comes from, or '' when no spec defines it (SubRip). */
+export const specUrl = (code: DiagnosticCode): string =>
+  DIAGNOSTICS[code].spec === '' ? '' : SPEC + DIAGNOSTICS[code].spec;
 
 export function diagnostic(code: DiagnosticCode, message: string, range: SourceRange): Diagnostic {
   return { code, severity: DIAGNOSTICS[code].severity, message, range };

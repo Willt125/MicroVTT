@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
-  import type { Cue, Region } from '@microvtt/core';
+  import { srtToVtt, type Cue, type Region } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import { cueAt, loopTarget } from '../media.ts';
   import { RATES, type Player } from '../player.svelte.ts';
@@ -69,7 +69,8 @@
   const specCaptions = $derived(player.captions && player.renderer === 'spec');
 
   const renderTrack = $derived.by((): RenderTrack => {
-    const doc = editor.doc;
+    // Formats other than WebVTT are drawn as their WebVTT conversion (SubRip's {\anN} as settings).
+    const doc = editor.format.id === 'srt' ? srtToVtt(editor.doc).document : editor.doc;
     return {
       cues: doc.body.filter((item): item is Cue => item.type === 'cue'),
       regions: doc.head.filter((item): item is Region => item.type === 'region'),

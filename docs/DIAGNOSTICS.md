@@ -5,7 +5,8 @@ Every problem the validator reports, and what export does about it. Generated fr
 
 Codes are stable identifiers. Errors are conformance failures; warnings mark valid syntax that
 does not do what it looks like (for example a cue setting that user agents ignore); info is
-advisory. Export always produces a file with no errors.
+advisory. Export always produces a file with no errors. Codes starting `srt-` are for SubRip
+files, which have no specification: their rules are what players commonly read.
 
 | Code | Severity | Rule | Export | Spec |
 | --- | --- | --- | --- | --- |
@@ -63,3 +64,12 @@ advisory. Export always produces a file with no errors.
 | `style-css-syntax` | error | A STYLE block must contain a valid CSS style sheet. | Rules and declarations that do not parse are removed. | [§](https://w3c.github.io/webvtt/#webvtt-style-block) |
 | `style-selector` | warning | Only ::cue and ::cue-region rules affect WebVTT cues. | None: the rule is kept as written. | [§](https://w3c.github.io/webvtt/#the-cue-pseudo-element) |
 | `style-property-ignored` | warning | This property does not apply to ::cue or ::cue-region and is ignored. | None: the declaration is kept as written. | [§](https://w3c.github.io/webvtt/#the-cue-pseudo-element) |
+| `srt-block-unreadable` | error | Each SubRip block is a number, a timing line ("00:00:01,000 --> 00:00:02,500") and text. Lines that are not part of such a block are skipped by players. | The lines are left out: they are not in the document. | — |
+| `srt-encoding` | info | SubRip files have no set encoding, and players guess it. UTF-8 is read most widely. | Export writes UTF-8, or the file's own encoding when you choose it and every character fits. | — |
+| `srt-timing-format` | warning | SubRip times are written HH:MM:SS,mmm. Other forms (a full stop for the comma, missing hours, one-digit fields) are read by some players and not others. | Times are written HH:MM:SS,mmm. | — |
+| `srt-numbering` | info | SubRip cues are numbered from 1 in order. Players ignore the numbers, but some tools need them. | Cues are numbered from 1. | — |
+| `srt-coordinates` | warning | Box coordinates after the times ("X1:100 X2:600 Y1:400 Y2:450", from DVD rips) are not read by most players. | The coordinates are left out. | — |
+| `srt-end-before-start` | warning | A cue must end after it starts; players skip or misplace cues that do not. | None: the times are written as they are. | — |
+| `srt-blank-line` | error | A blank line ends a SubRip cue, so cue text cannot contain one. | Blank lines in cue text are left out. | — |
+| `srt-arrow` | error | A line of cue text containing "-->" is read as the timing line of a new cue. | "-->" in cue text is written as "->". | — |
+| `srt-unknown-tag` | warning | Players know <b>, <i>, <u>, <s>, <font color/face/size> and override blocks such as {\an8} and {\i1}; others are shown as text by some players and hidden by others. | None: the markup is kept as written. | — |

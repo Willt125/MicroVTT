@@ -254,6 +254,26 @@ tentative proposals (5vmin font size, w3c/webvtt#529 and #530); and a few broken
 (two tracks with no blank lines, so their STYLE block is part of a NOTE; animation references
 copied from the bold test).
 
+### SubRip (.srt), which has no spec
+
+MicroVTT also edits SubRip natively (Phase 6b, `packages/core/src/srt/`). There is no
+specification, so its rules are what players commonly read, and are documented as such:
+
+- A file is blocks separated by blank lines: a number, a timing line
+  `HH:MM:SS,mmm --> HH:MM:SS,mmm`, then text. Import also takes what players take: no number,
+  no blank line before the next block, a full stop for the comma, missing hours, one-digit
+  fields, and box coordinates after the times (`X1:… Y2:…`, from DVD rips), which are dropped.
+- Cue text markup is HTML-like tags (`<b>`, `<i>`, `<u>`, `<s>`, `<font color/face/size>`) and
+  override blocks borrowed from ASS: `{\an1}`–`{\an9}` place the cue (numeric keypad layout),
+  `{\i1}` … `{\i0}` and the like toggle a style. There are no character references: `&amp;`
+  is shown as typed.
+- There is no set encoding. Import detects it as for WebVTT; export writes UTF-8 unless the
+  file's own encoding is chosen and every character fits.
+- WebVTT ↔ SubRip: `{\anN}` maps to `line` (top, middle at 50%, bottom) and `align`
+  (left, centre, right), and back; `<font color>` maps to colour classes (the default ones, or
+  a generated class with a STYLE rule), and back. What the other format cannot hold is listed
+  on export.
+
 ### MIME (`text/vtt`), spec §10
 
 The file extension is `.vtt`, the MIME type is `text/vtt`, and the charset is always UTF-8. Exports must use these.
