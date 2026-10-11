@@ -240,8 +240,12 @@ Interpretations where the spec leaves a gap or disagrees with browsers (and WPT)
   string) is closed as the end of a style sheet closes it, and each sheet is its own `<style>`,
   so one block cannot spill into the next.
 - **Scroll-up regions** show their latest lines (older ones are pushed out of the region's
-  top), but without the 0.433s transition the spec asks for: the renderer rebuilds the cues it draws
-  whenever the set changes. Planned.
+  top), and move them up with the spec's transition (`top`, 0.433s). The renderer rebuilds the
+  cue boxes when the set of cues changes, so it measures where the lines still showing were,
+  starts every line that far down (a new line from below the region's clipped edge) and lets them
+  slide up. It does so only while playing on (the time moved forward by at most 2 s since the
+  last drawing), not when seeking, resizing or editing, and not for viewers who prefer reduced
+  motion.
 - **Controls.** The browser's renderer moves captions above the video's controls while they
   show; the spec renderer does not (the controls are not part of the video's rendering area).
 

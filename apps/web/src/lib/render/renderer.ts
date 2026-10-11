@@ -191,11 +191,47 @@ function markTime(built: BuiltCue, timeMs: number): void {
   }
 }
 
+/** How long scroll-up regions take to move their lines up (§7.2). */
+export const SCROLL_UP_MS = 433;
+
+/** At most this far ahead of the last render, a change counts as playing on (not seeking). */
+const PLAYING_ON_MS = 2000;
+
+/** Where a scroll-up region's cues were drawn: top edges in the rendering area, by cue. */
+interface RegionLines {
+  width: number;
+  height: number;
+  tops: Map<Cue, number>;
+}
+
+const prefersReducedMotion = (): boolean =>
+  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Moves a scroll-up region's lines up into place (§7.2: transition-property top, 0.433s): each
+ * cue box starts `shift` px lower, where the lines already showing were, and slides up; a new
+ * line comes in from below the region's edge (the region clips it).
+ */
+function scrollUp(roots: HTMLElement[], shift: number): void {
+  for (const root of roots) {
+    root.style.transition = 'none';
+    root.style.top = `${shift}px`;
+  }
+  void roots[0]?.offsetHeight; // Starts the transition from there.
+  for (const root of roots) {
+    root.style.transition = `top ${SCROLL_UP_MS / 1000}s`;
+    root.style.top = '0px';
+  }
+}
+
 /** Renders text tracks into an element the size of the video's rendering area. */
 export class CueRenderer {
   private readonly container: HTMLElement;
   private built: BuiltCue[] = [];
   private key: unknown[] = [];
+  private lastTimeMs: number | null = null;
+  /** Scroll-up regions as last drawn, by track index and region id. */
+  private scrolled = new Map<string, RegionLines>();
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -216,6 +252,7 @@ export class CueRenderer {
     } else {
       for (const built of this.built) markTime(built, timeMs);
     }
+    this.lastTimeMs = timeMs;
   }
 
   /** Removes everything drawn. */
@@ -223,6 +260,8 @@ export class CueRenderer {
     this.container.replaceChildren();
     this.built = [];
     this.key = [];
+    this.lastTimeMs = null;
+    this.scrolled.clear();
   }
 
   private layout(
@@ -287,7 +326,10 @@ export class CueRenderer {
       this.container.append(wrapper);
 
       // Region boxes, for the regions this track's active cues are in.
-      const regionBoxes = new Map<string, { el: HTMLElement; region: Region; top: number }>();
+      const regionBoxes = new Map<
+        string,
+        { el: HTMLElement; region: Region; top: number; cues: Map<Cue, HTMLElement> }
+      >();
       for (const region of track.regions) {
         if (!(active[trackIndex] as Cue[]).some((c) => c.region === region.id)) continue;
         const box = regionBoxSettings(region);
@@ -299,7 +341,7 @@ export class CueRenderer {
         el.style.left = `${(box.left * width) / 100}px`;
         el.style.top = `${(box.top * height) / 100}px`;
         wrapper.append(el);
-        regionBoxes.set(region.id, { el, region, top: (box.top * height) / 100 });
+        regionBoxes.set(region.id, { el, region, top: (box.top * height) / 100, cues: new Map() });
         output.push(() => rectOf(el));
       }
 
@@ -315,6 +357,7 @@ export class CueRenderer {
             built.root.remove();
             continue;
           }
+          inRegion.cues.set(cue, built.root);
           this.built.push(built);
           continue;
         }
@@ -328,6 +371,31 @@ export class CueRenderer {
         const diff = full - el.getBoundingClientRect().height;
         if (diff > 0) el.style.top = `${top + diff}px`;
       }
+
+      const playingOn =
+        this.lastTimeMs !== null &&
+        timeMs > this.lastTimeMs &&
+        timeMs - this.lastTimeMs <= PLAYING_ON_MS;
+      const seen = new Set<string>();
+      for (const { region, cues } of regionBoxes.values()) {
+        if (region.scroll !== 'up') continue;
+        const id = `${trackIndex}:${region.id}`;
+        seen.add(id);
+        // Where each line is in the video area (the region itself moves as it fills).
+        const tops = new Map([...cues].map(([cue, root]) => [cue, rectOf(root).top]));
+        const before = this.scrolled.get(id);
+        this.scrolled.set(id, { width, height, tops });
+        if (!playingOn || !before || before.width !== width || before.height !== height) continue;
+        // How far the lines still showing moved up for the new ones.
+        let shift = 0;
+        for (const [cue, top] of tops) {
+          const was = before.tops.get(cue);
+          if (was !== undefined) shift = Math.max(shift, was - top);
+        }
+        if (shift >= 0.5 && !prefersReducedMotion()) scrollUp([...cues.values()], shift);
+      }
+      for (const id of this.scrolled.keys())
+        if (id.startsWith(`${trackIndex}:`) && !seen.has(id)) this.scrolled.delete(id);
     });
   }
 

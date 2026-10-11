@@ -701,8 +701,9 @@ Next, in this order (owner, 2026-10-11):
     `chaptersFromList`, `chapterList`, `formatListTime`, `chapterTitleText` (`chapters.ts`);
     `looksLikeJson`, `jsonProblem`, `formatJson`, `metadataPayloadProblems`, `guessFileType`
     (`metadata.ts`).
-- The scroll-up animation of regions (0.433s): scroll-up regions show their latest lines, but
-  the renderer rebuilds the cues it draws whenever they change, so nothing moves smoothly yet.
+- [x] **6g: scroll-up animation** (2026-10-11): lines in a `scroll:up` region slide up over
+      0.433s as a new line comes in (§7.2), in the spec renderer, while playing on; not when seeking
+      or for viewers who prefer reduced motion. See `SPEC-NOTES.md`.
 - Renderer reference results on Firefox and WebKit: the WPT harness runs there with
   `WPT_ALL_BROWSERS=1`; their differences are still to be reviewed and recorded.
 
