@@ -5,7 +5,7 @@
  * match drops the timing tags inside it. A plain query also finds its letters however they are
  * encoded: precomposed ("é", NFC) or as a letter and combining marks ("e" + U+0301, NFD).
  */
-import type { Cue, VttDocument } from '@microvtt/core';
+import { WEBVTT_TEXT, type Cue, type TextDialect, type VttDocument } from '@microvtt/core';
 
 export interface FindOptions {
   query: string;
@@ -18,7 +18,8 @@ export interface FindOptions {
 }
 
 /** Whitespace between words, with any tags (timestamps, `<c>` spans) on either side. */
-const ACROSS_TAGS = String.raw`(?:<[^>\n]*>)*[ \t\n]+(?:<[^>\n]*>)*`;
+const acrossTags = (dialect: TextDialect): string =>
+  `(?:${dialect.tag})*[ \\t\\n]+(?:${dialect.tag})*`;
 
 export interface Match {
   bodyIndex: number;
@@ -43,8 +44,14 @@ function escapeText(s: string): string {
   return out;
 }
 
-/** Builds the search pattern, or returns an error message for an invalid expression. */
-export function buildPattern(options: FindOptions): RegExp | string | null {
+/**
+ * Builds the search pattern, or returns an error message for an invalid expression. `dialect`
+ * says what the tags are that `acrossTimings` skips.
+ */
+export function buildPattern(
+  options: FindOptions,
+  dialect: TextDialect = WEBVTT_TEXT,
+): RegExp | string | null {
   if (options.query === '') return null;
   let source = options.regex
     ? options.query
@@ -53,7 +60,7 @@ export function buildPattern(options: FindOptions): RegExp | string | null {
           .trim()
           .split(/[ \t\n]+/)
           .map(escapeText)
-          .join(ACROSS_TAGS)
+          .join(acrossTags(dialect))
       : escapeText(options.query);
   if (source === '') return null;
   // \b only knows ASCII; words in other scripts need Unicode classes. Combining marks (accents,

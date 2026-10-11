@@ -16,7 +16,7 @@
   import TimingDialog from './lib/components/TimingDialog.svelte';
   import Toolbar from './lib/components/Toolbar.svelte';
   import { Editor } from './lib/editor.svelte.ts';
-  import { canSaveInPlace, droppedHandle, pickVttFile } from './lib/files.ts';
+  import { ACCEPT, canSaveInPlace, droppedHandle, pickSubtitleFile } from './lib/files.ts';
   import { standardRate, stepFrame } from './lib/frames.ts';
   import { isMediaFile, splitOffset, splitTime } from './lib/media.ts';
   import { Player } from './lib/player.svelte.ts';
@@ -107,7 +107,7 @@
   async function openPicker(): Promise<void> {
     if (!canSaveInPlace()) return fileInput?.click();
     try {
-      const picked = await pickVttFile();
+      const picked = await pickSubtitleFile();
       if (picked) await openFile(picked.file, picked.handle);
     } catch (error) {
       editor.error = `Could not open the file: ${(error as Error).message}`;
@@ -178,7 +178,9 @@
       editor.error = 'Cannot split: the cue is too short.';
       return;
     }
-    void keepTextFocus(() => editor.splitSelected(at, caret ?? splitOffset(cue.text, ratio(at))));
+    void keepTextFocus(() =>
+      editor.splitSelected(at, caret ?? splitOffset(cue.text, ratio(at), editor.format.text)),
+    );
   }
 
   function run(action: Action): void {
@@ -314,7 +316,7 @@
 <input
   class="visually-hidden"
   type="file"
-  accept=".vtt,text/vtt"
+  accept={ACCEPT}
   bind:this={fileInput}
   onchange={(e) => {
     void openFile(e.currentTarget.files?.[0]);

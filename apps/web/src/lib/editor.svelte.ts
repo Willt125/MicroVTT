@@ -11,6 +11,7 @@ import type {
   LanguageHintSource,
   QualityFinding,
   QualityRuleId,
+  SubtitleFormat,
   VttDocument,
 } from '@microvtt/core';
 import {
@@ -21,6 +22,9 @@ import {
   createCue,
   createDocument,
   findQuickFixes,
+  formatById,
+  formatOf,
+  WEBVTT,
   guessLanguage,
   isValidLanguageTag,
   languageHint,
@@ -83,6 +87,8 @@ export type TimeChange =
 export class Editor {
   doc = $state.raw<VttDocument>(createDocument());
   fileName = $state('untitled.vtt');
+  /** The format the document is edited in (it decides the cue text markup and settings). */
+  format = $state.raw<SubtitleFormat>(WEBVTT);
   fileType = $state<FileType>('captions');
   /** Body index of the selected cue (the one being edited), or -1. */
   #selected = $state(-1);
@@ -388,7 +394,7 @@ export class Editor {
 
   /** Starts a new, empty document. */
   newDocument(): void {
-    this.load(createDocument(), 'untitled.vtt', [], null);
+    this.load(createDocument(), 'untitled.vtt', [], null, WEBVTT);
   }
 
   private load(
@@ -396,9 +402,11 @@ export class Editor {
     name: string,
     importDiagnostics: ItemDiagnostic[],
     autoCaptions: AutoCaptionInfo | null,
+    format: SubtitleFormat,
     handle: FileSystemFileHandle | null = null,
   ): void {
     this.doc = doc;
+    this.format = format;
     this.fileName = name;
     this.fileHandle = handle;
     this.importDiagnostics = importDiagnostics;
@@ -450,13 +458,24 @@ export class Editor {
     this.error = null;
     // The worker takes the buffer; keep a copy to reread it in another encoding.
     const copy = bytes.slice(0);
+    const format = formatOf(
+      name,
+      new TextDecoder().decode(new Uint8Array(bytes, 0, Math.min(64, bytes.byteLength))),
+    );
     try {
-      const imported = await this.worker.import(bytes, encoding);
+      const imported = await this.worker.import(bytes, format.id, encoding);
       if (!imported.ok) {
         this.error = `${name} is not a WebVTT file: it does not start with "WEBVTT".`;
         return;
       }
-      this.load(imported.document, name, imported.diagnostics, imported.autoCaptions, handle);
+      this.load(
+        imported.document,
+        name,
+        imported.diagnostics,
+        imported.autoCaptions,
+        format,
+        handle,
+      );
       this.encoding = imported.encoding;
       this.encodingGuessed = imported.encodingGuessed;
       this.sourceBytes = copy;
@@ -568,7 +587,13 @@ export class Editor {
   splitSelected(atMs: number, textOffset: number): void {
     if (!this.selectedCue) return;
     try {
-      const next = splitCue(this.doc, this.selected, Math.round(atMs), textOffset);
+      const next = splitCue(
+        this.doc,
+        this.selected,
+        Math.round(atMs),
+        textOffset,
+        this.format.text,
+      );
       this.apply(next, 'Split cue', { select: this.selected + 1 });
     } catch (error) {
       this.error = `Cannot split: ${(error as Error).message}.`;
@@ -589,7 +614,7 @@ export class Editor {
     const range = this.mergeRange();
     if (!range) return;
     const [from, to] = range;
-    this.apply(mergeCues(this.doc, from, to), 'Merge cues', { select: from });
+    this.apply(mergeCues(this.doc, from, to, this.format.text), 'Merge cues', { select: from });
   }
 
   get canMerge(): boolean {
@@ -648,7 +673,13 @@ export class Editor {
       this.error = 'The unsaved work could not be read.';
       return;
     }
-    this.load(save.document, save.meta.fileName, [], null);
+    this.load(
+      save.document,
+      save.meta.fileName,
+      [],
+      null,
+      formatById(save.meta.format ?? 'webvtt'),
+    );
     this.fileType = save.meta.fileType;
     if (save.meta.language !== undefined) {
       this.language = save.meta.language;
@@ -677,6 +708,7 @@ export class Editor {
     if (!this.dirty) return;
     const meta: AutosaveMeta = {
       fileName: this.fileName,
+      format: this.format.id,
       fileType: this.fileType,
       savedAt: Date.now(),
       cues: this.cueRows.length,
@@ -732,7 +764,7 @@ export class Editor {
       const moving = indexSet(change.indices);
       if (moving.size === 0) return;
       this.applyTimes(
-        shiftCues(this.doc, change.deltaMs, (_, i) => moving.has(i)),
+        shiftCues(this.doc, change.deltaMs, (_, i) => moving.has(i), this.format.text),
         moving.size === 1 ? 'Move cue' : `Move ${moving.size} cues`,
       );
       return;
@@ -767,13 +799,17 @@ export class Editor {
     });
     if (earliest === Infinity) return 0;
     const delta = Math.round(Math.max(deltaMs, -earliest));
-    if (delta !== 0) this.applyTimes(shiftCues(this.doc, delta, filter), 'Shift times');
+    if (delta !== 0)
+      this.applyTimes(shiftCues(this.doc, delta, filter, this.format.text), 'Shift times');
     return delta;
   }
 
   /** Two-point resync of the cues in `scope` (see core's `resyncCues`), as one undo step. */
   resync(a: SyncPoint, b: SyncPoint, scope: Scope): void {
-    this.applyTimes(resyncCues(this.doc, a, b, this.inScope(scope)), 'Resync times');
+    this.applyTimes(
+      resyncCues(this.doc, a, b, this.inScope(scope), this.format.text),
+      'Resync times',
+    );
   }
 
   /** Moves the selection by `delta` cue rows. */
@@ -805,7 +841,7 @@ export class Editor {
               overrides: overrides[ruleset] ?? {},
               ...(this.#mediaFps ? { fps: this.#mediaFps } : {}),
             };
-      const checked = await this.worker.validate(doc, this.fileType, quality);
+      const checked = await this.worker.validate(doc, this.format.id, this.fileType, quality);
       // Ignore results for documents that have since changed.
       if (version === this.validateVersion) {
         this.diagnostics = checked.diagnostics;

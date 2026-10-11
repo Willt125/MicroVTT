@@ -2,6 +2,7 @@
  * Opening and saving files. Where the File System Access API exists (Chromium), files opened
  * through it can be saved back in place; elsewhere saving downloads a copy.
  */
+import { FORMATS, type SubtitleFormat } from '@microvtt/core';
 
 interface PickerType {
   description: string;
@@ -22,7 +23,13 @@ type PermissionHandle = FileSystemFileHandle & {
   requestPermission?(options: { mode: 'readwrite' }): Promise<PermissionState>;
 };
 
-const VTT_TYPES: PickerType[] = [{ description: 'WebVTT', accept: { 'text/vtt': ['.vtt'] } }];
+const pickerType = (format: SubtitleFormat): PickerType => ({
+  description: format.name,
+  accept: { [format.mimeType]: [...format.extensions] },
+});
+
+/** The `accept` list for file inputs: every format's extensions and MIME type. */
+export const ACCEPT = FORMATS.flatMap((f) => [...f.extensions, f.mimeType]).join(',');
 
 const picker = (): PickerWindow | null =>
   typeof window !== 'undefined' && 'showOpenFilePicker' in window
@@ -35,13 +42,13 @@ export const canSaveInPlace = (): boolean => picker() !== null;
 const isAbort = (error: unknown): boolean =>
   error instanceof DOMException && error.name === 'AbortError';
 
-/** Shows the open picker. Returns null if cancelled. */
-export async function pickVttFile(): Promise<{
+/** Shows the open picker for subtitle files. Returns null if cancelled. */
+export async function pickSubtitleFile(): Promise<{
   file: File;
   handle: FileSystemFileHandle;
 } | null> {
   try {
-    const [handle] = await picker()!.showOpenFilePicker({ types: VTT_TYPES });
+    const [handle] = await picker()!.showOpenFilePicker({ types: FORMATS.map(pickerType) });
     if (!handle) return null;
     return { file: await handle.getFile(), handle };
   } catch (error) {
@@ -50,10 +57,13 @@ export async function pickVttFile(): Promise<{
   }
 }
 
-/** Shows the save picker. Returns null if cancelled. */
-export async function pickSaveFile(suggestedName: string): Promise<FileSystemFileHandle | null> {
+/** Shows the save picker for a file in `format`. Returns null if cancelled. */
+export async function pickSaveFile(
+  suggestedName: string,
+  format: SubtitleFormat,
+): Promise<FileSystemFileHandle | null> {
   try {
-    return await picker()!.showSaveFilePicker({ suggestedName, types: VTT_TYPES });
+    return await picker()!.showSaveFilePicker({ suggestedName, types: [pickerType(format)] });
   } catch (error) {
     if (isAbort(error)) return null;
     throw error;
@@ -73,8 +83,8 @@ export async function writeFile(handle: FileSystemFileHandle, text: string): Pro
 }
 
 /** Saves a copy through the browser's downloads. */
-export function download(text: string, name: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/vtt;charset=utf-8' }));
+export function download(text: string, name: string, format: SubtitleFormat): void {
+  const url = URL.createObjectURL(new Blob([text], { type: `${format.mimeType};charset=utf-8` }));
   const a = document.createElement('a');
   a.href = url;
   a.download = name;

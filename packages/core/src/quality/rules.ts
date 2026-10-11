@@ -4,10 +4,12 @@
  * (measure.ts), so markup, character references and ruby annotations do not count.
  */
 import type { Cue, VttDocument } from '../document.ts';
+import type { TextDialect } from '../format/dialect.ts';
 import { parseStylesheet } from '../css.ts';
 import { composite, contrastRatio, hexOf, parseColour, type Rgba } from './colour.ts';
 import { breakUnits, joinLines, type BreakUnit } from '../script.ts';
 import { displayLength, formatCount, graphemeLength, wordCount } from './measure.ts';
+import { isPlain, markupPattern } from './markup.ts';
 import { NETFLIX_GLYPH_RANGES } from './netflix-glyphs.generated.ts';
 import { CJK_RULES } from './rules-cjk.ts';
 import { FINNISH_RULES } from './rules-fi.ts';
@@ -20,6 +22,8 @@ export interface CueInfo {
   index: number;
   /** The text a viewer reads, by line. */
   lines: string[];
+  /** How the cue's text is written: fixes keep its markup as it is. */
+  dialect: TextDialect;
   /** The next cue in the file, or null. */
   next: CueInfo | null;
 }
@@ -58,8 +62,6 @@ const HALF_WIDTH_PARAM: ParamSpec = {
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(ms % 1000 === 0 ? 0 : 2)} s`;
 const duration = (c: Cue): number => c.endMs - c.startMs;
 const plain = (info: CueInfo): string => info.lines.join('\n');
-/** Cue text with no markup or references, where the raw text is what is read. */
-const isPlain = (text: string): boolean => !/[<&]/.test(text);
 
 /**
  * Lines for `words` in at most two lines of at most `max` characters; one line if the text
@@ -97,7 +99,7 @@ export function balanceLines(
 }
 
 const rewrapFix = (info: CueInfo, max: number, halfWidth = 1): QualityFix | undefined => {
-  if (!isPlain(info.cue.text)) return undefined;
+  if (!isPlain(info)) return undefined;
   const lines = balanceLines(breakUnits(info.lines.join('\n')), max, (t) =>
     displayLength(t, halfWidth),
   );
@@ -453,7 +455,7 @@ const RULE_LIST: RuleDefinition[] = [
       emit({
         index: info.index,
         message: `Fits on one line (${formatCount(length)} characters).`,
-        ...(isPlain(info.cue.text)
+        ...(isPlain(info)
           ? { fix: { label: 'Join', change: { kind: 'text', text: joined } } }
           : {}),
       });
@@ -569,7 +571,10 @@ const RULE_LIST: RuleDefinition[] = [
             label: 'Add a space',
             change: {
               kind: 'text',
-              text: info.cue.text.replace(/^((?:<[^>\n]*>)*)-(?=[^\s-])/gm, '$1- '),
+              text: info.cue.text.replace(
+                markupPattern(info.dialect, (T) => `^((?:${T})*)-(?=[^\\s-])`, 'gm'),
+                '$1- ',
+              ),
             },
           },
         });
@@ -583,7 +588,10 @@ const RULE_LIST: RuleDefinition[] = [
           label: 'Remove the space',
           change: {
             kind: 'text',
-            text: info.cue.text.replace(/^((?:<[^>\n]*>)*)-[ \t]+/gm, '$1-'),
+            text: info.cue.text.replace(
+              markupPattern(info.dialect, (T) => `^((?:${T})*)-[ \\t]+`, 'gm'),
+              '$1-',
+            ),
           },
         },
       });
@@ -598,8 +606,12 @@ const RULE_LIST: RuleDefinition[] = [
     defaults: {},
     cue(info, _, emit) {
       if (!/\b(?:OK|Ok)\b/.test(plain(info))) return;
+      const sentenceStart = markupPattern(
+        info.dialect,
+        (T) => `(?:^|[.!?]\\s+|\\n-?|^-)(?:${T})*$`,
+      );
       const text = info.cue.text.replace(/\b(?:OK|Ok)\b/g, (_m, offset: number, all: string) =>
-        /(?:^|[.!?]\s+|\n-?|^-)(?:<[^>]*>)*$/.test(all.slice(0, offset)) ? 'Okay' : 'okay',
+        sentenceStart.test(all.slice(0, offset)) ? 'Okay' : 'okay',
       );
       emit({
         index: info.index,
@@ -697,7 +709,7 @@ const RULE_LIST: RuleDefinition[] = [
       emit({
         index: info.index,
         message: `Not in the BBC’s character list: ${shown}${bad.length > 6 ? ' …' : ''}`,
-        ...(mappable.length > 0 && isPlain(info.cue.text)
+        ...(mappable.length > 0 && isPlain(info)
           ? {
               fix: {
                 label: 'Replace quotes and ellipses',

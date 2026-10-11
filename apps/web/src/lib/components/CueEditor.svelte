@@ -20,6 +20,8 @@
 
   const cue = $derived(editor.selectedCue);
   const problems = $derived(editor.diagnosticsByItem.get(editor.selected) ?? []);
+  /** The cue settings the document's format has. */
+  const settings = $derived(new Set(editor.format.cueSettings));
   const regions = $derived(regionsOf(editor.doc).map((r) => r.id));
   let fieldError = $state<string | null>(null);
 
@@ -175,8 +177,7 @@
 
       <div class="text-head">
         <label class="text-label" for="cue-text"
-          >Text <span class="muted">(WebVTT markup, e.g. &lt;i&gt;, &lt;v Name&gt;, &amp;amp;)</span
-          ></label
+          >Text <span class="muted">({editor.format.text.markupHint})</span></label
         >
         <label
           class="language"
@@ -233,63 +234,81 @@
         </select>
       </div>
 
-      <details class="settings">
-        <summary>Settings</summary>
-        <div class="grid">
-          <label>
-            Align
-            <select
-              value={cue.align}
-              onchange={(e) =>
-                update({ align: e.currentTarget.value as AlignSetting }, 'Change alignment')}
-            >
-              {#each ['start', 'center', 'end', 'left', 'right'] as a (a)}<option value={a}
-                  >{a}</option
-                >{/each}
-            </select>
-          </label>
-          <label>
-            Vertical
-            <select
-              value={cue.vertical}
-              onchange={(e) =>
-                update({ vertical: e.currentTarget.value as DirectionSetting }, 'Change direction')}
-            >
-              <option value="">horizontal</option>
-              <option value="rl">rl (growing left)</option>
-              <option value="lr">lr (growing right)</option>
-            </select>
-          </label>
-          <label>
-            Line
-            <input value={lineText(cue)} onchange={(e) => commitLine(e.currentTarget.value)} />
-          </label>
-          <label>
-            Position
-            <input
-              value={posText(cue)}
-              onchange={(e) => commitPercent('position', e.currentTarget.value)}
-            />
-          </label>
-          <label>
-            Size
-            <input
-              value={`${cue.size}%`}
-              onchange={(e) => commitPercent('size', e.currentTarget.value)}
-            />
-          </label>
-          <label>
-            Region
-            <select
-              value={cue.region ?? ''}
-              onchange={(e) => update({ region: e.currentTarget.value || null }, 'Change region')}
-            >
-              <option value="">(none)</option>
-              {#each regions as id (id)}<option value={id}>{id}</option>{/each}
-            </select>
-          </label>
-        </div>
-      </details>
+      {#if settings.size > 0}
+        <details class="settings">
+          <summary>Settings</summary>
+          <div class="grid">
+            {#if settings.has('align')}
+              <label>
+                Align
+                <select
+                  value={cue.align}
+                  onchange={(e) =>
+                    update({ align: e.currentTarget.value as AlignSetting }, 'Change alignment')}
+                >
+                  {#each ['start', 'center', 'end', 'left', 'right'] as a (a)}<option value={a}
+                      >{a}</option
+                    >{/each}
+                </select>
+              </label>
+            {/if}
+            {#if settings.has('vertical')}
+              <label>
+                Vertical
+                <select
+                  value={cue.vertical}
+                  onchange={(e) =>
+                    update(
+                      { vertical: e.currentTarget.value as DirectionSetting },
+                      'Change direction',
+                    )}
+                >
+                  <option value="">horizontal</option>
+                  <option value="rl">rl (growing left)</option>
+                  <option value="lr">lr (growing right)</option>
+                </select>
+              </label>
+            {/if}
+            {#if settings.has('line')}
+              <label>
+                Line
+                <input value={lineText(cue)} onchange={(e) => commitLine(e.currentTarget.value)} />
+              </label>
+            {/if}
+            {#if settings.has('position')}
+              <label>
+                Position
+                <input
+                  value={posText(cue)}
+                  onchange={(e) => commitPercent('position', e.currentTarget.value)}
+                />
+              </label>
+            {/if}
+            {#if settings.has('size')}
+              <label>
+                Size
+                <input
+                  value={`${cue.size}%`}
+                  onchange={(e) => commitPercent('size', e.currentTarget.value)}
+                />
+              </label>
+            {/if}
+            {#if settings.has('region')}
+              <label>
+                Region
+                <select
+                  value={cue.region ?? ''}
+                  onchange={(e) =>
+                    update({ region: e.currentTarget.value || null }, 'Change region')}
+                >
+                  <option value="">(none)</option>
+                  {#each regions as id (id)}<option value={id}>{id}</option>{/each}
+                </select>
+              </label>
+            {/if}
+          </div>
+        </details>
+      {/if}
 
       {#if fieldError}
         <p class="error-text" role="alert">{fieldError}</p>

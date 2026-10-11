@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { VttDocument } from '@microvtt/core';
-import { createCue, createDocument } from '@microvtt/core';
+import { WEBVTT_TEXT, createCue, createDocument } from '@microvtt/core';
 import {
   buildPattern,
   findAll,
@@ -138,5 +138,22 @@ describe('media helpers', () => {
     expect(splitOffset('one two three', 0.5)).toBe(7);
     expect(splitOffset('a<c.x y>bc</c>', 0.5)).toBe(7); // No usable space: the ratio point.
     expect(splitOffset('one<00:00:01.000><c> two</c>', 0.9)).toBe(20); // The space inside <c>.
+  });
+});
+
+describe('other text dialects', () => {
+  // Override blocks in braces, as in SubRip; `<` is just a character there.
+  const braces = { ...WEBVTT_TEXT, tag: String.raw`\{[^}\n]*\}` };
+
+  it('skips the dialect’s tags between words', () => {
+    const options = { query: 'one two', matchCase: false, wholeWord: false, regex: false };
+    const across = buildPattern({ ...options, acrossTimings: true }, braces) as RegExp;
+    expect('one {\\i1}two'.match(across)?.[0]).toBe('one {\\i1}two');
+    expect(across.test('one <i>two')).toBe(false);
+  });
+
+  it('splits at a space outside the dialect’s tags', () => {
+    expect(splitOffset('ab{\\an8 x}cd', 0.5, braces)).toBe(6); // No space outside: the ratio.
+    expect(splitOffset('a<b c>d', 0.5, braces)).toBe(3); // "<b c>" is text here.
   });
 });

@@ -1,6 +1,7 @@
 /** Running a ruleset over a document, and applying the fixes it offers. */
 import type { BodyItem, Cue, VttDocument } from '../document.ts';
-import { readableLines } from './measure.ts';
+import type { TextDialect } from '../format/dialect.ts';
+import { WEBVTT_TEXT } from '../format/webvtt-text.ts';
 import { RULES, type CueInfo } from './rules.ts';
 import { RULESETS } from './rulesets.ts';
 import type { QualityFinding, QualityFix, QualityRuleId, RuleOverrides, Ruleset } from './types.ts';
@@ -9,6 +10,8 @@ import type { QualityFinding, QualityFix, QualityRuleId, RuleOverrides, Ruleset 
 export interface QualityContext {
   /** The video's frame rate, used by rules with an `fps` setting unless the user set one. */
   fps?: number;
+  /** How the document's cue text is written (WebVTT by default). */
+  dialect?: TextDialect;
 }
 
 /** A ruleset's rules after the user's changes: enabled ones, with their settings. */
@@ -66,10 +69,17 @@ export function checkQuality(
 
   const cueRules = rules.filter(({ id }) => RULES[id].cue);
   if (cueRules.length > 0) {
+    const dialect = context.dialect ?? WEBVTT_TEXT;
     const infos: CueInfo[] = [];
     doc.body.forEach((item, index) => {
       if (item.type === 'cue')
-        infos.push({ cue: item, index, lines: readableLines(item.text), next: null });
+        infos.push({
+          cue: item,
+          index,
+          lines: dialect.readableLines(item.text),
+          dialect,
+          next: null,
+        });
     });
     infos.forEach((info, i) => (info.next = infos[i + 1] ?? null));
     for (const info of infos) {

@@ -47,7 +47,7 @@
     const rows = editor.cueRows;
     const timer = setTimeout(() => {
       saveGlossary(snapshot.filter((e) => e.find.trim() !== ''));
-      counts = countGlossary(doc, rows, snapshot);
+      counts = countGlossary(doc, rows, snapshot, editor.format.text);
     }, 250);
     return () => clearTimeout(timer);
   });
@@ -59,6 +59,7 @@
       editor.doc,
       editor.cueRows,
       $state.snapshot(entries) as GlossaryEntry[],
+      editor.format.text,
     );
     const n = done.reduce((a, b) => a + b, 0);
     if (n === 0) {

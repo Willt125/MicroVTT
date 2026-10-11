@@ -149,3 +149,12 @@ export {
 export type { LanguageGuess, LanguageHint, LanguageHintSource } from './language.ts';
 export * from './render.ts';
 export { scopeCueStylesheet } from './cue-css.ts';
+export {
+  FORMATS,
+  WEBVTT,
+  WEBVTT_TEXT,
+  formatById,
+  formatOf,
+  textTimestamps,
+} from './format/index.ts';
+export type { CueSettingId, FormatId, SubtitleFormat, TextDialect } from './format/index.ts';

@@ -2,11 +2,10 @@
  * Rules for Finnish subtitles, from the Netflix Finnish Timed Text Style Guide and the Kotus
  * (Institute for the Languages of Finland) lists it refers to.
  */
+import { isPlain, markupPattern } from './markup.ts';
 import type { CueInfo, Emitted, RuleDefinition } from './rules.ts';
 
 const plain = (info: CueInfo): string => info.lines.join('\n');
-/** Cue text with no markup or references, where the raw text is what is read. */
-const isPlain = (text: string): boolean => !/[<&]/.test(text);
 /** A letter in any script (for word boundaries around Finnish words). */
 const L = '\\p{L}';
 
@@ -85,9 +84,9 @@ const officialForm = (match: string): string => {
   return (BY_CAPITALS.get(name) ?? name) + ending;
 };
 
-/** Text after the last closing tags, so text can be added before them. */
-const insertBeforeClosingTags = (raw: string, add: string): string => {
-  const m = /(?:<\/[^>]*>|\s)*$/.exec(raw);
+/** Adds text before the closing tags (and white space) at the end of the cue's text. */
+const insertBeforeClosingTags = (info: CueInfo, raw: string, add: string): string => {
+  const m = markupPattern(info.dialect, (_T, C) => `(?:${C}|\\s)*$`).exec(raw);
   const at = m ? m.index : raw.length;
   return raw.slice(0, at) + add + raw.slice(at);
 };
@@ -109,7 +108,10 @@ export const FINNISH_RULES: RuleDefinition[] = [
           label: 'Remove the first hyphen',
           change: {
             kind: 'text',
-            text: info.cue.text.replace(/^((?:<[^>\n]*>)*)\s*-\s*/, '$1'),
+            text: info.cue.text.replace(
+              markupPattern(info.dialect, (T) => `^((?:${T})*)\\s*-\\s*`),
+              '$1',
+            ),
           },
         },
       });
@@ -134,7 +136,7 @@ export const FINNISH_RULES: RuleDefinition[] = [
           'Ends with no punctuation. If the sentence continues in the next cue, end with “ -”.',
         fix: {
           label: 'Add “ -”',
-          change: { kind: 'text', text: insertBeforeClosingTags(info.cue.text, ' -') },
+          change: { kind: 'text', text: insertBeforeClosingTags(info, info.cue.text, ' -') },
         },
       };
       emit(out);
@@ -157,7 +159,10 @@ export const FINNISH_RULES: RuleDefinition[] = [
           label: 'Remove the space',
           change: {
             kind: 'text',
-            text: info.cue.text.replace(/[^\S\n]+([.,!?:;…])(?=\s|$|<)/gm, '$1'),
+            text: info.cue.text.replace(
+              markupPattern(info.dialect, (T) => `[^\\S\\n]+([.,!?:;…])(?=\\s|$|${T})`, 'gm'),
+              '$1',
+            ),
           },
         },
       });
@@ -189,7 +194,7 @@ export const FINNISH_RULES: RuleDefinition[] = [
       emit({
         index: info.index,
         message: `Contains ${found.join('; ')}.`,
-        ...(isPlain(info.cue.text) && fixed !== info.cue.text
+        ...(isPlain(info) && fixed !== info.cue.text
           ? { fix: { label: 'Use Finnish formats', change: { kind: 'text', text: fixed } } }
           : {}),
       });

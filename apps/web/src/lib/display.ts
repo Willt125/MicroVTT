@@ -1,22 +1,17 @@
 /** Helpers for showing cues in the table. */
-import type { CueNode, Severity } from '@microvtt/core';
-import { parseCueText } from '@microvtt/core';
+import { WEBVTT_TEXT, type Severity, type TextDialect } from '@microvtt/core';
 
-const cache = new Map<string, string>();
+const caches = new WeakMap<TextDialect, Map<string, string>>();
 const CACHE_LIMIT = 5000;
 
-function textOf(nodes: CueNode[]): string {
-  return nodes
-    .map((n) => (n.type === 'text' ? n.value : n.type === 'timestamp' ? '' : textOf(n.children)))
-    .join('');
-}
-
 /** The readable text of raw cue text, on one line ("⏎" marks line breaks). Cached. */
-export function plainText(raw: string): string {
+export function plainText(raw: string, dialect: TextDialect = WEBVTT_TEXT): string {
+  let cache = caches.get(dialect);
+  if (!cache) caches.set(dialect, (cache = new Map()));
   let text = cache.get(raw);
   if (text === undefined) {
-    text = textOf(parseCueText(raw).children)
-      .split('\n')
+    text = dialect
+      .displayLines(raw)
       .map((line) => line.trim())
       .filter((line) => line !== '')
       .join(' ⏎ ');

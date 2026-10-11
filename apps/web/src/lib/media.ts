@@ -1,5 +1,5 @@
 /** Playback helpers that don't touch the DOM. */
-import type { Cue, VttDocument } from '@microvtt/core';
+import { WEBVTT_TEXT, type Cue, type TextDialect, type VttDocument } from '@microvtt/core';
 
 /**
  * The body index of the cue showing at `ms`: of the cues with start ≤ ms < end, the one that
@@ -50,17 +50,21 @@ export function isMediaFile(file: File): boolean {
 
 /**
  * A text offset to split raw cue text at, near `ratio` of its length: the closest whitespace
- * outside tags, else the ratio point itself (core moves it out of any tag).
+ * outside the dialect's tags, else the ratio point itself (core moves it out of any tag).
  */
-export function splitOffset(text: string, ratio: number): number {
+export function splitOffset(
+  text: string,
+  ratio: number,
+  dialect: TextDialect = WEBVTT_TEXT,
+): number {
   const target = Math.round(text.length * Math.min(1, Math.max(0, ratio)));
+  const inTag = new Uint8Array(text.length);
+  for (const m of text.matchAll(new RegExp(dialect.tag, 'g')))
+    inTag.fill(1, m.index, m.index + m[0].length);
   let best = -1;
-  let inTag = false;
-  for (let i = 0; i < text.length; i++) {
+  for (let i = 1; i < text.length - 1; i++) {
     const ch = text[i];
-    if (ch === '<') inTag = true;
-    else if (ch === '>') inTag = false;
-    else if (!inTag && (ch === ' ' || ch === '\n') && i > 0 && i < text.length - 1) {
+    if (!inTag[i] && (ch === ' ' || ch === '\n')) {
       if (best === -1 || Math.abs(i - target) < Math.abs(best - target)) best = i;
     }
   }
