@@ -12,6 +12,8 @@ export const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 export type CaptionRenderer = 'spec' | 'browser';
 
 const RENDERER_KEY = 'microvtt.renderer';
+/** `HTMLMediaElement.HAVE_METADATA`, without needing the DOM. */
+const HAVE_METADATA = 1;
 
 function loadRenderer(): CaptionRenderer {
   try {
@@ -45,6 +47,12 @@ export class Player {
   /** True when the file has no video track. */
   isAudio = $state(false);
   error = $state<string | null>(null);
+  /**
+   * A seek asked for before the media's metadata loaded. The element should keep it as its
+   * default playback start position, but WebKit sometimes starts at 0 regardless, so it is
+   * applied again once the metadata is in.
+   */
+  private pendingMs: number | null = null;
 
   get hasMedia(): boolean {
     return this.url !== null;
@@ -68,6 +76,15 @@ export class Player {
     this.paused = true;
     this.isAudio = false;
     this.error = null;
+    this.pendingMs = null;
+  }
+
+  /** The media's metadata loaded: its duration is known, and a seek asked for earlier applies. */
+  metadataLoaded(media: HTMLMediaElement): void {
+    this.durationMs = Number.isFinite(media.duration) ? media.duration * 1000 : 0;
+    const pending = this.pendingMs;
+    this.pendingMs = null;
+    if (pending !== null && Math.round(media.currentTime * 1000) !== pending) this.seek(pending);
   }
 
   setRenderer(renderer: CaptionRenderer): void {
@@ -103,6 +120,7 @@ export class Player {
     const clamped = Math.round(Math.max(0, Math.min(max, ms)));
     media.currentTime = clamped / 1000;
     this.currentMs = clamped;
+    this.pendingMs = media.readyState < HAVE_METADATA ? clamped : null;
   }
 
   skip(deltaMs: number): void {
