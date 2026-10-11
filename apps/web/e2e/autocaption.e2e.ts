@@ -5,6 +5,7 @@ test('offers cleanup, previews it, applies it as one undo step', async ({ page }
   await openSample(page);
   const offer = page.getByRole('status').filter({ hasText: 'auto-captions' });
   await expect(offer).toBeVisible();
+  await expect(offer).toContainText('This looks like roll-up captions');
   await offer.getByRole('button', { name: 'Clean up…' }).click();
 
   const dialog = page.getByRole('dialog', { name: 'Clean up auto-captions' });

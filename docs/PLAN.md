@@ -743,7 +743,8 @@ hidden; }`; hidden words keep their place, as the layout does not change with ti
     that repeat the last `lines` lines (YouTube's form). A pause of a second or more clears the
     screen. Regions are WebVTT only; SubRip gets repeated lines. Chrome's own caption rendering
     ignores regions and stacks the lines newest on top; YouTube drops regions. Repeated lines
-    look like YouTube auto-captions, so a file saved that way is offered cleanup when reopened.
+    look like YouTube auto-captions, so a file saved that way is offered cleanup when reopened
+    (the offer says it looks like roll-up captions, and to keep them if rolled up on purpose).
 - [x] **6h: renderer review in Firefox and WebKit** (2026-10-11): the WPT rendering reftests
       run in all three browsers in CI, each difference recorded per browser with its reason (see
       `SPEC-NOTES.md`). They found one renderer bug (mixed-direction cues placed at the top in
