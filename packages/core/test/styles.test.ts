@@ -7,12 +7,15 @@ import {
   createCue,
   createDocument,
   cueSelectors,
+  backsCSpans,
+  cuesOutsideC,
   cuesWithUntaggedTiming,
   deleteStyle,
   exportDocument,
   ruleTemplates,
   styleSheetProblems,
   updateStyle,
+  wrapForBackgroundInAll,
   wrapTimedPartsInAll,
 } from '../src/index.ts';
 
@@ -91,15 +94,16 @@ describe('selectors from cue text', () => {
   it('offers rule templates for them, each a valid rule', () => {
     const templates = ruleTemplates(cueSelectors(doc));
     const labels = templates.map((t) => t.label);
-    expect(labels.slice(0, 6)).toEqual([
+    expect(labels.slice(0, 7)).toEqual([
       'Every cue',
       'Italic text (<i>)',
       'Bold text (<b>)',
       'Words not yet spoken, greyed (karaoke)',
       'Words not yet spoken, hidden (paint-on)',
+      'Words not yet spoken, hidden, box growing with them (paint-on)',
       'Every region',
     ]);
-    expect(labels.slice(6)).toEqual([
+    expect(labels.slice(7)).toEqual([
       'Class .loud',
       'Class .red',
       'Class .x',
@@ -121,18 +125,43 @@ describe('timed text that :past and :future cannot reach', () => {
       body: [
         createCue(0, 3000, 'a <00:00:01.000>b'),
         createCue(3000, 6000, 'plain'),
-        createCue(6000, 9000, '<c>c</c> <00:00:07.000><c>d</c>'),
+        createCue(6000, 9000, '<c>c </c><00:00:07.000><c>d</c>'),
       ],
     };
     expect(cuesWithUntaggedTiming(d)).toBe(1);
     const wrapped = wrapTimedPartsInAll(d);
     expect(wrapped.body.map((c) => (c.type === 'cue' ? c.text : ''))).toEqual([
-      '<c>a</c> <00:00:01.000><c>b</c>',
+      '<c>a </c><00:00:01.000><c>b</c>',
       'plain',
-      '<c>c</c> <00:00:07.000><c>d</c>',
+      '<c>c </c><00:00:07.000><c>d</c>',
     ]);
     expect(wrapped.body[1]).toBe(d.body[1]);
     expect(cuesWithUntaggedTiming(wrapped)).toBe(0);
     expect(wrapTimedPartsInAll(wrapped)).toBe(wrapped);
+  });
+});
+
+describe('styles with the background on <c>', () => {
+  it('tells such sheets apart, and wraps every cue so none is left without a box', () => {
+    const preset = ruleTemplates(cueSelectors(createDocument())).find((t) =>
+      t.label.includes('box growing'),
+    )?.css as string;
+    expect(backsCSpans(preset)).toBe(true);
+    expect(styleSheetProblems(preset)).toEqual([]);
+    expect(backsCSpans('::cue(:future) { visibility: hidden; }')).toBe(false);
+    expect(backsCSpans('::cue(c) { color: red; }')).toBe(false);
+
+    const d: VttDocument = {
+      ...createDocument(),
+      body: [createCue(0, 3000, 'a <00:00:01.000>b'), createCue(3000, 6000, 'plain')],
+    };
+    expect(cuesOutsideC(d)).toBe(2);
+    const wrapped = wrapForBackgroundInAll(d);
+    expect(wrapped.body.map((c) => (c.type === 'cue' ? c.text : ''))).toEqual([
+      '<c>a </c><00:00:01.000><c>b</c>',
+      '<c>plain</c>',
+    ]);
+    expect(cuesOutsideC(wrapped)).toBe(0);
+    expect(wrapForBackgroundInAll(wrapped)).toBe(wrapped);
   });
 });

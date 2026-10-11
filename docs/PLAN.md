@@ -681,13 +681,24 @@ Next, in this order (owner, 2026-10-11):
   - Paint-on and karaoke styling (added after Phase 6). `:past` and `:future` reach only the
     cue's internal nodes (§8.2.2), never bare text, so timed words styled that way must be in a
     span: "Wrap in <c>" (this cue, or all cues as one undo step) puts each run of bare text
-    beside a timestamp in `<c>`, whitespace outside (`wrapTimedParts`, `wrapTimedPartsInAll`).
-    The Styles dialog says when a sheet's `:past`/`:future` rules cannot reach some cues and
-    offers the same fix. Rule presets: "Words not yet spoken, greyed (karaoke)" and "…, hidden
-    (paint-on)" (`::cue(:future) { visibility: hidden; }`; hidden words keep their place, as the
-    layout does not change with time). `timeWords` puts a timing before the start tags of the
-    word it times, so re-timing keeps wrapped words wrapped. Firefox's own caption rendering
-    has no `:past`/`:future`, so there paint-on shows the whole cue at once.
+    beside a timestamp in `<c>`, with the spaces after it, so backgrounds on the spans meet
+    (`wrapTimedParts`, `wrapTimedPartsInAll`). The Styles dialog says when a sheet's
+    `:past`/`:future` rules cannot reach some cues and offers the same fix. Rule presets: "Words
+    not yet spoken, greyed (karaoke)" and "…, hidden (paint-on)" (`::cue(:future) { visibility:
+hidden; }`; hidden words keep their place, as the layout does not change with time).
+    `timeWords` puts a timing before the start tags of the word it times, so re-timing keeps
+    wrapped words wrapped. Firefox's own caption rendering has no `:past`/`:future`, so there
+    paint-on shows the whole cue at once.
+  - A box that grows with the words: the cue's background covers all its text, hidden words
+    included, so the preset "…, hidden, box growing with them (paint-on)" makes it transparent
+    and puts the background on `c` spans instead (`::cue(c c)` transparent, so nested spans add
+    no second layer). That needs every visible part of every cue in a `<c>`; the owner chose to
+    wrap untimed cues whole rather than leave them without a box. When a sheet backs `c` spans,
+    the Styles dialog counts the cues with text outside one and wraps them
+    (`wrapForBackground`, `cuesOutsideC`, `wrapForBackgroundInAll`; other spans of a timed cue
+    get a `<c>` each, never one holding a timing, which would stay visible over hidden words).
+    Captions only: chapter titles and metadata payloads are never wrapped. In Firefox every
+    word shows at once, on spans whose boxes meet, so it looks like the usual box.
 - [x] **6f: chapters and metadata modes** (2026-10-11):
   - The file type (captions, chapters, metadata, any) is chosen in the toolbar ("Type", WebVTT
     only) as well as in Export, and the editor follows it. A file opens as captions; when its
@@ -909,6 +920,9 @@ Next, in this order (owner, 2026-10-11):
 - **2026-10-11 (owner):** Rich cue-text editing is markup tools over the raw text field (with a
   breadcrumb of the spans at the cursor), not a formatted editor. Word timing includes editing,
   spreading and tap timing in the same PR.
+- **2026-10-11 (owner):** Timed text is wrapped in `<c>` only when asked (a button), not every
+  time timings are written. For paint-on with a box that grows with the words, untimed cues are
+  wrapped whole in `<c>` too, so no cue is left without a background.
 - **2026-10-11 (Phase 6a):** The spec renderer is the default preview: it draws the same in
   every browser and follows the spec where browsers differ. Where WPT's references contradict the
   spec, the spec wins, and each case is listed with its reason.

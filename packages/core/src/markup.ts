@@ -462,9 +462,9 @@ export const removeTimestamps = (text: string): string => cut(text, timestampTag
 /**
  * `text` with each run of bare text that sits beside a timestamp wrapped in `<c>`: `:past` and
  * `:future` styles reach only the cue's internal nodes (§8.2.2), never bare text, so karaoke and
- * paint-on styling needs the timed parts in a span. Whitespace around a run stays outside the
- * span. Text already in a span of its own is left as it is, and so is a cue without timestamps;
- * running it again changes nothing.
+ * paint-on styling needs the timed parts in a span. Spaces after a word go inside its span, so
+ * backgrounds on the spans meet; other whitespace stays outside. Text already in a span of its
+ * own is left as it is, and so is a cue without timestamps; running it again changes nothing.
  */
 export function wrapTimedParts(text: string): string {
   if (!/<[0-9]/.test(text)) return text;
@@ -496,11 +496,65 @@ export function wrapTimedParts(text: string): string {
     if (!timedParents.has(parentOf(run.start))) continue;
     const content = text.slice(run.start, run.end);
     const lead = /^[\t\n\f\r ]*/.exec(content)?.[0].length ?? 0;
-    const trail = /[\t\n\f\r ]*$/.exec(content)?.[0].length ?? 0;
     if (lead === content.length) continue;
     const start = run.start + lead;
-    const end = run.end - trail;
+    const end = run.start + lead + innerLength(content.slice(lead));
     out = `${out.slice(0, start)}<c>${out.slice(start, end)}</c>${out.slice(end)}`;
+  }
+  return out;
+}
+
+/** How much of `text` (which starts with a non-space) belongs in its span: all but trailing line breaks and the whitespace around them. */
+function innerLength(text: string): number {
+  const trail = /[\t\n\f\r ]*$/.exec(text)?.[0] ?? '';
+  const spaces = /^[\t ]*/.exec(trail)?.[0].length ?? 0;
+  return text.length - trail.length + spaces;
+}
+
+/**
+ * `text` with every visible part in a `<c>` at the top level, for styles that put the background
+ * on `c` rather than on the cue (a box that grows with paint-on text): timed text as
+ * `wrapTimedParts` wraps it, any other span at the top level of a timed cue in a `<c>` of its
+ * own (with the spaces after it), and a cue without timestamps in one `<c>` around all of it.
+ * Running it again changes nothing.
+ */
+export function wrapForBackground(text: string): string {
+  const t = wrapTimedParts(text);
+  const lead = /^[\t\n\f\r ]*/.exec(t)?.[0].length ?? 0;
+  if (lead === t.length) return t;
+  const spans = markupSpans(t);
+  const stamps = timestampTags(t);
+  const inside = (r: TextRange, o: MarkupSpan): boolean =>
+    o.inner.start <= r.start && r.end <= o.inner.end;
+  if (stamps.length === 0) {
+    // Already one <c> around everything visible?
+    const visibleEnd = t.replace(/[\t\n\f\r ]+$/, '').length;
+    const top = spans.filter((s) => !spans.some((o) => o !== s && inside(outerRange(s), o)));
+    const only = top.length === 1 ? (top[0] as MarkupSpan) : null;
+    if (only?.name === 'c' && only.open.start === lead && outerRange(only).end >= visibleEnd)
+      return t;
+    const end = lead + innerLength(t.slice(lead));
+    return `${t.slice(0, lead)}<c>${t.slice(lead, end)}</c>${t.slice(end)}`;
+  }
+  // Timed: a span with no timing in it, beside timed text and not in a <c>, gets a <c> of its own.
+  const timedIn = (r: TextRange): boolean =>
+    stamps.some((ts) => r.start <= ts.start && ts.end <= r.end);
+  const parentOf = (s: MarkupSpan): TextRange => {
+    const outer = spans.filter((o) => o !== s && inside(outerRange(s), o)).at(-1);
+    return outer ? outer.inner : { start: 0, end: t.length };
+  };
+  const wrap = spans.filter(
+    (s) =>
+      s.name !== 'c' &&
+      !timedIn(outerRange(s)) &&
+      timedIn(parentOf(s)) &&
+      !spans.some((o) => o.name === 'c' && inside(outerRange(s), o)),
+  );
+  let out = t;
+  for (const s of wrap.reverse()) {
+    const r = outerRange(s);
+    const end = r.end + (/^[\t ]*/.exec(t.slice(r.end))?.[0].length ?? 0);
+    out = `${out.slice(0, r.start)}<c>${out.slice(r.start, end)}</c>${out.slice(end)}`;
   }
   return out;
 }

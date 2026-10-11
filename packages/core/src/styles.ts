@@ -1,9 +1,9 @@
 /** Editing STYLE blocks: pure operations on the document, and checks for the styles editor. */
-import { checkStylesheet } from './css.ts';
+import { checkStylesheet, parseStylesheet } from './css.ts';
 import { parseCueText, type CueNode } from './cuetext.ts';
 import { DIAGNOSTICS, type DiagnosticCode, type Severity } from './diagnostics.ts';
 import type { Style, VttDocument } from './document.ts';
-import { wrapTimedParts } from './markup.ts';
+import { wrapForBackground, wrapTimedParts } from './markup.ts';
 
 /** A new STYLE block's starting text. */
 export const NEW_STYLE_SHEET = '::cue {\n  \n}';
@@ -127,6 +127,17 @@ export function ruleTemplates(selectors: CueSelectors): { label: string; css: st
       label: 'Words not yet spoken, hidden (paint-on)',
       css: rule('::cue(:future)', 'visibility: hidden;'),
     },
+    {
+      // The box is on the <c> spans, so it grows with the words shown; a <c> inside another
+      // adds no second layer.
+      label: 'Words not yet spoken, hidden, box growing with them (paint-on)',
+      css: [
+        rule('::cue', 'background: transparent;'),
+        rule('::cue(c)', 'background: rgba(0, 0, 0, 0.8);'),
+        rule('::cue(c c)', 'background: transparent;'),
+        rule('::cue(:future)', 'visibility: hidden;'),
+      ].join('\n'),
+    },
     { label: 'Every region', css: rule('::cue-region', 'background: transparent;') },
     ...[...selectors.classes.keys()].sort().map((c) => ({
       label: `Class .${c}`,
@@ -148,6 +159,19 @@ export function ruleTemplates(selectors: CueSelectors): { label: string; css: st
 
 const CSS_IDENT = /^-?[_a-zA-Z][\w-]*$/;
 
+/** `doc` with `wrap` applied to every cue's text; the same document when no cue changes. */
+function mapCueText(doc: VttDocument, wrap: (text: string) => string): VttDocument {
+  let changed = false;
+  const body = doc.body.map((i) => {
+    if (i.type !== 'cue') return i;
+    const text = wrap(i.text);
+    if (text === i.text) return i;
+    changed = true;
+    return { ...i, text };
+  });
+  return changed ? { ...doc, body } : doc;
+}
+
 /**
  * How many cues have timed text outside any tag, which `:past` and `:future` rules cannot reach
  * (see `wrapTimedParts`).
@@ -156,14 +180,25 @@ export const cuesWithUntaggedTiming = (doc: VttDocument): number =>
   doc.body.filter((i) => i.type === 'cue' && wrapTimedParts(i.text) !== i.text).length;
 
 /** `doc` with every cue's timed text in tags (`wrapTimedParts`); the same document when none changes. */
-export function wrapTimedPartsInAll(doc: VttDocument): VttDocument {
-  let changed = false;
-  const body = doc.body.map((i) => {
-    if (i.type !== 'cue') return i;
-    const text = wrapTimedParts(i.text);
-    if (text === i.text) return i;
-    changed = true;
-    return { ...i, text };
-  });
-  return changed ? { ...doc, body } : doc;
-}
+export const wrapTimedPartsInAll = (doc: VttDocument): VttDocument =>
+  mapCueText(doc, wrapTimedParts);
+
+/**
+ * Whether a style sheet puts a background on `c` spans (`::cue(c)`): then text outside a `<c>`
+ * gets that background only from the cue itself, which such sheets usually make transparent.
+ */
+export const backsCSpans = (css: string): boolean =>
+  parseStylesheet(css).rules.some(
+    (r) =>
+      !r.atRule &&
+      /::cue\(\s*c\s*\)/.test(r.prelude) &&
+      r.declarations.some((d) => d.name === 'background' || d.name === 'background-color'),
+  );
+
+/** How many cues have visible text outside a top-level `<c>` (see `wrapForBackground`). */
+export const cuesOutsideC = (doc: VttDocument): number =>
+  doc.body.filter((i) => i.type === 'cue' && wrapForBackground(i.text) !== i.text).length;
+
+/** `doc` with every cue's text in `<c>` spans (`wrapForBackground`); the same document when none changes. */
+export const wrapForBackgroundInAll = (doc: VttDocument): VttDocument =>
+  mapCueText(doc, wrapForBackground);

@@ -201,6 +201,9 @@ export {
   updateStyle,
   cuesWithUntaggedTiming,
   wrapTimedPartsInAll,
+  backsCSpans,
+  cuesOutsideC,
+  wrapForBackgroundInAll,
 } from './styles.ts';
 export type { CueSelectors, StyleProblem } from './styles.ts';
 export {
@@ -225,6 +228,7 @@ export {
   timeWords,
   unwrapRange,
   wellFormedRange,
+  wrapForBackground,
   wrapRange,
   wrapTimedParts,
 } from './markup.ts';

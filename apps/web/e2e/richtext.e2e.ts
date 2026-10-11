@@ -158,7 +158,7 @@ test('wraps timed text so the paint-on style hides words not yet spoken', async 
   await note.getByRole('button', { name: 'Wrap it in <c>' }).click();
   await expect(note).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Done' }).click();
-  const wrapped = '<c>One</c> <00:00:01.818><c>two</c> <00:00:02.636><c>three</c>';
+  const wrapped = '<c>One </c><00:00:01.818><c>two </c><00:00:02.636><c>three</c>';
   await expect(cueText(page)).toHaveValue(wrapped);
   await expect(wrap).toHaveCount(0);
 
@@ -184,6 +184,62 @@ test('wraps timed text so the paint-on style hides words not yet spoken', async 
   await expect(word('three')).toHaveCSS('visibility', 'hidden');
   await expect(word('two')).toHaveCSS('visibility', 'visible');
   await expect(word('One')).toHaveCSS('visibility', 'visible');
+});
+
+test('the growing-box paint-on style puts every cue in <c> and backs only the words shown', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await vttInput(page).setInputFiles({
+    name: 'cues.vtt',
+    mimeType: 'text/vtt',
+    buffer: Buffer.from(
+      'WEBVTT\n\n00:00:01.000 --> 00:00:04.000\nOne <00:00:02.000>two <00:00:03.000><i>three</i>\n\n' +
+        '00:00:05.000 --> 00:00:07.000\nNo timings\n',
+    ),
+  });
+  await expect(status(page)).toContainText('2 cues');
+  await page.getByRole('button', { name: 'Styles…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Styles' });
+  await dialog.getByRole('button', { name: 'Add style block' }).click();
+  await dialog.getByLabel('CSS').fill('');
+  await dialog
+    .getByLabel('Add a rule for')
+    .selectOption({ label: 'Words not yet spoken, hidden, box growing with them (paint-on)' });
+  await expect(dialog).toContainText('No problems.');
+  const note = dialog.getByRole('status').filter({ hasText: 'without a background' });
+  await expect(note).toContainText('2 cues have text outside a <c>');
+  await note.getByRole('button', { name: 'Wrap it in <c>' }).click();
+  await expect(note).toHaveCount(0);
+  await expect(dialog.getByRole('status').filter({ hasText: 'outside any tag' })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(cueText(page)).toHaveValue(
+    '<c>One </c><00:00:02.000><c>two </c><00:00:03.000><c><i>three</i></c>',
+  );
+
+  await mediaInput(page).setInputFiles({
+    name: 'tone.wav',
+    mimeType: 'audio/wav',
+    buffer: wav(10),
+  });
+  await expect
+    .poll(() => page.locator('video').evaluate((v: HTMLVideoElement) => v.readyState), {
+      timeout: 10_000,
+    })
+    .toBeGreaterThanOrEqual(1);
+  const word = (w: string) => page.locator('.media .vtt-node', { hasText: w }).first();
+  await page.locator('video').evaluate((v: HTMLVideoElement) => (v.currentTime = 2.5));
+  // The cue's own box is gone; each word shown has its own, and the next is hidden with it.
+  await expect(page.locator('.media .vtt-bg').first()).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0)',
+  );
+  await expect(word('One')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0.8)');
+  await expect(word('two')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0.8)');
+  await expect(word('three')).toHaveCSS('visibility', 'hidden');
+  // The cue without timings keeps a box, from its <c>.
+  await page.locator('video').evaluate((v: HTMLVideoElement) => (v.currentTime = 6));
+  await expect(word('No timings')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0.8)');
 });
 
 test('taps word timings while the media plays', async ({ page }) => {
