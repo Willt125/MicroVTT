@@ -1,6 +1,6 @@
 /** Editing markup in raw cue text: spans, wrapping, unwrapping, clearing, and word timings. */
 import { describe, expect, it } from 'vitest';
-import type { MarkupKind } from '../src/index.ts';
+import type { CueNode, MarkupKind } from '../src/index.ts';
 import {
   SRT_TEXT,
   WEBVTT_TEXT,
@@ -10,6 +10,7 @@ import {
   insertTimestamp,
   languageProblem,
   markupSpans,
+  parseCueText,
   removeSpan,
   removeTimestamp,
   setTimestamp,
@@ -18,6 +19,7 @@ import {
   spreadWordTimes,
   timeWords,
   timestampProblems,
+  wrapTimedParts,
   timestampTags,
   unwrapRange,
   wellFormedRange,
@@ -237,17 +239,65 @@ describe('word timings', () => {
   });
 
   it('times words: one timing before each word after the first', () => {
+    // Before a span the word opens, so :past and :future reach the span.
     expect(timeWords('One two <i>three</i>', [1500, 2000])).toBe(
-      'One <00:00:01.500>two <i><00:00:02.000>three</i>',
+      'One <00:00:01.500>two <00:00:02.000><i>three</i>',
     );
     // Replaces the timings it had; extra times are ignored.
     expect(timeWords(text, [1200, 1300, 9999])).toBe(
-      'One <00:00:01.200>two <i><00:00:01.300>three</i>',
+      'One <00:00:01.200>two <00:00:01.300><i>three</i>',
     );
   });
 
   it('spreads the cue across its words by their length', () => {
     expect(spreadWordTimes('aa b aaaaa', 0, 8000)).toEqual([2000, 3000]);
     expect(spreadWordTimes('single', 0, 1000)).toEqual([]);
+  });
+});
+
+describe('wrapping timed parts for :past and :future', () => {
+  it('puts bare text beside timestamps in <c>, whitespace outside', () => {
+    const wrapped = wrapTimedParts('Never <00:01.000>gonna <00:01.500>give');
+    expect(wrapped).toBe('<c>Never</c> <00:01.000><c>gonna</c> <00:01.500><c>give</c>');
+    expect(wrapTimedParts(wrapped)).toBe(wrapped);
+    expect(wrapTimedParts('one\n<00:01.000>two three')).toBe(
+      '<c>one</c>\n<00:01.000><c>two three</c>',
+    );
+    expect(wrapTimedParts('a &amp; b <00:01.000>c')).toBe('<c>a &amp; b</c> <00:01.000><c>c</c>');
+  });
+
+  it('leaves spans of their own, text away from timestamps, and untimed cues', () => {
+    expect(wrapTimedParts('plain <i>text</i>')).toBe('plain <i>text</i>');
+    expect(wrapTimedParts('<i>a</i> <00:01.000><b>b</b>')).toBe('<i>a</i> <00:01.000><b>b</b>');
+    expect(wrapTimedParts('<v Bob>Hi <00:01.000>there</v> <i>friend</i>')).toBe(
+      '<v Bob><c>Hi</c> <00:01.000><c>there</c></v> <i>friend</i>',
+    );
+  });
+
+  it('keeps wrapped words wrapped when they are timed again', () => {
+    const wrapped = wrapTimedParts('Never <00:01.000>gonna <00:01.500>give');
+    const retimed = timeWords(wrapped, [1100, 1600]);
+    expect(retimed).toBe('<c>Never</c> <00:00:01.100><c>gonna</c> <00:00:01.600><c>give</c>');
+    expect(wrapTimedParts(retimed)).toBe(retimed);
+    expect(timeWords('a <i>b</i>', [500])).toBe('a <00:00:00.500><i>b</i>');
+  });
+
+  it('gives every timed text node a span', () => {
+    const text = wrapTimedParts('x <00:01.000>y\n<b>z</b> <00:02.000>w');
+    const bare = (nodes: CueNode[], timed: boolean): string[] =>
+      nodes.flatMap((n) =>
+        n.type === 'text'
+          ? timed && n.value.trim() !== ''
+            ? [n.value]
+            : []
+          : n.type === 'timestamp'
+            ? []
+            : bare(
+                n.children,
+                n.children.some((c) => c.type === 'timestamp'),
+              ),
+      );
+    const root = parseCueText(text);
+    expect(bare(root.children, true)).toEqual([]);
   });
 });

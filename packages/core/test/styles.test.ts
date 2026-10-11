@@ -7,11 +7,13 @@ import {
   createCue,
   createDocument,
   cueSelectors,
+  cuesWithUntaggedTiming,
   deleteStyle,
   exportDocument,
   ruleTemplates,
   styleSheetProblems,
   updateStyle,
+  wrapTimedPartsInAll,
 } from '../src/index.ts';
 
 const withHead = (head: VttDocument['head']): VttDocument => ({ ...createDocument(), head });
@@ -89,14 +91,15 @@ describe('selectors from cue text', () => {
   it('offers rule templates for them, each a valid rule', () => {
     const templates = ruleTemplates(cueSelectors(doc));
     const labels = templates.map((t) => t.label);
-    expect(labels.slice(0, 5)).toEqual([
+    expect(labels.slice(0, 6)).toEqual([
       'Every cue',
       'Italic text (<i>)',
       'Bold text (<b>)',
-      'Text still to be spoken (karaoke)',
+      'Words not yet spoken, greyed (karaoke)',
+      'Words not yet spoken, hidden (paint-on)',
       'Every region',
     ]);
-    expect(labels.slice(5)).toEqual([
+    expect(labels.slice(6)).toEqual([
       'Class .loud',
       'Class .red',
       'Class .x',
@@ -108,5 +111,28 @@ describe('selectors from cue text', () => {
       '::cue(v[voice="Ann \\"Q\\""]) {\n  color: cyan;\n}',
     );
     for (const t of templates) expect(styleSheetProblems(t.css)).toEqual([]);
+  });
+});
+
+describe('timed text that :past and :future cannot reach', () => {
+  it('counts the cues and wraps their timed text in one go', () => {
+    const d: VttDocument = {
+      ...createDocument(),
+      body: [
+        createCue(0, 3000, 'a <00:00:01.000>b'),
+        createCue(3000, 6000, 'plain'),
+        createCue(6000, 9000, '<c>c</c> <00:00:07.000><c>d</c>'),
+      ],
+    };
+    expect(cuesWithUntaggedTiming(d)).toBe(1);
+    const wrapped = wrapTimedPartsInAll(d);
+    expect(wrapped.body.map((c) => (c.type === 'cue' ? c.text : ''))).toEqual([
+      '<c>a</c> <00:00:01.000><c>b</c>',
+      'plain',
+      '<c>c</c> <00:00:07.000><c>d</c>',
+    ]);
+    expect(wrapped.body[1]).toBe(d.body[1]);
+    expect(cuesWithUntaggedTiming(wrapped)).toBe(0);
+    expect(wrapTimedPartsInAll(wrapped)).toBe(wrapped);
   });
 });

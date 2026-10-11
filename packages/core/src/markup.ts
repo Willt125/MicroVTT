@@ -459,6 +459,52 @@ export function removeTimestamp(text: string, index: number): string {
 /** `text` without timestamps. */
 export const removeTimestamps = (text: string): string => cut(text, timestampTags(text));
 
+/**
+ * `text` with each run of bare text that sits beside a timestamp wrapped in `<c>`: `:past` and
+ * `:future` styles reach only the cue's internal nodes (§8.2.2), never bare text, so karaoke and
+ * paint-on styling needs the timed parts in a span. Whitespace around a run stays outside the
+ * span. Text already in a span of its own is left as it is, and so is a cue without timestamps;
+ * running it again changes nothing.
+ */
+export function wrapTimedParts(text: string): string {
+  if (!/<[0-9]/.test(text)) return text;
+  const stamps = timestampTags(text);
+  if (stamps.length === 0) return text;
+  const spans = markupSpans(text);
+  /** The innermost span whose content holds `at`, or -1 for the cue itself. */
+  const parentOf = (at: number): number => {
+    let best = -1;
+    spans.forEach((s, i) => {
+      if (s.inner.start <= at && at <= s.inner.end) best = i;
+    });
+    return best;
+  };
+  const timedParents = new Set(stamps.map((t) => parentOf(t.start)));
+  // Runs of text between tags.
+  const runs: TextRange[] = [];
+  let pos = 0;
+  while (pos <= text.length) {
+    const lt = text.indexOf('<', pos);
+    const end = lt === -1 ? text.length : lt;
+    if (end > pos) runs.push({ start: pos, end });
+    if (lt === -1) break;
+    const gt = text.indexOf('>', lt + 1);
+    pos = gt === -1 ? text.length + 1 : gt + 1;
+  }
+  let out = text;
+  for (const run of runs.reverse()) {
+    if (!timedParents.has(parentOf(run.start))) continue;
+    const content = text.slice(run.start, run.end);
+    const lead = /^[\t\n\f\r ]*/.exec(content)?.[0].length ?? 0;
+    const trail = /[\t\n\f\r ]*$/.exec(content)?.[0].length ?? 0;
+    if (lead === content.length) continue;
+    const start = run.start + lead;
+    const end = run.end - trail;
+    out = `${out.slice(0, start)}<c>${out.slice(start, end)}</c>${out.slice(end)}`;
+  }
+  return out;
+}
+
 /** Inserts a timestamp for `ms` at `offset` (moved out of a tag or reference), returning the caret after it. */
 export function insertTimestamp(
   text: string,
@@ -542,6 +588,16 @@ export function cueWords(text: string, language?: string): { word: string; start
 }
 
 /**
+ * `at`, moved back over the start tags right before it: a timing for a word that opens a span
+ * goes before the span, so the span is timed as a whole and `:past` / `:future` reach it.
+ */
+function beforeStartTags(text: string, at: number): number {
+  let m: RegExpExecArray | null;
+  while ((m = /<[a-z][^<>]*>$/.exec(text.slice(0, at)))) at = m.index;
+  return at;
+}
+
+/**
  * Times the words of `text`: removes its timestamps, then puts `times[i]` before word `i + 1`
  * (the first word starts with the cue). Extra times are ignored.
  */
@@ -550,8 +606,8 @@ export function timeWords(text: string, times: readonly number[], language?: str
   const words = cueWords(plain, language).slice(1, times.length + 1);
   let out = plain;
   for (let i = words.length - 1; i >= 0; i--) {
-    const w = words[i] as { start: number };
-    out = out.slice(0, w.start) + timestampTag(times[i] as number) + out.slice(w.start);
+    const at = beforeStartTags(out, (words[i] as { start: number }).start);
+    out = out.slice(0, at) + timestampTag(times[i] as number) + out.slice(at);
   }
   return out;
 }

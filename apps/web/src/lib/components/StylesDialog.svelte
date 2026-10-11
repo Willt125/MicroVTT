@@ -8,12 +8,14 @@
   import {
     addStyle,
     cueSelectors,
+    cuesWithUntaggedTiming,
     deleteStyle,
     NEW_STYLE_SHEET,
     parseStylesheet,
     ruleTemplates,
     styleSheetProblems,
     updateStyle,
+    wrapTimedPartsInAll,
     type Cue,
   } from '@microvtt/core';
   import { tick } from 'svelte';
@@ -36,6 +38,10 @@
   );
   const style = $derived(styles.find((s) => s.index === selected) ?? styles[0] ?? null);
   const problems = $derived(style ? styleSheetProblems(style.css) : []);
+  /** Cues whose timed text the sheet's :past/:future rules cannot reach, when it has any. */
+  const untagged = $derived(
+    style && /:(?:past|future)\b/.test(style.css) ? cuesWithUntaggedTiming(editor.doc) : 0,
+  );
   const templates = $derived(open ? ruleTemplates(cueSelectors(editor.doc)) : []);
   const previewCue = $derived<Cue | null>(
     editor.selectedCue ?? editor.doc.body.find((i): i is Cue => i.type === 'cue') ?? null,
@@ -196,6 +202,19 @@
                 </li>
               {/each}
             </ul>
+          {/if}
+          {#if untagged > 0}
+            <p class="warning-text small" role="status">
+              {untagged}
+              {untagged === 1 ? 'cue has' : 'cues have'} timed text outside any tag, which
+              <code>:past</code> and <code>:future</code> rules cannot reach.
+              <button
+                class="small"
+                onclick={() =>
+                  editor.apply(wrapTimedPartsInAll(editor.doc), 'Wrap timed text in <c>')}
+                >Wrap it in &lt;c&gt;</button
+              >
+            </p>
           {/if}
         </div>
       </div>

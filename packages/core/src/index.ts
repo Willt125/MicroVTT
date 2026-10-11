@@ -199,6 +199,8 @@ export {
   ruleTemplates,
   styleSheetProblems,
   updateStyle,
+  cuesWithUntaggedTiming,
+  wrapTimedPartsInAll,
 } from './styles.ts';
 export type { CueSelectors, StyleProblem } from './styles.ts';
 export {
@@ -224,6 +226,7 @@ export {
   unwrapRange,
   wellFormedRange,
   wrapRange,
+  wrapTimedParts,
 } from './markup.ts';
 export type { MarkupEdit, MarkupKind, MarkupSpan, TextRange, TimestampTag } from './markup.ts';
 export {

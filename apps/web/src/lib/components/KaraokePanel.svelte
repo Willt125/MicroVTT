@@ -1,10 +1,12 @@
 <!--
   Word timing (karaoke): the timestamps in the cue's text, each the time the text after it
   starts. Edit or remove each; insert one at the cursor; spread the cue's time across its words;
-  or tap the timing: play the media and tap as each word starts.
+  or tap the timing: play the media and tap as each word starts. Timed text can be wrapped in
+  <c> so that :past and :future styles reach it.
 -->
 <script lang="ts">
   import {
+    cuesWithUntaggedTiming,
     cueWords,
     insertTimestamp,
     removeTimestamp,
@@ -14,6 +16,8 @@
     timestampProblems,
     timestampTags,
     timeWords,
+    wrapTimedParts,
+    wrapTimedPartsInAll,
     type Cue,
   } from '@microvtt/core';
   import { tick } from 'svelte';
@@ -41,6 +45,10 @@
   );
   const words = $derived(cueWords(cue.text, language));
   const media = $derived(player?.hasMedia ?? false);
+
+  /** Whether this cue, and how many cues in all, have timed text that styles cannot reach. */
+  const unwrapped = $derived(wrapTimedParts(cue.text) !== cue.text);
+  const unwrappedCues = $derived(cuesWithUntaggedTiming(editor.doc));
 
   /** The word a timing starts (the first after it). */
   const wordAfter = (end: number): string => words.find((w) => w.start >= end)?.word ?? '';
@@ -135,8 +143,9 @@
     >
   </summary>
   <p class="muted small">
-    For karaoke: each timing is when the text after it starts. Players can style the text before and
-    after the playhead differently (<code>::cue(:past)</code>, <code>::cue(:future)</code>).
+    For karaoke and paint-on: each timing is when the text after it starts. Styles can treat the
+    text before and after the playhead differently (<code>::cue(:past)</code>,
+    <code>::cue(:future)</code>), but only text in a tag such as <code>&lt;c&gt;</code>.
   </p>
 
   {#if tags.length > 0}
@@ -208,6 +217,29 @@
       >
     {/if}
   </div>
+
+  {#if tags.length > 0 && (unwrapped || unwrappedCues > 0)}
+    <div class="row wrap" role="group" aria-label="Wrap timed text">
+      <span class="small"
+        >{unwrapped ? 'Some timed text here' : 'Timed text in other cues'} is not in a tag, so
+        <code>:past</code>/<code>:future</code> styles cannot reach it.</span
+      >
+      <button
+        class="small"
+        disabled={!unwrapped}
+        title="Put each part of this cue's timed text in <c>"
+        onclick={() => run(() => onchange(wrapTimedParts(cue.text), 'Wrap timed text in <c>'))}
+        >Wrap in &lt;c&gt;</button
+      >
+      <button
+        class="small"
+        disabled={unwrappedCues === 0}
+        title="Put the timed text of every cue in <c>, as one undo step"
+        onclick={() => editor.apply(wrapTimedPartsInAll(editor.doc), 'Wrap timed text in <c>')}
+        >In all cues ({unwrappedCues})</button
+      >
+    </div>
+  {/if}
 
   {#if tapping}
     <div class="tap" role="status">

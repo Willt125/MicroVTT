@@ -215,6 +215,8 @@ alignment, box size and offsets, region boxes, active cues in text track cue ord
   regions (6vh lines, anchors, moved down by the height their cues leave unused).
 - `::cue`, `::cue(selector)`, `::cue-region`, `::cue-region(#id)`, `:past` and `:future`, with
   only the properties §8 allows for each; `:past`/`:future` rules lose the sizing ones.
+  `::cue()` arguments match internal nodes, not text, so `::cue(:future)` reaches only timed
+  text inside a span (`<c>`, `<i>`, …); the editor offers to wrap bare timed text in `<c>`.
   Selectors in `::cue()` match the cue and its nodes only (WebVTT names; other type selectors
   match nothing; node objects are in the empty namespace). A page-level prefix in a STYLE
   block applies only if it matches §7.3's hypothetical element (`*`, `*|*`, `|*`, `:not()` of
