@@ -704,8 +704,10 @@ Next, in this order (owner, 2026-10-11):
 - [x] **6g: scroll-up animation** (2026-10-11): lines in a `scroll:up` region slide up over
       0.433s as a new line comes in (§7.2), in the spec renderer, while playing on; not when seeking
       or for viewers who prefer reduced motion. See `SPEC-NOTES.md`.
-- Renderer reference results on Firefox and WebKit: the WPT harness runs there with
-  `WPT_ALL_BROWSERS=1`; their differences are still to be reviewed and recorded.
+- [x] **6h: renderer review in Firefox and WebKit** (2026-10-11): the WPT rendering reftests
+      run in all three browsers in CI, each difference recorded per browser with its reason (see
+      `SPEC-NOTES.md`). They found one renderer bug (mixed-direction cues placed at the top in
+      Firefox), now fixed.
 
 ### Phase 7: Packaging, hosting and polish
 
