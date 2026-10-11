@@ -564,9 +564,12 @@ Still open:
       for Japanese, half-width characters counting half in Japanese and Korean, and each guide's
       reading speed, punctuation, numbers and Latin-letter rules (`rules-cjk.ts`). Traditional
       Chinese text (`zh-TW`, `zh-Hant`) is offered the Traditional rules.
-- [ ] Auto-caption cleanup still wraps every language at 42 characters. Default its line length
-      (and half-width counting) from the text's language: 13 for Japanese, 16 for Chinese and
-      Korean.
+- [x] Auto-caption cleanup starts from the chosen style ruleset's line limits when it follows a
+      guide for the text's language (with the user's changes; at most two lines), else from the
+      language (13 for Japanese, 16 for Chinese and Korean, half-width counting half in Japanese
+      and Korean), else 42; the dialog says where they came from. A caption line too long for
+      one cue at those limits breaks between its words, an untimed one at estimated times; when
+      choosing cues, punctuation no longer runs over the limit.
 - [ ] Case-insensitive find follows JavaScript's simple case folding: Turkish `İ`/`ı` and German
       `ß`/`SS` do not match each other. Document in the help, or fold by the editor's language.
 - [ ] Guess more Latin-script languages (Croatian, Serbian and Bosnian; Malay; Slovenian…), which

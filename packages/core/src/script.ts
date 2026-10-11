@@ -58,6 +58,17 @@ let wordSegmenter: Intl.Segmenter | undefined;
 const OPENERS = /^[\p{Ps}\p{Pi}]+$/u;
 const KANA_ONLY = /^[\p{Script=Hiragana}ー]+$/u;
 const JAPANESE_END = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー\p{Pe}\p{Pf}]$/u;
+const CONTENT_END = /[\p{Script=Han}\p{Script=Katakana}ー\p{Pe}\p{Pf}]$/u;
+
+/**
+ * Whether a word in hiragana belongs to the Japanese word before it: its ending or particle
+ * after a word in kanji or katakana ("説明" + "して"), or a short particle or ending (up to two
+ * characters, "を", "ない") after any. Longer hiragana words after hiragana start a new phrase.
+ */
+const attachesKana = (before: string, kana: string): boolean =>
+  KANA_ONLY.test(kana) &&
+  JAPANESE_END.test(before) &&
+  (CONTENT_END.test(before) || [...kana].length <= 2);
 
 /**
  * Plain text split where a line may break: at spaces, and inside runs of scripts written
@@ -85,8 +96,7 @@ export function breakUnits(text: string): BreakUnit[] {
       } else if (
         prev &&
         opener === '' &&
-        ((!isWordLike && !/^\s+$/.test(segment)) ||
-          (KANA_ONLY.test(segment) && JAPANESE_END.test(prev.text)))
+        ((!isWordLike && !/^\s+$/.test(segment)) || attachesKana(prev.text, segment))
       ) {
         prev.text += segment;
       } else {
@@ -115,5 +125,5 @@ export function continuesWord(before: string, after: string): boolean {
   if (letter.test(prev) && letter.test(first) && !isUnspaced(prev) && !isUnspaced(first))
     return true;
   const word = next.replace(/\p{P}+$/u, '');
-  return word !== '' && KANA_ONLY.test(word) && JAPANESE_END.test(prev);
+  return word !== '' && attachesKana(prev, word);
 }

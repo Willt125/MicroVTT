@@ -2,7 +2,9 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { Cue, VttDocument } from '../src/index.ts';
 import {
+  RULESETS,
   cleanupAutoCaptions,
+  cleanupLineDefaults,
   createCue,
   createDocument,
   detectAutoCaptions,
@@ -396,6 +398,61 @@ describe('cleanup', () => {
       expect(text).toContain('わからない');
       expect(text.split('\n').some((l) => l.endsWith('わから'))).toBe(false);
     }
+  });
+
+  it('starts from the chosen guide’s line limits, then the language’s, then 42', () => {
+    const byId = (id: string) => RULESETS.find((r) => r.id === id);
+    expect(cleanupLineDefaults(byId('netflix-ja'), {}, 'ja')).toEqual({
+      maxLineLength: 13,
+      maxLines: 2,
+      halfWidth: 0.5,
+      from: 'Netflix Japanese',
+    });
+    // The user's changes to the ruleset count; a third (SDH) line does not.
+    expect(
+      cleanupLineDefaults(
+        byId('netflix-zh-hans-sdh'),
+        { 'line-length': { params: { max: 15 } } },
+        'zh',
+      ),
+    ).toMatchObject({ maxLineLength: 15, maxLines: 2 });
+    // A guide for another language, or no guide: the language's usual limits.
+    expect(cleanupLineDefaults(byId('netflix-en-us'), {}, 'ko')).toEqual({
+      maxLineLength: 16,
+      maxLines: 2,
+      halfWidth: 0.5,
+      from: 'Korean',
+    });
+    expect(cleanupLineDefaults(byId('lite'), {}, 'zh-TW').maxLineLength).toBe(16);
+    expect(cleanupLineDefaults(byId('bbc'), {}, null)).toMatchObject({ maxLineLength: 37 });
+    expect(cleanupLineDefaults(byId('lite'), {}, 'fi')).toEqual({
+      maxLineLength: 42,
+      maxLines: 2,
+      halfWidth: 1,
+      from: null,
+    });
+  });
+
+  it('counts half-width characters as half when asked', () => {
+    const ko = machineTranslated([
+      ['오늘 ', '날씨가 ', '정말 ', '좋네요 ', 'OK ', '공원에 ', '갈까요'],
+    ]);
+    const lines = (halfWidth: number) =>
+      cuesOf(
+        cleanupAutoCaptions(ko, { maxLineLength: 16, halfWidth, keepWordTimings: false }).document,
+      ).flatMap((c) => c.text.split('\n'));
+    // Every line keeps to 16 by the guide's count.
+    for (const line of lines(0.5)) expect(visibleLength(line, 0.5)).toBeLessThanOrEqual(16);
+    expect(lines(1).every((l) => visibleLength(l) <= 16)).toBe(true);
+    const flat = (ls: string[]) => ls.join('').replace(/\s/g, '');
+    expect(flat(lines(0.5))).toBe(flat(lines(1)));
+    // At half width the whole text (16 Hangul, 6 spaces, "OK": 20) fits one line of 20; at full
+    // width (24) it does not.
+    const one = (halfWidth: number) =>
+      cuesOf(cleanupAutoCaptions(ko, { maxLineLength: 20, maxLines: 1, halfWidth }).document)
+        .length;
+    expect(one(0.5)).toBe(1);
+    expect(one(1)).toBeGreaterThan(1);
   });
 
   it('keeps notes in place and the head unchanged', () => {

@@ -86,6 +86,7 @@ export type { CueUpdate, SyncPoint } from './edit.ts';
 export {
   DEFAULT_SEGMENT_OPTIONS,
   cleanupAutoCaptions,
+  cleanupLineDefaults,
   detectAutoCaptions,
   extractLines,
   findReviewMarkers,
@@ -101,6 +102,7 @@ export type {
   CleanupOptions,
   CleanupReport,
   CleanupResult,
+  LineDefaults,
   ReviewKind,
   ReviewMarker,
   Segment,

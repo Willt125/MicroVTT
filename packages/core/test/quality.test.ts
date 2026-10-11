@@ -81,6 +81,12 @@ describe('measuring', () => {
     expect(shown('Hello there,\nfriend.')).toEqual(['Hello', ' there,', ' friend.']);
     // Punctuation stays with its word; Japanese endings in hiragana stay with the word before.
     expect(shown('「こんにちは」と言った。')).toEqual(['「こんにちは」と', '言った。']);
+    // Only short particles and endings join hiragana before them; a longer word starts a phrase.
+    // (Exact pieces depend on the dictionary, so only their size is checked.)
+    const phrases = shown('興味深いことをしようとしているので、');
+    expect(phrases.join('')).toBe('興味深いことをしようとしているので、');
+    expect(phrases.length).toBeGreaterThanOrEqual(3);
+    expect(phrases.every((p) => [...p].length <= 10)).toBe(true);
     expect(shown('我们今天去公园，好吗？').join('')).toBe('我们今天去公园，好吗？');
     expect(shown('我们今天去公园，好吗？').length).toBeGreaterThan(2);
     expect(joinLines(['東京に', '行きます。'])).toBe('東京に行きます。');

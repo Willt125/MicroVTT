@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
   import type { CleanupOptions, CleanupResult, Cue } from '@microvtt/core';
+  import { RULESETS, cleanupLineDefaults } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import { plainText } from '../display.ts';
   import { formatTime } from '../time.ts';
@@ -23,6 +24,10 @@
   // Options (seconds in the form, milliseconds for the engine).
   let maxLineLength = $state(42);
   let maxLines = $state(2);
+  /** Half-width characters count as half (Japanese, Korean). */
+  let halfWidthHalf = $state(false);
+  /** Where the line limits came from (a ruleset or a language), or null for the default. */
+  let limitsFrom = $state<string | null>(null);
   let minDuration = $state(1);
   let maxDuration = $state(7);
   let maxCharsPerSecond = $state(20);
@@ -52,6 +57,17 @@
       await editor.detectAutoCaptions();
       checking = false;
     }
+    // Line limits from the chosen style guide when it fits the text, else from the language.
+    const { ruleset: id, overrides } = editor.qualitySettings;
+    const limits = cleanupLineDefaults(
+      RULESETS.find((r) => r.id === id),
+      overrides[id] ?? {},
+      editor.language,
+    );
+    maxLineLength = limits.maxLineLength;
+    maxLines = limits.maxLines;
+    halfWidthHalf = limits.halfWidth < 1;
+    limitsFrom = limits.from;
     // Translations' word times are estimates: default to line breaks and no timing tags.
     keepWordTimings = !approximate;
     wordBreaks = false;
@@ -59,6 +75,7 @@
 
   const options = $derived<Partial<CleanupOptions>>({
     maxLineLength,
+    halfWidth: halfWidthHalf ? 0.5 : 1,
     maxLines,
     minDurationMs: Math.round(minDuration * 1000),
     maxDurationMs: Math.round(maxDuration * 1000),
@@ -148,6 +165,14 @@
         /></label
       >
       <label>Lines per cue <input type="number" min="1" max="5" bind:value={maxLines} /></label>
+      <label
+        class="inline"
+        title="As the Japanese and Korean guides count: Latin letters, digits, spaces and ASCII punctuation"
+        ><input type="checkbox" bind:checked={halfWidthHalf} /> Half-width characters count as half</label
+      >
+      {#if limitsFrom}
+        <p class="muted limits-from">Line limits from {limitsFrom}.</p>
+      {/if}
       <label
         >Shortest cue (s) <input type="number" min="0" step="0.1" bind:value={minDuration} /></label
       >
@@ -266,6 +291,16 @@
     flex-direction: column;
     gap: 0.15rem;
     font-size: 0.88rem;
+  }
+  fieldset label.inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .limits-from {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 0.85rem;
   }
   fieldset input[type='number'] {
     width: 6rem;
