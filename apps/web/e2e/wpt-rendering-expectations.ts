@@ -224,31 +224,65 @@ const ROUNDING = (tolerance: number, reason: string): Adjustment => ({
  * in ADJUSTED (and on top of any general adjustment).
  */
 export const BROWSER_ADJUSTED: Partial<Record<Browser, Record<string, Adjustment>>> = {
-  firefox: Object.fromEntries(
-    [
-      '2_cues_overlapping_completely_move_up',
-      '2_cues_overlapping_partially_move_down',
-      '2_cues_overlapping_partially_move_up',
-      '2_tracks',
-      '3_tracks',
-      'align_center',
-      'align_center_position_50',
-      'align_center_position_gt_50',
-      'align_center_position_gt_50_size_gt_maximum_size',
-      'align_center_position_lt_50',
-      'align_center_position_lt_50_size_gt_maximum_size',
-      'align_center_wrapped',
-      'align_end',
-      'align_end_wrapped',
-      'align_start',
-      'align_start_wrapped',
-      'basic',
-      'evil/9_cues_overlapping_completely',
-      'evil/9_cues_overlapping_completely_all_cues_have_same_timestamp',
-      'line_-2_wrapped_cue_grow_upwards',
-      'line_1_wrapped_cue_grow_downwards',
-    ].map((name) => [name, FIREFOX_LINE_HEIGHT]),
-  ),
+  firefox: {
+    ...Object.fromEntries(
+      [
+        '2_cues_overlapping_partially_move_down',
+        'align_center',
+        'align_center_position_50',
+        'align_center_position_gt_50',
+        'align_center_position_gt_50_size_gt_maximum_size',
+        'align_center_position_lt_50',
+        'align_center_position_lt_50_size_gt_maximum_size',
+        'align_center_wrapped',
+        'align_end',
+        'align_end_wrapped',
+        'align_start',
+        'align_start_wrapped',
+        'basic',
+      ].map((name) => [name, FIREFOX_LINE_HEIGHT]),
+    ),
+    ...Object.fromEntries(
+      [
+        '2_cues_overlapping_completely_move_up',
+        '2_cues_overlapping_partially_move_up',
+        '2_tracks',
+        '3_tracks',
+      ].map((name) => [
+        name,
+        combined(
+          FIREFOX_LINE_HEIGHT,
+          ROUNDING(
+            name === '3_tracks' ? 400 : 200,
+            'Then one row of glyph pixels, where one cue’s box meets the next, still differs in Firefox (175–356 pixels): the reference stacks the lines in one block, where Firefox puts that line’s glyphs a pixel apart.',
+          ),
+        ),
+      ]),
+    ),
+    ...Object.fromEntries(
+      [
+        'evil/9_cues_overlapping_completely',
+        'evil/9_cues_overlapping_completely_all_cues_have_same_timestamp',
+      ].map((name) => [
+        name,
+        combined(FIREFOX_LINE_HEIGHT, {
+          reason:
+            'Then CENTRED_ON_LINE’s half-pixel (4.5px) rounds the other way in Firefox: everything is 1px higher. Moved down 1px, it matches.',
+          css: '#video { translate: 0 1px; }',
+        }),
+      ]),
+    ),
+    line_1_wrapped_cue_grow_downwards: {
+      reason:
+        'The reference puts line 1 at 9px, one font size down; the spec puts it one line box down (§7.2), and Firefox’s line box is 10px (see FIREFOX_LINE_HEIGHT; the reference leaves line-height normal here). Moved up 1px, it matches.',
+      css: '#video { translate: 0 -1px; }',
+    },
+    'line_-2_wrapped_cue_grow_upwards': {
+      reason:
+        'The reference puts line -2 one font size (9px) above the last line; the spec counts in line boxes (§7.2), and Firefox’s are 10px (the reference leaves line-height normal here). Moved down 1px, it matches.',
+      css: '#video { translate: 0 1px; }',
+    },
+  },
   webkit: {
     ...Object.fromEntries(
       [
