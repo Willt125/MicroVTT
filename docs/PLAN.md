@@ -699,6 +699,11 @@ hidden; }`; hidden words keep their place, as the layout does not change with ti
     get a `<c>` each, never one holding a timing, which would stay visible over hidden words).
     Captions only: chapter titles and metadata payloads are never wrapped. In Firefox every
     word shows at once, on spans whose boxes meet, so it looks like the usual box.
+  - Auto-caption cleanup drops YouTube's own `<c>` spans as it rebuilds the cues; its option
+    "Put timed words in <c>" (`wrapInC`) wraps the new text as the file's style sheets need
+    (`wrapForStyles`: all text when one backs `c` spans, timed text for `:past`/`:future`
+    rules, else nothing), and is on by default only then. YouTube drops STYLE blocks on upload,
+    so this styling never shows there.
 - [x] **6f: chapters and metadata modes** (2026-10-11):
   - The file type (captions, chapters, metadata, any) is chosen in the toolbar ("Type", WebVTT
     only) as well as in Export, and the editor follows it. A file opens as captions; when its

@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
   import type { CleanupOptions, CleanupResult, Cue } from '@microvtt/core';
-  import { RULESETS, cleanupLineDefaults } from '@microvtt/core';
+  import { RULESETS, cleanupLineDefaults, wrapForStyles } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import { plainText } from '../display.ts';
   import { formatTime } from '../time.ts';
@@ -36,11 +36,14 @@
   let wordBreaks = $state(false);
   let keepWordTimings = $state(true);
   let keepCueSettings = $state(false);
+  /** Put the output in <c> spans, as the file's style sheets need (see wrapForStyles). */
+  let tagWords = $state(false);
   let collapseSpaces = $state(true);
   let removeDoubledZeroWidthSpaces = $state(true);
 
   const info = $derived(editor.autoCaptions);
   const approximate = $derived(info?.approximateTimings ?? false);
+  const styleWrap = $derived(wrapForStyles(editor.doc));
 
   $effect(() => {
     if (!dialog) return;
@@ -71,6 +74,8 @@
     // Translations' word times are estimates: default to line breaks and no timing tags.
     keepWordTimings = !approximate;
     wordBreaks = false;
+    // On when the file's styles style timed words (:past/:future) or back <c> spans.
+    tagWords = styleWrap !== 'none';
   }
 
   const options = $derived<Partial<CleanupOptions>>({
@@ -85,6 +90,7 @@
     unit: approximate && !wordBreaks ? 'line' : 'word',
     keepWordTimings,
     keepCueSettings,
+    wrapInC: tagWords ? (styleWrap === 'none' ? 'timed' : styleWrap) : 'none',
     collapseSpaces,
     removeDoubledZeroWidthSpaces,
   });
@@ -214,6 +220,15 @@
       >
       <label
         ><input type="checkbox" bind:checked={keepCueSettings} /> Keep YouTube's left-aligned positioning</label
+      >
+      <label
+        title={styleWrap === 'all'
+          ? "This file's styles put the background on <c> spans, so every cue's text goes in <c>"
+          : ':past and :future styles reach only text in a tag; YouTube’s own <c> spans are not kept'}
+        ><input type="checkbox" bind:checked={tagWords} />
+        {styleWrap === 'all'
+          ? 'Put all text in <c> (for the paint-on box style)'
+          : 'Put timed words in <c> (for karaoke / paint-on styles)'}</label
       >
       <label
         title="Repeated spaces become one; spaces between Chinese or Japanese characters (which machine translation adds after 。 and 、) are removed"

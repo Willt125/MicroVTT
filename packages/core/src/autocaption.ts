@@ -23,6 +23,7 @@ import type { RuleOverrides, Ruleset } from './quality/types.ts';
 import { breakUnits, continuesWord, hasUnspaced, joinsWithoutSpace } from './script.ts';
 import type { BodyItem, Cue, Note, VttDocument } from './document.ts';
 import { createCue } from './document.ts';
+import { applyTextWrap, wrapForStyles, type TextWrap } from './styles.ts';
 import { formatTimestamp, parseTimestamp } from './timestamp.ts';
 
 /** A word as it appears in cue text (markup kept, e.g. `A&amp;B`), with the space before it. */
@@ -630,6 +631,11 @@ export interface CleanupOptions extends SegmentOptions {
   keepWordTimings: boolean;
   /** Keep the source cues' settings (YouTube's `align:start position:0%`). Default false. */
   keepCueSettings: boolean;
+  /**
+   * Wrap the cue text in `<c>` so `:past` / `:future` and `c` backgrounds reach it (the source's
+   * own `<c>` spans are not kept). Default: what the document's style sheets need.
+   */
+  wrapInC: TextWrap;
 }
 
 export interface CleanupReport {
@@ -685,6 +691,7 @@ export function cleanupAutoCaptions(
     unit: info.approximateTimings ? 'line' : 'word',
     keepWordTimings: !info.approximateTimings,
     keepCueSettings: false,
+    wrapInC: wrapForStyles(doc),
     ...options,
   };
   const segments = segment(lines, o);
@@ -698,7 +705,7 @@ export function cleanupAutoCaptions(
     while (nextNote < notes.length && (notes[nextNote] as readonly [Note, number])[1] < seg.source)
       body.push((notes[nextNote++] as readonly [Note, number])[0]);
     const source = doc.body[seg.source] as Cue;
-    const fresh = createCue(seg.startMs, seg.endMs, cueText(seg, o));
+    const fresh = createCue(seg.startMs, seg.endMs, applyTextWrap(cueText(seg, o), o.wrapInC));
     const cue: Cue = o.keepCueSettings
       ? { ...source, id: '', startMs: seg.startMs, endMs: seg.endMs, text: fresh.text }
       : fresh;

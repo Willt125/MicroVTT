@@ -204,8 +204,10 @@ export {
   backsCSpans,
   cuesOutsideC,
   wrapForBackgroundInAll,
+  wrapForStyles,
+  applyTextWrap,
 } from './styles.ts';
-export type { CueSelectors, StyleProblem } from './styles.ts';
+export type { CueSelectors, StyleProblem, TextWrap } from './styles.ts';
 export {
   classProblem,
   clearMarkup,

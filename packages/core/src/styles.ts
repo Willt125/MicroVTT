@@ -202,3 +202,20 @@ export const cuesOutsideC = (doc: VttDocument): number =>
 /** `doc` with every cue's text in `<c>` spans (`wrapForBackground`); the same document when none changes. */
 export const wrapForBackgroundInAll = (doc: VttDocument): VttDocument =>
   mapCueText(doc, wrapForBackground);
+
+/** How cue text is wrapped in `<c>` for style sheets: not at all, timed text, or all text. */
+export type TextWrap = 'none' | 'timed' | 'all';
+
+/**
+ * The wrapping a document's style sheets need: all text when one backs `c` spans, timed text
+ * when one uses `:past` or `:future`, else none.
+ */
+export function wrapForStyles(doc: VttDocument): TextWrap {
+  const sheets = doc.head.flatMap((h) => (h.type === 'style' ? [h.css] : []));
+  if (sheets.some(backsCSpans)) return 'all';
+  return sheets.some((css) => /:(?:past|future)\b/.test(css)) ? 'timed' : 'none';
+}
+
+/** `text` wrapped as `wrap` says (`wrapTimedParts`, `wrapForBackground`). */
+export const applyTextWrap = (text: string, wrap: TextWrap): string =>
+  wrap === 'all' ? wrapForBackground(text) : wrap === 'timed' ? wrapTimedParts(text) : text;
