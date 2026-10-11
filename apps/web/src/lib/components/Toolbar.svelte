@@ -12,6 +12,7 @@
     onsplit: () => void;
     onfind: () => void;
     ontiming: () => void;
+    onstyles: () => void;
     oncleanup: () => void;
     onglossary: () => void;
     onhelp: () => void;
@@ -27,6 +28,7 @@
     onsplit,
     onfind,
     ontiming,
+    onstyles,
     oncleanup,
     onglossary,
     onhelp,
@@ -95,6 +97,13 @@
       onclick={ontiming}
       disabled={editor.cueRows.length === 0}
       title="Shift, resync or change the frame rate of all or the selected cues">Timing…</button
+    >
+    <button
+      onclick={onstyles}
+      disabled={!editor.hasDocument || !editor.format.styleSheets}
+      title={editor.format.styleSheets
+        ? 'Edit the CSS for the cues (STYLE blocks)'
+        : `${editor.format.name} files have no style sheets`}>Styles…</button
     >
   </div>
   <div class="group" aria-label="Auto-captions">

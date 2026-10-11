@@ -15,6 +15,7 @@
   import Timeline from './lib/components/Timeline.svelte';
   import TimingDialog from './lib/components/TimingDialog.svelte';
   import RegionsDialog from './lib/components/RegionsDialog.svelte';
+  import StylesDialog from './lib/components/StylesDialog.svelte';
   import Toolbar from './lib/components/Toolbar.svelte';
   import { Editor } from './lib/editor.svelte.ts';
   import { ACCEPT, canSaveInPlace, droppedHandle, pickSubtitleFile } from './lib/files.ts';
@@ -40,6 +41,7 @@
   let glossaryOpen = $state(false);
   let timingOpen = $state(false);
   let regionsOpen = $state(false);
+  let stylesOpen = $state(false);
   let rulesOpen = $state(false);
   const waveform = new Waveform();
   /** The frame rate frame stepping uses: chosen, or measured from the video. */
@@ -143,6 +145,7 @@
       glossaryOpen ||
       timingOpen ||
       regionsOpen ||
+      stylesOpen ||
       rulesOpen
     )
       return;
@@ -263,6 +266,7 @@
         glossaryOpen ||
         timingOpen ||
         regionsOpen ||
+        stylesOpen ||
         rulesOpen
       )
         return;
@@ -355,6 +359,7 @@
     onsplit={split}
     onfind={() => (findOpen = true)}
     ontiming={() => (timingOpen = true)}
+    onstyles={() => (stylesOpen = true)}
     oncleanup={() => (cleanupOpen = true)}
     onglossary={() => (glossaryOpen = true)}
     onhelp={() => (helpOpen = true)}
@@ -473,6 +478,7 @@
   <GlossaryDialog {editor} bind:open={glossaryOpen} />
   <TimingDialog {editor} {player} bind:open={timingOpen} />
   <RegionsDialog {editor} bind:open={regionsOpen} />
+  <StylesDialog {editor} bind:open={stylesOpen} />
   <RulesDialog {editor} bind:open={rulesOpen} />
 </div>
 
