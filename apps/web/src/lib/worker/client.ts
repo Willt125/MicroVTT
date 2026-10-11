@@ -1,5 +1,6 @@
 /** Promise-based client for the worker. */
 import type { FileType, FormatId, VttDocument } from '@microvtt/core';
+import { createVttWorker } from '../workers.ts';
 import type {
   AutoCaptionInfo,
   Autosave,
@@ -26,7 +27,7 @@ export class VttWorker {
   private nextId = 1;
 
   constructor() {
-    this.worker = new Worker(new URL('./vtt.worker.ts', import.meta.url), { type: 'module' });
+    this.worker = createVttWorker();
     this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       const response = event.data;
       const pending = this.pending.get(response.id);

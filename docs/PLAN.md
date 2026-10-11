@@ -711,7 +711,14 @@ Next, in this order (owner, 2026-10-11):
 
 ### Phase 7: Packaging, hosting and polish
 
-- Single-file build. Hosted PWA (precache, install, file handling where supported), published
+- **Single-file build** (done): `pnpm build:single` writes the whole editor (scripts, styles,
+  both workers) to one `microvtt.html` to open from disk or pass around. A `file://` page has an
+  opaque origin, which costs two things: the workers are inlined as classic workers (Chromium
+  will not start a module worker from a `blob:` URL there), and autosave reports itself
+  unavailable where the browser gives such a page no storage (Chromium does not); the waveform
+  cache falls back to memory the same way. An e2e test opens the built file from disk in all
+  three browsers.
+- Hosted PWA (precache, install, file handling where supported), published
   once the owner is confident in quality. i18n-ready strings, an accessibility audit (keyboard and
   screen reader), dark mode, and a performance pass against the targets.
 

@@ -42,6 +42,7 @@ pnpm e2e         # browser tests (Playwright; run `pnpm --filter @microvtt/web e
 pnpm typecheck
 pnpm lint
 pnpm build
+pnpm build:single  # the whole editor as one HTML file: apps/web/dist-single/microvtt.html
 pnpm bench       # parser benchmarks (see docs/BENCHMARKS.md)
 pnpm fuzz        # long differential/streaming fuzz run (CI runs a short one)
 ```
