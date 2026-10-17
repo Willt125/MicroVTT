@@ -1,8 +1,35 @@
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
+import { versionLabel } from './src/lib/build-version.ts';
+
+/** The version to show: package.json's, with the commit unless this is its release tag. */
+function appVersion(): string {
+  const { version } = JSON.parse(
+    readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
+  ) as { version: string };
+  const git = (...args: string[]): string | null => {
+    try {
+      return execFileSync('git', args, {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch {
+      return null;
+    }
+  };
+  const commit = git('rev-parse', '--short', 'HEAD');
+  if (commit === null) return versionLabel(version, null);
+  return versionLabel(version, {
+    commit,
+    tagged: git('tag', '--points-at', 'HEAD')?.split('\n').includes(`v${version}`) ?? false,
+    dirty: (git('status', '--porcelain', '--untracked-files=no') ?? '') !== '',
+  });
+}
 
 /** Names the single file after the app, so a copy passed around says what it is. */
 const singleFileName = (): Plugin => ({
@@ -21,6 +48,7 @@ const singleFileName = (): Plugin => ({
 export default defineConfig(({ mode }) => ({
   // Relative asset URLs so the built app also works when opened from disk or a sub-path.
   base: './',
+  define: { __APP_VERSION__: JSON.stringify(appVersion()) },
   plugins: mode === 'single' ? [svelte(), viteSingleFile(), singleFileName()] : [svelte()],
   resolve:
     mode === 'single'

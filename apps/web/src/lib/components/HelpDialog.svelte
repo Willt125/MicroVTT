@@ -1,6 +1,7 @@
 <!-- Keyboard shortcuts reference. -->
 <script lang="ts">
   import { SHORTCUTS } from '../shortcuts.ts';
+  import { APP_VERSION } from '../version.ts';
 
   interface Props {
     open: boolean;
@@ -53,6 +54,12 @@
     </tbody>
   </table>
   <div class="actions">
+    <span
+      class="version muted"
+      title={APP_VERSION.includes('+')
+        ? 'A build between releases: the version it follows, then the commit it was built from'
+        : undefined}>MicroVTT {APP_VERSION}</span
+    >
     <button class="primary" onclick={() => (open = false)}>Close</button>
   </div>
 </dialog>
@@ -98,6 +105,13 @@
   .actions {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
+    gap: 1rem;
     margin-top: 1rem;
+  }
+  .version {
+    margin-right: auto;
+    font-size: 0.85rem;
+    user-select: all;
   }
 </style>

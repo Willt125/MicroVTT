@@ -42,6 +42,12 @@ body:
     validations:
       required: true
   - type: input
+    id: version
+    attributes:
+      label: MicroVTT version
+      description: Shown at the bottom of the keyboard shortcuts dialog (press ?). Older copies may not show one.
+      placeholder: 0.1.0, or 0.1.0+abc1234
+  - type: input
     id: browser
     attributes:
       label: Browser and version

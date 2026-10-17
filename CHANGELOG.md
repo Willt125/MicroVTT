@@ -32,5 +32,7 @@ is 0.y.z, anything may still change.
   offers player-compatibility fixes, and checks the file for YouTube. Chromium always asks where
   to save, through the system save dialog.
 - **Distribution:** a single-file build, `microvtt.html`, to open from disk or pass around.
+- **Version:** shown at the bottom of the keyboard shortcuts dialog (`?`). Builds between releases
+  add the commit they were built from, as in `0.1.0+abc1234`.
 
 [Unreleased]: https://github.com/Willt125/MicroVTT/commits/main

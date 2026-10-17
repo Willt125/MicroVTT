@@ -47,6 +47,8 @@ test('lists the keyboard shortcuts', async ({ page }) => {
   const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Set the cue’s start to the playhead');
+  // The version, as SemVer: with the commit for builds between releases.
+  await expect(dialog.getByText(/^MicroVTT \d+\.\d+\.\d+(\+[0-9a-z.]+)?$/)).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
 });
