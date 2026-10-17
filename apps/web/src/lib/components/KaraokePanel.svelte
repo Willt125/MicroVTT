@@ -250,7 +250,7 @@
           ({tapTimes.length + 2} of {tapWords.length})
         {/if}
       </span>
-      <button bind:this={tapButton} class="primary" onclick={tap}>Tap</button>
+      <button bind:this={tapButton} class="primary" data-keep-focus onclick={tap}>Tap</button>
       <button class="small" onclick={stopTap}>Stop</button>
     </div>
   {/if}

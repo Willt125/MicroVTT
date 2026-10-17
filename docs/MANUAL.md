@@ -578,6 +578,10 @@ Converting an SRT to WebVTT (in Export) unlocks the WebVTT tools.
 Press **?** in the app for this list. Single-key shortcuts work when you are not typing in a
 field. Add **Alt** (Option on a Mac) to use them while typing.
 
+Buttons, checkboxes and section headers you click with the mouse let go of focus afterwards, so
+`Space` plays or pauses rather than pressing them again. Reach a control with `Tab` and `Space`
+presses it as usual. While tap timing, the **Tap** button keeps focus so `Space` taps.
+
 | Key                                 | Action                                                 |
 | ----------------------------------- | ------------------------------------------------------ |
 | `Space` / `K`                       | Play or pause                                          |

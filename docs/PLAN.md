@@ -793,6 +793,13 @@ Notes from the first demo hand-out (2026-10-12). Done 2026-10-17.
       cue text has focus, and clicking **Split** (or **Merge**) used to move focus to the button,
       so the cue was cut near its middle instead. The buttons no longer take focus when clicked.
       `MANUAL.md` describes how the split time and text cut are chosen with and without media.
+- [x] **Space plays after a mouse click on a control** (2026-10-17). A button, checkbox or
+      section header clicked with the mouse kept focus (in Chromium and Firefox; Safari never
+      gives it), so the next Space pressed it again (**Add cue** added another cue) instead of
+      playing. Controls clicked with the mouse now let go of focus; ones reached with the
+      keyboard keep it, so Space and Enter still press them. Controls in dialogs and **Tap** (tap
+      timing, where Space taps) keep focus. The cost, accepted by the owner since the users work
+      from the keyboard shortcuts: a control clicked with the mouse shows no focus outline.
 
 ### Phase 8: Converters
 
