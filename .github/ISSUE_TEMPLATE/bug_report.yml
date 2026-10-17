@@ -1,0 +1,83 @@
+name: Bug report
+description: Something in MicroVTT does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. This repository is **public**: anything you post here can be read by anyone.
+        Please do not attach whole caption files or media that are private or someone else's work. A few cues, typed or trimmed by hand, are usually enough to show the problem.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What went wrong? Include any message MicroVTT showed, word for word if you can.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What you did, step by step, starting from opening the editor.
+      placeholder: |
+        1. Open a .vtt file with two cues
+        2. Select the first cue and press S
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: dropdown
+    id: build
+    attributes:
+      label: Which MicroVTT
+      options:
+        - The single file (microvtt.html), opened from disk
+        - A local build (pnpm dev or pnpm preview)
+        - Other (say under Anything else)
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      description: Shown in the browser's About page.
+      placeholder: Firefox 157.0.1, Chrome 141, Safari 26…
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11, macOS 26, Ubuntu 26.04…
+  - type: dropdown
+    id: format
+    attributes:
+      label: File format
+      options:
+        - WebVTT (.vtt)
+        - SubRip (.srt)
+        - Converting between them
+        - Not about a particular file
+  - type: textarea
+    id: sample
+    attributes:
+      label: Sample
+      description: The few cues that show the problem, as text. Leave out anything private.
+      render: text
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: Screenshots, how often it happens, whether media was loaded, and so on.
+  - type: checkboxes
+    id: public
+    attributes:
+      label: Public repository
+      options:
+        - label: I understand this report is public, and it has nothing private or that I may not share.
+          required: true
