@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { FileType } from '@microvtt/core';
+  import { tick } from 'svelte';
+  import { baseName } from '../filename.ts';
   import { FILE_TYPES } from '../filetypes.ts';
   import type { Editor } from '../editor.svelte.ts';
   import { SYSTEM, THEMES } from '../themes.ts';
@@ -51,6 +53,31 @@
       'This browser does not offer storage for autosave here (for example in a private window).',
     failed: 'The last autosave could not be written; your edits are still open here.',
   } as const;
+
+  /** Keeps focus where it is (in the cue text) when a button is clicked. */
+  const keepFocus = (event: MouseEvent): void => event.preventDefault();
+
+  /** Renaming the file in place: the name typed so far (without the extension). */
+  let renaming = $state(false);
+  let draft = $state('');
+  let renameError = $state<string | null>(null);
+  let nameInput: HTMLInputElement | undefined = $state();
+
+  async function startRename(): Promise<void> {
+    draft = baseName(editor.fileName);
+    renameError = null;
+    renaming = true;
+    await tick();
+    nameInput?.focus();
+    nameInput?.select();
+  }
+
+  /** Enter keeps the field open on a bad name, to fix it; leaving the field drops it. */
+  function commitRename(event?: FocusEvent): void {
+    if (!renaming) return;
+    renameError = editor.rename(draft);
+    if (renameError === null || event?.type === 'blur') renaming = false;
+  }
 </script>
 
 <header class="toolbar">
@@ -100,10 +127,16 @@
       disabled={!editor.selectedCue}
       title="Delete the selected cues (Delete)">Delete</button
     >
-    <button onclick={onsplit} disabled={!editor.selectedCue} title="Split the selected cue (S)"
+    <!-- Clicking does not take focus from the cue text, so Split still knows the text cursor. -->
+    <button
+      onmousedown={keepFocus}
+      onclick={onsplit}
+      disabled={!editor.selectedCue}
+      title="Split the selected cue (S): at the text cursor when it is in the cue text"
       >Split</button
     >
     <button
+      onmousedown={keepFocus}
       onclick={() => editor.mergeWithNext()}
       disabled={!editor.canMerge}
       title="Merge the selected cues, or the selected cue with the next one (M)">Merge</button
@@ -143,24 +176,63 @@
       title="Corrections applied to the whole file (saved in this browser)">Glossary…</button
     >
   </div>
-  <p class="status" aria-live="polite">
-    {#if editor.busy}
-      {editor.busy}
-    {:else if editor.hasDocument}
-      <strong>{editor.fileName}</strong>{editor.dirty ? ' • edited' : ''}
-      <span class="muted"
-        >· {editor.cueRows.length.toLocaleString()}
-        {editor.cueRows.length === 1 ? 'cue' : 'cues'}</span
-      >
-      {#if editor.dirty && editor.autosaveStatus !== 'idle'}
-        <span
-          class={editor.autosaveStatus === 'saved' ? 'muted' : 'warning-text'}
-          title={AUTOSAVE_TITLE[editor.autosaveStatus]}
-          >· {AUTOSAVE_TEXT[editor.autosaveStatus]}</span
+  <div class="status">
+    {#if !editor.busy && editor.hasDocument}
+      {#if renaming}
+        <form
+          class="rename"
+          onsubmit={(e) => {
+            e.preventDefault();
+            commitRename();
+          }}
+        >
+          <input
+            bind:this={nameInput}
+            bind:value={draft}
+            aria-label="File name"
+            aria-invalid={renameError ? 'true' : undefined}
+            aria-describedby={renameError ? 'rename-error' : undefined}
+            spellcheck="false"
+            autocomplete="off"
+            size={Math.max(8, Math.min(40, draft.length + 1))}
+            onkeydown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                renaming = false;
+              }
+            }}
+            onblur={(e) => commitRename(e)}
+          /><span class="muted">{editor.format.extensions[0]}</span>
+          {#if renameError}<span id="rename-error" class="error-text" role="alert"
+              >{renameError}</span
+            >{/if}
+        </form>
+      {:else}
+        <button class="name" onclick={startRename} title="Rename: the name the file is saved as"
+          ><strong>{editor.fileName}</strong></button
         >
       {/if}
     {/if}
-  </p>
+    <span aria-live="polite">
+      {#if editor.busy}
+        {editor.busy}
+      {:else if editor.hasDocument}
+        {editor.dirty ? ' • edited' : ''}
+        <span class="muted"
+          >· {editor.cueRows.length.toLocaleString()}
+          {editor.cueRows.length === 1 ? 'cue' : 'cues'}</span
+        >
+        {#if editor.dirty && editor.autosaveStatus !== 'idle'}
+          <span
+            class={editor.autosaveStatus === 'saved' ? 'muted' : 'warning-text'}
+            title={AUTOSAVE_TITLE[editor.autosaveStatus]}
+            >· {AUTOSAVE_TEXT[editor.autosaveStatus]}</span
+          >
+        {/if}
+      {/if}
+    </span>
+  </div>
   <button onclick={onhelp} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
   <label class="theme">
     Theme
@@ -206,6 +278,31 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+  .name {
+    background: none;
+    border: 1px solid transparent;
+    padding: 0.1rem 0.3rem;
+    margin-left: -0.3rem;
+    color: inherit;
+    font: inherit;
+    cursor: text;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .name:hover,
+  .name:focus-visible {
+    border-color: var(--control);
+  }
+  .rename {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.15rem;
+  }
+  .rename .error-text {
+    margin-left: 0.5rem;
+    font-size: 0.85rem;
   }
   .theme {
     display: flex;

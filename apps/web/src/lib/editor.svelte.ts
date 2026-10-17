@@ -52,6 +52,7 @@ import type {
   ReviewMarker,
 } from './worker/protocol.ts';
 import { sliceDocument } from './media.ts';
+import { checkFileName } from './filename.ts';
 import {
   loadQualitySettings,
   saveQualitySettings,
@@ -579,6 +580,23 @@ export class Editor {
       window ? sliceDocument(this.doc, window.fromMs, window.toMs) : this.doc,
       this.format.id,
     );
+  }
+
+  /**
+   * Renames the document (not the file on disk): the new name is what it is saved as. A file
+   * opened in place is then no longer saved back to it, only through Save as…. Returns why the
+   * name cannot be used, or null.
+   */
+  rename(input: string): string | null {
+    const checked = checkFileName(input, this.format);
+    if ('error' in checked) return checked.error;
+    if (checked.name === this.fileName) return null;
+    this.fileName = checked.name;
+    this.fileHandle = null;
+    // Not saved under the new name yet.
+    this.dirty = true;
+    this.scheduleAutosave();
+    return null;
   }
 
   /** Records a save; `handle` and `name` are where it went, when saved through a picker. */

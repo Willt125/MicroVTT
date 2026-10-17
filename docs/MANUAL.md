@@ -125,6 +125,11 @@ On the right are the theme picker and **?** for the keyboard shortcuts. The stat
 file name, "• edited" when there are unsaved changes, the cue count, and whether your edits are
 autosaved.
 
+**Click the file name to rename the file.** Type the new name and press Enter (Escape cancels).
+The extension follows the format, so you type only the name. The new name is what Export saves
+the file as; the file you opened keeps its name on disk, and saving goes through **Save as…**
+from then on (see [Saving](#saving)).
+
 ## 4. The cue list
 
 The list shows each cue's number, start, end, text (one line, shortened; hover for all of it)
@@ -148,8 +153,21 @@ Many tools (Delete, Merge, Timing, Roll-up, cue settings) act on the whole selec
 Only the visible rows are drawn, so files with tens of thousands of cues stay responsive.
 
 **Add cue** (or `N`) inserts a cue after the selected one, or at the playhead when media is
-open. **Split** (`S`) cuts the cue at the text cursor, and at the playhead if the playhead is
-inside the cue. **Merge** (`M`) joins the selected cues, or the cue with the next one.
+open. **Merge** (`M`) joins the selected cues, or the cue with the next one; the second cue's
+start is kept as a word timing at the join, so Merge is not an exact undo of Split (Undo is).
+
+**Split** (`S`) makes two cues of one. It decides two things separately: where the text is cut,
+and when the second cue starts.
+
+|                                         | Text cursor in the cue text                               | No text cursor                                                                 |
+| --------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **Media open, playhead inside the cue** | Text cut at the cursor; time at the playhead              | Time at the playhead; text cut at the space nearest the same share of the text |
+| **Otherwise**                           | Text cut at the cursor; time at the same share of the cue | Time at the middle; text cut at the space nearest the middle                   |
+
+The cursor counts when the cue text has focus: click **Split** in the toolbar, or press `Alt+S`
+while typing (plain `S` only works outside text fields). The shares count the text as written,
+markup included, so without media the time is an estimate. The second cue gets no id; both keep
+the cue's settings, and word timings go to the half they fall in.
 
 ## 5. Editing a cue
 
@@ -264,6 +282,12 @@ The timeline shows a time ruler, the audio **waveform**, a lane of cue blocks, a
 
 Edges **snap** to neighbouring cue edges, word timings and the playhead; a dashed line shows the
 snap. Hold **Alt** while dragging to turn snapping off.
+
+**Word timings** show as short ticks at the top and bottom of a cue's block. They move with the
+cue when you drag it, and stay put when you drag one of its edges.
+
+**P** moves the playhead to the time under the mouse pointer, without clicking: hover over the
+moment you want and press `P` (`Alt+P` while typing).
 
 The waveform is computed in the background and cached in the browser, so reopening the same media
 is instant.
@@ -513,9 +537,13 @@ Some players misread files that are perfectly valid. These fixes keep the file v
 
 ### Saving
 
-- In Chrome and Edge, a file you opened can be saved in place (**Save to _name_**), saved
-  elsewhere (**Save as…**), or downloaded.
-- In other browsers, export downloads the file.
+- **Chrome and Edge** always ask where to save: **Save as…** opens the system's save dialog. A
+  file you opened (and have not renamed) can also be saved back in place (**Save to _name_**).
+  If the save dialog cannot open, the dialog offers **Download instead**.
+- **Firefox and Safari** cannot be made to ask from a web page: export downloads the file, and
+  the browser's own setting decides whether it asks where. To be asked every time, turn on
+  "Always ask you where to save files" (Firefox: Settings › General) or set File download
+  location to "Ask for each download" (Safari: Settings › General).
 
 Saving marks the document as saved and clears the autosave.
 
@@ -550,28 +578,29 @@ Converting an SRT to WebVTT (in Export) unlocks the WebVTT tools.
 Press **?** in the app for this list. Single-key shortcuts work when you are not typing in a
 field. Add **Alt** (Option on a Mac) to use them while typing.
 
-| Key                                 | Action                                                                         |
-| ----------------------------------- | ------------------------------------------------------------------------------ |
-| `Space` / `K`                       | Play or pause                                                                  |
-| `J` / `L`                           | Back / forward 1 second (with Shift: 5 seconds)                                |
-| `,` / `.`                           | Back / forward one frame                                                       |
-| `[` / `]`                           | Set the cue's start / end to the playhead                                      |
-| `R`                                 | Loop the cue on or off                                                         |
-| `N`                                 | New cue (at the playhead when media is open)                                   |
-| `S`                                 | Split the cue at the text cursor (and at the playhead if it is inside the cue) |
-| `M`                                 | Merge the selected cues, or the cue with the next one                          |
-| `Alt+↑` / `Alt+↓`                   | Previous / next cue (plain arrows in the list)                                 |
-| `Ctrl+O`                            | Open a file                                                                    |
-| `Ctrl+S`                            | Export / save                                                                  |
-| `Ctrl+F`                            | Find and replace                                                               |
-| `Ctrl+Z`, `Ctrl+Shift+Z` / `Ctrl+Y` | Undo, redo                                                                     |
-| `Ctrl+A`                            | Select all cues                                                                |
-| `Ctrl+I` / `B` / `U`                | Italic, bold, underline (in the cue text)                                      |
-| `Enter` (in the list)               | Edit the cue's text                                                            |
-| `Delete` (in the list)              | Delete the selected cues                                                       |
-| `↑` / `↓` in a time field           | Nudge by 0.1 s (with Shift: 1 s)                                               |
-| `Alt` while dragging                | Don't snap on the timeline                                                     |
-| `Ctrl+scroll`                       | Zoom the timeline                                                              |
+| Key                                 | Action                                                 |
+| ----------------------------------- | ------------------------------------------------------ |
+| `Space` / `K`                       | Play or pause                                          |
+| `J` / `L`                           | Back / forward 1 second (with Shift: 5 seconds)        |
+| `,` / `.`                           | Back / forward one frame                               |
+| `[` / `]`                           | Set the cue's start / end to the playhead              |
+| `P`                                 | Move the playhead to the mouse pointer on the timeline |
+| `R`                                 | Loop the cue on or off                                 |
+| `N`                                 | New cue (at the playhead when media is open)           |
+| `S`                                 | Split the cue (see [section 4](#4-the-cue-list))       |
+| `M`                                 | Merge the selected cues, or the cue with the next one  |
+| `Alt+↑` / `Alt+↓`                   | Previous / next cue (plain arrows in the list)         |
+| `Ctrl+O`                            | Open a file                                            |
+| `Ctrl+S`                            | Export / save                                          |
+| `Ctrl+F`                            | Find and replace                                       |
+| `Ctrl+Z`, `Ctrl+Shift+Z` / `Ctrl+Y` | Undo, redo                                             |
+| `Ctrl+A`                            | Select all cues                                        |
+| `Ctrl+I` / `B` / `U`                | Italic, bold, underline (in the cue text)              |
+| `Enter` (in the list)               | Edit the cue's text                                    |
+| `Delete` (in the list)              | Delete the selected cues                               |
+| `↑` / `↓` in a time field           | Nudge by 0.1 s (with Shift: 1 s)                       |
+| `Alt` while dragging                | Don't snap on the timeline                             |
+| `Ctrl+scroll`                       | Zoom the timeline                                      |
 
 ## 20. The single-file build
 
@@ -580,5 +609,6 @@ file that you can pass around and open straight from disk, with no server and no
 works the same as the hosted app, with a few limits that come from opening a file from disk:
 
 - **Autosave** may be unavailable, depending on the browser. The status area says so.
-- **Save in place** depends on the browser, as in the hosted app.
+- **Saving** works as in the hosted app: Chrome and Edge ask where to save, and Firefox and
+  Safari download.
 - It does not update itself: hand out a fresh copy when the app changes.

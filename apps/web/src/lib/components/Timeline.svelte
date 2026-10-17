@@ -31,9 +31,11 @@
     editor: Editor;
     player: Player;
     waveform: Waveform;
+    /** Called with the time under the mouse pointer, or null when it leaves the timeline. */
+    onpointertime?: (ms: number | null) => void;
   }
 
-  let { editor, player, waveform }: Props = $props();
+  let { editor, player, waveform, onpointertime }: Props = $props();
 
   const RULER_PX = 18;
   const CUE_LANE_PX = 26;
@@ -41,6 +43,8 @@
   const EDGE_PX = 6;
   /** How near (in px) an edge snaps to a target. */
   const SNAP_PX = 8;
+  /** Length (in px) of the word-timing ticks at the top and bottom of a cue block. */
+  const TICK_PX = 5;
 
   let canvas: HTMLCanvasElement | undefined = $state();
   let width = $state(0);
@@ -52,10 +56,25 @@
   const MAX_GAIN = 16;
   let requested = 0;
   let frame = 0;
+  /** Word-timing ticks in the last frame drawn (for tests: the canvas cannot be read back). */
+  let drawnTicks = $state(0);
 
   const durationMs = $derived(
     Math.max(player.durationMs, waveform.durationMs, lastCueEnd(editor.doc.body)),
   );
+
+  /** Word timings inside each cue (cues are never changed in place, so they key the cache). */
+  const timings = new WeakMap<Cue, number[]>();
+  function wordTimings(cue: Cue): number[] {
+    let found = timings.get(cue);
+    if (!found) {
+      found = textTimestamps(editor.format.text, cue.text).filter(
+        (ms) => ms > cue.startMs && ms < cue.endMs,
+      );
+      timings.set(cue, found);
+    }
+    return found;
+  }
 
   function lastCueEnd(body: typeof editor.doc.body): number {
     let end = 0;
@@ -212,6 +231,7 @@
 
     // Cues, in the lane at the bottom.
     const laneTop = height - CUE_LANE_PX;
+    let ticks = 0;
     ctx.font = '12px system-ui, sans-serif';
     for (const i of editor.cueRows) {
       const cue = shown(i, editor.doc.body[i] as Cue);
@@ -225,6 +245,30 @@
       ctx.globalAlpha = 1;
       ctx.strokeStyle = selected ? c.accent : c.border;
       ctx.strokeRect(x1 + 0.5, laneTop + 2.5, Math.max(1, x2 - x1 - 1), CUE_LANE_PX - 5);
+      // Word timings: short ticks at the top and bottom of the block (a dashed line would look
+      // like the snap marker). They move with the cue when it is dragged, not with its edges.
+      const stamps = wordTimings(editor.doc.body[i] as Cue);
+      if (stamps.length > 0 && x2 - x1 > 6) {
+        const offset =
+          drag?.result && drag.hit.kind === 'move' && drag.moving.has(i) ? drag.result.deltaMs : 0;
+        ctx.strokeStyle = c.text;
+        ctx.globalAlpha = 0.45;
+        ctx.beginPath();
+        let lastPx = -Infinity;
+        for (const ms of stamps) {
+          const px = Math.round(x(ms + offset)) + 0.5;
+          // Within the block, and not crowded into a smear when zoomed out.
+          if (px <= x1 + 1 || px >= x2 - 1 || px - lastPx < 3) continue;
+          lastPx = px;
+          ticks++;
+          ctx.moveTo(px, laneTop + 3);
+          ctx.lineTo(px, laneTop + 3 + TICK_PX);
+          ctx.moveTo(px, laneTop + CUE_LANE_PX - 3 - TICK_PX);
+          ctx.lineTo(px, laneTop + CUE_LANE_PX - 3);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       if (x2 - x1 > 24) {
         ctx.save();
         ctx.beginPath();
@@ -239,6 +283,8 @@
         ctx.restore();
       }
     }
+
+    drawnTicks = ticks;
 
     // The time a drag has snapped to.
     if (drag?.result?.snappedTo != null) {
@@ -283,6 +329,12 @@
     return () => observer.disconnect();
   });
 
+  /** Records the time under the pointer, for the playhead-to-pointer shortcut. */
+  function trackPointer(event: MouseEvent): void {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    onpointertime?.(Math.max(0, view.startMs + (event.clientX - rect.left) * view.msPerPx));
+  }
+
   function onwheel(event: WheelEvent): void {
     event.preventDefault();
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -293,6 +345,7 @@
       const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
       setView({ ...view, startMs: view.startMs + delta * view.msPerPx });
     }
+    trackPointer(event);
   }
 
   interface Hit {
@@ -405,6 +458,7 @@
 
   function onpointermove(event: PointerEvent): void {
     const target = event.currentTarget as HTMLElement;
+    if (event.pointerType !== 'touch') trackPointer(event);
     if (drag) {
       const dx = event.clientX - drag.pointerX;
       if (!drag.result && Math.abs(dx) <= 3) return;
@@ -490,6 +544,7 @@
   data-where={waveform.where}
   data-start-ms={Math.round(view.startMs)}
   data-ms-per-px={view.msPerPx}
+  data-ticks={drawnTicks}
 >
   <div class="bar">
     <span class="status muted" aria-live="polite">{status}</span>
@@ -510,6 +565,7 @@
     {onpointermove}
     {onpointerup}
     {onpointercancel}
+    onpointerleave={() => onpointertime?.(null)}
   ></canvas>
 </section>
 

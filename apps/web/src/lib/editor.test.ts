@@ -178,6 +178,23 @@ describe('Editor', () => {
     expect(editor.error).toMatch(/Cannot split/);
   });
 
+  it('renames the document, not the file it came from', async () => {
+    const editor = new Editor(fakeWorker());
+    await editor.open(file('WEBVTT\n\n00:00.000 --> 00:01.000\none\n', 'a.vtt'));
+    editor.fileHandle = { name: 'a.vtt' } as FileSystemFileHandle;
+    expect(editor.rename('a')).toBeNull();
+    // The same name changes nothing.
+    expect(editor.fileHandle).not.toBeNull();
+    expect(editor.dirty).toBe(false);
+    expect(editor.rename('b/c')).toMatch(/cannot contain/);
+    expect(editor.fileName).toBe('a.vtt');
+    expect(editor.rename('Episode 2')).toBeNull();
+    expect(editor.fileName).toBe('Episode 2.vtt');
+    // Saved only through Save as… from now on, and not saved under the new name yet.
+    expect(editor.fileHandle).toBeNull();
+    expect(editor.dirty).toBe(true);
+  });
+
   it('opens pasted text', async () => {
     const editor = new Editor(fakeWorker());
     await editor.openText('WEBVTT\n\n00:01.000 --> 00:02.000\npasted\n');
