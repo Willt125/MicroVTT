@@ -767,39 +767,12 @@ hidden; }`; hidden words keep their place, as the layout does not change with ti
   once the owner is confident in quality. i18n-ready strings, an accessibility audit (keyboard and
   screen reader), dark mode, and a performance pass against the targets.
 
-### Phase 7a: Feedback from the first demo hand-out
+### Feedback from users
 
-Notes from the first demo hand-out (2026-10-12). Done 2026-10-17.
-
-- [x] **Rename the file in the editor.** Click the file name in the toolbar's status area to edit
-      it in place. The new name is what the tab title, autosave and Export use, and what the file
-      is saved as. After a rename, **Save to _name_** (overwriting the opened file) is not
-      offered: **Save as…**, pre-filled with the new name, becomes the primary action. The file
-      on disk is never renamed.
-- [x] **Always ask where to save.** Where the File System Access API exists (Chromium), export
-      always goes through **Save as…** (the system save dialog), or **Save to _name_** for a file
-      opened in place; **Download**, which saved straight to the Downloads folder, is gone, and is
-      offered only if the save dialog fails to open (not when it is cancelled). Firefox and Safari
-      have no API to force the dialog: export there is a download, and the Export dialog names the
-      browser setting that makes it ask. The single-file build opened from disk is a secure
-      context in Chromium, and the save dialog is available there.
-- [x] **Playhead to the mouse on the timeline.** A hotkey (**P**) that moves the
-      playhead to the time under the mouse pointer on the timeline, without clicking (clicking
-      already seeks). Listed in the shortcuts help.
-- [x] **Word timings on the timeline.** Draw each cue's word timings in its block, as short faint
-      ticks rather than dashed lines, since a dashed line already marks the snap point while
-      dragging. Later, perhaps: drag a tick to retime that word.
-- [x] **Split keeps the text cursor from the toolbar button.** The cursor counts only when the
-      cue text has focus, and clicking **Split** (or **Merge**) used to move focus to the button,
-      so the cue was cut near its middle instead. The buttons no longer take focus when clicked.
-      `MANUAL.md` describes how the split time and text cut are chosen with and without media.
-- [x] **Space plays after a mouse click on a control** (2026-10-17). A button, checkbox or
-      section header clicked with the mouse kept focus (in Chromium and Firefox; Safari never
-      gives it), so the next Space pressed it again (**Add cue** added another cue) instead of
-      playing. Controls clicked with the mouse now let go of focus; ones reached with the
-      keyboard keep it, so Space and Enter still press them. Controls in dialogs and **Tap** (tap
-      timing, where Space taps) keep focus. The cost, accepted by the owner since the users work
-      from the keyboard shortcuts: a control clicked with the mouse shows no focus outline.
+Bugs and suggestions from people using the editor arrive at any time, so they are not phases:
+they come in as GitHub issues (bug report and feature request templates) and are tracked in
+[FEEDBACK.md](FEEDBACK.md), with what was done about each. The first demo hand-out's items
+(2026-10-12 to 2026-10-17, once Phase 7a here) are recorded there.
 
 ### Phase 8: Converters
 
@@ -989,6 +962,15 @@ Notes from the first demo hand-out (2026-10-12). Done 2026-10-17.
 - **2026-10-12 (owner):** Renaming a file in the editor never renames the file on disk: after
   a rename, saving goes through Save as… with the new name. "Playhead to cursor" means the mouse
   pointer on the timeline, not the text cursor.
+- **2026-10-17 (owner):** Feedback is no longer planned as phases. It comes in as GitHub issues
+  (the repository is public, for CI) through bug and feature templates, and is logged in
+  `FEEDBACK.md`. The templates ask for a few hand-trimmed cues, not whole files or media.
+- **2026-10-17 (owner):** With the repository public, commits and pull requests follow
+  Conventional Commits 1.0.0, checked on pull request titles in CI, and pull requests are
+  squash-merged. Versions follow SemVer 2.0.0, starting at 0.1.0. The public API is the
+  user-facing contract (files written and read, shortcuts and documented behaviour, what is kept
+  in the browser, the single-file build), not the code. Rules in `CONTRIBUTING.md`; changes in
+  `CHANGELOG.md`.
 
 ## Open questions for the owner
 

@@ -7,6 +7,10 @@ updates:
       interval: weekly
     cooldown:
       default-days: 3
+    # Conventional Commits titles, which the PR title check requires: "ci(deps): bump …".
+    commit-message:
+      prefix: ci
+      include: scope
     groups:
       github-actions:
         patterns: ['*']

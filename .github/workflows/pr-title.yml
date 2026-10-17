@@ -1,0 +1,23 @@
+name: PR title
+
+# Pull requests are squash-merged, so the title becomes the commit on main: it must be a
+# Conventional Commits header (see CONTRIBUTING.md).
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  conventional:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts
+      - name: Check the title
+        # Passed through the environment, never interpolated into the script.
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: node scripts/pr-title.mjs

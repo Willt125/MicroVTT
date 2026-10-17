@@ -18,7 +18,12 @@ rules. Export can work around players that
 misread valid files
 (browsers, ffmpeg, video.js, Shaka Player) and lists what YouTube may not keep. Autosave keeps
 unsaved work in the browser. New to the editor? Start with the
-[manual](docs/MANUAL.md). See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
+[manual](docs/MANUAL.md). Found a bug or have an idea?
+[Open an issue](https://github.com/Willt125/MicroVTT/issues/new/choose);
+[docs/FEEDBACK.md](docs/FEEDBACK.md) tracks what has come in and what was done about it.
+[CONTRIBUTING.md](CONTRIBUTING.md) has the rules for commits, pull requests and versions, and
+[CHANGELOG.md](CHANGELOG.md) what each version changed. See
+[docs/PLAN.md](docs/PLAN.md) for the roadmap and
 [docs/SPEC-NOTES.md](docs/SPEC-NOTES.md) for the spec digest, and
 [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md) for every conformance check and its export fix.
 
