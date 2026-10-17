@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { status, vttInput } from './support.ts';
+import { savedText, status, vttInput } from './support.ts';
 
 const FILE = [
   'WEBVTT',
@@ -14,14 +14,7 @@ const FILE = [
   '',
 ].join('\n');
 
-async function exportText(page: import('@playwright/test').Page): Promise<string> {
-  const dialog = page.getByRole('dialog');
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    dialog.getByRole('button', { name: /^(Download|Save compat\.vtt)$/ }).click(),
-  ]);
-  return Buffer.concat(await (await download.createReadStream()).toArray()).toString('utf8');
-}
+const exportText = savedText;
 
 test('offers player-compatibility fixes and the YouTube check on export', async ({ page }) => {
   await page.goto('/');

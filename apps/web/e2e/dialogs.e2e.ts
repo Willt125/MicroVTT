@@ -3,7 +3,7 @@ import { openSample } from './support.ts';
 
 /**
  * A dialog's close event is queued as a task, so it can arrive after the dialog has been
- * reopened (Ctrl+S right after Download on a slow machine); it must not close it again.
+ * reopened (Ctrl+S right after saving on a slow machine); it must not close it again.
  */
 test('the export dialog reopens right after closing', async ({ page }) => {
   await openSample(page);

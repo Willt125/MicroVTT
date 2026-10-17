@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { status, vttInput } from './support.ts';
+import { savedText, status, vttInput } from './support.ts';
 
 const FILE = [
   'WEBVTT',
@@ -17,13 +17,7 @@ async function open(page: Page, name = 'cues.vtt', text = FILE): Promise<void> {
 
 async function exportText(page: Page): Promise<string> {
   await page.keyboard.press('ControlOrMeta+s');
-  const dialog = page.getByRole('dialog', { name: /^Export/ });
-  await expect(dialog.getByText('Checking…')).toBeHidden();
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    dialog.getByRole('button', { name: /^(Download|Save cues\.vtt)$/ }).click(),
-  ]);
-  return Buffer.concat(await (await download.createReadStream()).toArray()).toString('utf8');
+  return savedText(page);
 }
 
 test('adds and edits a style block, with problems, rules and a preview', async ({ page }) => {

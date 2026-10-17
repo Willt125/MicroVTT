@@ -108,9 +108,14 @@ export class Player {
     }
   }
 
-  /** Reads the playhead from the element, in whole milliseconds (document times are integers). */
+  /**
+   * Reads the playhead from the element, in whole milliseconds (document times are integers).
+   * Not while a seek is in progress: `currentMs` already holds where it goes, and WebKit can
+   * report the old position in events from earlier seeks, which would undo quick frame steps.
+   */
   readTime(): void {
-    if (this.element) this.currentMs = Math.round(this.element.currentTime * 1000);
+    if (this.element && !this.element.seeking)
+      this.currentMs = Math.round(this.element.currentTime * 1000);
   }
 
   seek(ms: number): void {

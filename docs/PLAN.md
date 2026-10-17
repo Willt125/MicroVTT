@@ -767,6 +767,33 @@ hidden; }`; hidden words keep their place, as the layout does not change with ti
   once the owner is confident in quality. i18n-ready strings, an accessibility audit (keyboard and
   screen reader), dark mode, and a performance pass against the targets.
 
+### Phase 7a: Feedback from the first demo hand-out
+
+Notes from the first demo hand-out (2026-10-12). Done 2026-10-17.
+
+- [x] **Rename the file in the editor.** Click the file name in the toolbar's status area to edit
+      it in place. The new name is what the tab title, autosave and Export use, and what the file
+      is saved as. After a rename, **Save to _name_** (overwriting the opened file) is not
+      offered: **Save as…**, pre-filled with the new name, becomes the primary action. The file
+      on disk is never renamed.
+- [x] **Always ask where to save.** Where the File System Access API exists (Chromium), export
+      always goes through **Save as…** (the system save dialog), or **Save to _name_** for a file
+      opened in place; **Download**, which saved straight to the Downloads folder, is gone, and is
+      offered only if the save dialog fails to open (not when it is cancelled). Firefox and Safari
+      have no API to force the dialog: export there is a download, and the Export dialog names the
+      browser setting that makes it ask. The single-file build opened from disk is a secure
+      context in Chromium, and the save dialog is available there.
+- [x] **Playhead to the mouse on the timeline.** A hotkey (**P**) that moves the
+      playhead to the time under the mouse pointer on the timeline, without clicking (clicking
+      already seeks). Listed in the shortcuts help.
+- [x] **Word timings on the timeline.** Draw each cue's word timings in its block, as short faint
+      ticks rather than dashed lines, since a dashed line already marks the snap point while
+      dragging. Later, perhaps: drag a tick to retime that word.
+- [x] **Split keeps the text cursor from the toolbar button.** The cursor counts only when the
+      cue text has focus, and clicking **Split** (or **Merge**) used to move focus to the button,
+      so the cue was cut near its middle instead. The buttons no longer take focus when clicked.
+      `MANUAL.md` describes how the split time and text cut are chosen with and without media.
+
 ### Phase 8: Converters
 
 - **Format seam** (with SRT; moved up to Phase 6b): split `packages/core` into what is common to every format (cue
@@ -952,6 +979,9 @@ hidden; }`; hidden words keep their place, as the layout does not change with ti
 - **2026-10-11 (Phase 6a):** The spec renderer is the default preview: it draws the same in
   every browser and follows the spec where browsers differ. Where WPT's references contradict the
   spec, the spec wins, and each case is listed with its reason.
+- **2026-10-12 (owner):** Renaming a file in the editor never renames the file on disk: after
+  a rename, saving goes through Save as… with the new name. "Playhead to cursor" means the mouse
+  pointer on the timeline, not the text cursor.
 
 ## Open questions for the owner
 

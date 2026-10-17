@@ -60,6 +60,28 @@ test.describe('with media', () => {
     await expect.poll(() => mediaTime(page)).toBeCloseTo(12_000, -2);
   });
 
+  test('moves the playhead to the mouse pointer with P', async ({ page }) => {
+    const box = (await page.locator('.timeline canvas').boundingBox()) as {
+      y: number;
+      height: number;
+    };
+    await page.mouse.move(await xOf(page, 9000), box.y + box.height * 0.4);
+    await page.keyboard.press('p');
+    await expect.poll(() => mediaTime(page)).toBeCloseTo(9000, -2);
+    // Away from the timeline, P does nothing.
+    await page.mouse.move(5, 5);
+    await page.keyboard.press('p');
+    await page.waitForTimeout(200);
+    expect(await mediaTime(page)).toBeCloseTo(9000, -2);
+  });
+
+  test('marks word timings in the cue blocks', async ({ page }) => {
+    // Several sample cues carry word timings.
+    await expect
+      .poll(async () => Number(await timeline(page).getAttribute('data-ticks')))
+      .toBeGreaterThan(5);
+  });
+
   test('zooms with the buttons', async ({ page }) => {
     const before = await inkedFraction(page);
     await timeline(page).getByRole('button', { name: 'Whole file' }).click();

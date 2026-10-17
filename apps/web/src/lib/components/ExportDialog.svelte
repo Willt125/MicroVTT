@@ -18,6 +18,7 @@
   import type { Editor } from '../editor.svelte.ts';
   import type { ExportedFile } from '../worker/protocol.ts';
   import { canSaveInPlace, download, pickSaveFile, writeFile } from '../files.ts';
+  import { withExtension } from '../filename.ts';
 
   interface Props {
     editor: Editor;
@@ -41,6 +42,8 @@
   let failure = $state<string | null>(null);
   let saving = $state(false);
   let saveError = $state<string | null>(null);
+  /** Set when the save dialog itself failed (not cancelled): a download is offered instead. */
+  let pickerFailed = $state(false);
   const pickers = canSaveInPlace();
   // Fixes that keep what viewers see start ticked; they only apply where the list shows them.
   let compatibility = $state<CompatibilityId[]>(
@@ -87,6 +90,8 @@
       lineEnding = editor.format.id === 'srt' ? editor.style.lineEnding : LF;
       byteOrderMark = editor.format.id === 'srt' && editor.style.byteOrderMark;
       keepEncoding = false;
+      saveError = null;
+      pickerFailed = false;
       dialog.showModal();
     }
     if (!open && dialog.open) dialog.close();
@@ -126,9 +131,7 @@
 
   const warnings = $derived(result?.diagnostics.filter((d) => d.severity !== 'error').length ?? 0);
 
-  const exportName = $derived(
-    editor.fileName.replace(/\.[^.]*$/, '') + (target.extensions[0] ?? ''),
-  );
+  const exportName = $derived(withExtension(editor.fileName, target));
 
   /** Saves through the browser's downloads. */
   function saveDownload(): void {
@@ -143,8 +146,14 @@
     if (!result) return;
     saving = true;
     saveError = null;
+    pickerFailed = false;
     try {
-      const file = handle ?? (await pickSaveFile(exportName, target));
+      const file =
+        handle ??
+        (await pickSaveFile(exportName, target).catch((error: unknown) => {
+          pickerFailed = true;
+          throw error;
+        }));
       if (!file) return; // Cancelled.
       if (!(await writeFile(file, result.bytes ?? result.text))) {
         saveError = `Permission to write ${file.name} was not given.`;
@@ -349,12 +358,21 @@
   {#if saveError}
     <p class="error-text" role="alert">{saveError}</p>
   {/if}
+  {#if !pickers}
+    <p class="muted small">
+      This browser saves to its downloads folder. To choose where each file goes, turn on its
+      setting to ask: in Firefox, Settings › General › “Always ask you where to save files”; in
+      Safari, Settings › General › File download location › “Ask for each download”.
+    </p>
+  {/if}
   <div class="actions">
     <button onclick={() => (open = false)}>Cancel</button>
     {#if pickers}
-      <button disabled={!result || saving} onclick={saveDownload} title="Save a copy to Downloads"
-        >Download</button
-      >
+      <!-- Always through the save dialog, so the user chooses where the file goes; Downloads
+           only if that dialog cannot open here. -->
+      {#if pickerFailed}
+        <button disabled={!result || saving} onclick={saveDownload}>Download instead</button>
+      {/if}
       {#if editor.fileHandle}
         <button disabled={!result || saving} onclick={() => saveTo(null)}>Save as…</button>
         <button
@@ -364,8 +382,11 @@
           title="Overwrite the file you opened">Save to {editor.fileHandle.name}</button
         >
       {:else}
-        <button class="primary" disabled={!result || saving} onclick={() => saveTo(null)}
-          >Save as…</button
+        <button
+          class="primary"
+          disabled={!result || saving}
+          onclick={() => saveTo(null)}
+          title="Choose where to save {exportName}">Save as…</button
         >
       {/if}
     {:else}

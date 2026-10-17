@@ -39,6 +39,8 @@
   let exportOpen = $state(false);
   let helpOpen = $state(false);
   let findOpen = $state(false);
+  /** The time under the mouse pointer on the timeline, or null when it is not over it. */
+  let pointerMs = $state<number | null>(null);
   let cleanupOpen = $state(false);
   let glossaryOpen = $state(false);
   let timingOpen = $state(false);
@@ -220,6 +222,9 @@
         return;
       case 'set-end':
         if (media) editor.setTime('endMs', player.currentMs);
+        return;
+      case 'to-pointer':
+        if (media && pointerMs !== null) player.seek(pointerMs);
         return;
       case 'loop':
         if (media) player.loop = !player.loop;
@@ -460,7 +465,7 @@
       </div>
     </main>
     {#if player.hasMedia}
-      <Timeline {editor} {player} {waveform} />
+      <Timeline {editor} {player} {waveform} onpointertime={(ms) => (pointerMs = ms)} />
     {/if}
   {:else}
     <main class="start">

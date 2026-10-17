@@ -1,6 +1,6 @@
 /** Phase 4d in the editor: files from older drafts and other tools open as they were meant. */
 import { expect, test, type Page } from '@playwright/test';
-import { cueText, rows, status, vttInput } from './support.ts';
+import { cueText, rows, savedFile, status, vttInput } from './support.ts';
 
 async function open(page: Page, name: string, buffer: Buffer): Promise<void> {
   await page.goto('/');
@@ -8,13 +8,9 @@ async function open(page: Page, name: string, buffer: Buffer): Promise<void> {
 }
 
 async function exportText(page: Page, name: string): Promise<string> {
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.getByText('Checking…')).toBeHidden();
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    dialog.getByRole('button', { name: new RegExp(`^(Download|Save ${name})$`) }).click(),
-  ]);
-  return Buffer.concat(await (await download.createReadStream()).toArray()).toString('utf8');
+  const saved = await savedFile(page);
+  expect(saved.name).toBe(name);
+  return saved.bytes.toString('utf8');
 }
 
 test('an SRT-style file with <br> and <font> opens with every cue', async ({ page }) => {

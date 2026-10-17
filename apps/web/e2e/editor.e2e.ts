@@ -6,6 +6,7 @@ import {
   errorCount,
   openSample,
   rows,
+  savedFile,
   selectedCells,
   status,
 } from './support.ts';
@@ -61,6 +62,16 @@ test('splits at the caret and merges back, keeping focus in the text', async ({ 
   await expect(status(page)).toContainText(`${SAMPLE_CUES} cues`);
 });
 
+test('the Split button splits at the text cursor', async ({ page }) => {
+  await cueText(page).fill('hello brave world');
+  await cueText(page).evaluate((t: HTMLTextAreaElement) => t.setSelectionRange(6, 6));
+  await page.getByRole('button', { name: 'Split', exact: true }).click();
+  await expect(cueText(page)).toHaveValue('brave world');
+  await expect(cueText(page)).toBeFocused();
+  await page.keyboard.press('Alt+ArrowUp');
+  await expect(cueText(page)).toHaveValue('hello');
+});
+
 test('nudges times with the arrow keys', async ({ page }) => {
   const start = page.getByLabel('Start', { exact: true });
   await expect(start).toHaveValue('00:00:00.240');
@@ -71,19 +82,13 @@ test('nudges times with the arrow keys', async ({ page }) => {
   expect((await selectedCells(page)).start).toBe('00:00:01.340');
 });
 
-test('exports a conforming file', async ({ page, browserName }) => {
+test('exports a conforming file', async ({ page }) => {
   await page.keyboard.press('ControlOrMeta+s');
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('changes so the file conforms');
-  // Chromium can save through a picker; every browser can download.
-  const save =
-    browserName === 'chromium'
-      ? dialog.getByRole('button', { name: 'Download' })
-      : dialog.getByRole('button', { name: 'Save autocaption-sample.vtt' });
-  const [download] = await Promise.all([page.waitForEvent('download'), save.click()]);
-  expect(download.suggestedFilename()).toBe('autocaption-sample.vtt');
-  const text = await (await download.createReadStream()).toArray();
-  const vtt = Buffer.concat(text).toString('utf8');
-  expect(vtt).toMatch(/^WEBVTT\n\nNOTE\nKind: captions\nLanguage: en\n\n/);
+  // Through the save dialog where the browser has one (Chromium), else as a download.
+  const saved = await savedFile(page);
+  expect(saved.name).toBe('autocaption-sample.vtt');
+  expect(saved.bytes.toString('utf8')).toMatch(/^WEBVTT\n\nNOTE\nKind: captions\nLanguage: en\n\n/);
   await expect(status(page)).not.toContainText('edited');
 });

@@ -77,3 +77,64 @@ export async function selectedCells(
 /** The media element's current time in milliseconds. */
 export const mediaTime = (page: Page): Promise<number> =>
   page.locator('video').evaluate((v: HTMLVideoElement) => Math.round(v.currentTime * 1000));
+
+/** The saved file of the `savedFile` stand-in, kept on the page. */
+type SavedWindow = Window & { __saved?: { name: string; bytes: number[] } };
+
+/**
+ * Replaces the browser's save dialog (where there is one: Chromium) with a stand-in that saves
+ * under the suggested name and keeps what is written, as the real dialog cannot be driven.
+ */
+export async function stubSaveDialog(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    if (!('showSaveFilePicker' in window)) return false;
+    const w = window as SavedWindow;
+    delete w.__saved;
+    Object.assign(window, {
+      showSaveFilePicker: async ({ suggestedName }: { suggestedName: string }) => ({
+        kind: 'file',
+        name: suggestedName,
+        createWritable: async () => {
+          let bytes: number[] = [];
+          return {
+            write: async (data: string | Uint8Array) => {
+              bytes = [
+                ...bytes,
+                ...(typeof data === 'string' ? new TextEncoder().encode(data) : data),
+              ];
+            },
+            close: async () => {
+              w.__saved = { name: suggestedName, bytes };
+            },
+          };
+        },
+      }),
+    });
+    return true;
+  });
+}
+
+/**
+ * Saves from the open Export dialog with its main button and returns the file written: through
+ * the save dialog (a stand-in) where the browser has one, else as a download.
+ */
+export async function savedFile(page: Page): Promise<{ name: string; bytes: Buffer }> {
+  const dialog = page.getByRole('dialog', { name: /^Export/ });
+  await expect(dialog.getByText('Checking…')).toBeHidden();
+  const save = dialog.locator('.actions .primary');
+  if (await stubSaveDialog(page)) {
+    await save.click();
+    const saved = await page.waitForFunction(() => (window as SavedWindow).__saved);
+    const { name, bytes } = (await saved.jsonValue()) as { name: string; bytes: number[] };
+    return { name, bytes: Buffer.from(bytes) };
+  }
+  const [download] = await Promise.all([page.waitForEvent('download'), save.click()]);
+  return {
+    name: download.suggestedFilename(),
+    bytes: Buffer.concat(await (await download.createReadStream()).toArray()),
+  };
+}
+
+/** The text of `savedFile`. */
+export const savedText = async (page: Page): Promise<string> =>
+  (await savedFile(page)).bytes.toString('utf8');

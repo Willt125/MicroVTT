@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { cueList, rows, status, vttInput } from './support.ts';
+import { cueList, rows, savedText, status, vttInput } from './support.ts';
 
 const FILE = [
   'WEBVTT',
@@ -24,13 +24,7 @@ async function open(page: Page): Promise<void> {
 
 async function exportText(page: Page): Promise<string> {
   await page.keyboard.press('ControlOrMeta+s');
-  const dialog = page.getByRole('dialog', { name: /^Export/ });
-  await expect(dialog.getByText('Checking…')).toBeHidden();
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    dialog.getByRole('button', { name: /^(Download|Save cues\.vtt)$/ }).click(),
-  ]);
-  return Buffer.concat(await (await download.createReadStream()).toArray()).toString('utf8');
+  return savedText(page);
 }
 
 const settings = (page: Page) => page.locator('details.settings');

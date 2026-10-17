@@ -14,6 +14,7 @@ export type Action =
   | 'frame-forward'
   | 'set-start'
   | 'set-end'
+  | 'to-pointer'
   | 'loop'
   | 'add'
   | 'split'
@@ -87,6 +88,13 @@ export const SHORTCUTS: readonly Shortcut[] = [
     code: 'BracketRight',
     label: ']',
     description: 'Set the cue’s end to the playhead',
+  },
+  {
+    action: 'to-pointer',
+    keys: ['p'],
+    code: 'KeyP',
+    label: 'P',
+    description: 'Move the playhead to the mouse pointer on the timeline',
   },
   { action: 'loop', keys: ['r'], code: 'KeyR', label: 'R', description: 'Loop the cue on or off' },
   {
