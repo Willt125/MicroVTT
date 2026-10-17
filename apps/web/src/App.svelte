@@ -308,6 +308,28 @@
       else editor.undo();
     }
   }
+
+  /**
+   * A button, checkbox or disclosure clicked with the mouse lets go of focus afterwards, so the
+   * next Space plays or pauses instead of pressing it again. Keyboard presses (detail 0) keep
+   * focus where it is, as do controls in dialogs and ones marked `data-keep-focus` (Tap).
+   * Runs before the control's own handler, so a dialog it opens returns focus to the page.
+   */
+  function onclickcapture(event: MouseEvent): void {
+    if (event.detail === 0 || !(event.target instanceof Element)) return;
+    const CONTROLS = 'button, summary, input[type="checkbox"], input[type="radio"]';
+    // A click on a checkbox's label focuses the checkbox only after this event.
+    const labelled = event.target.closest('label')?.control;
+    const control = labelled?.matches(CONTROLS)
+      ? labelled
+      : event.target.closest<HTMLElement>(CONTROLS);
+    if (!control || control.closest('dialog, [data-keep-focus]')) return;
+    if (control === document.activeElement) control.blur();
+    else
+      setTimeout(() => {
+        if (control === document.activeElement) control.blur();
+      });
+  }
 </script>
 
 <svelte:window
@@ -315,6 +337,7 @@
   {onpageshow}
   {onkeydown}
   {onpaste}
+  {onclickcapture}
   ondragover={(e) => {
     e.preventDefault();
     dragging = true;

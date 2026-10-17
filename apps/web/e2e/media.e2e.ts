@@ -87,6 +87,43 @@ test('plays from the keyboard, and the list follows playback', async ({ page }) 
   await expect(page.locator('video')).toHaveJSProperty('paused', true);
 });
 
+test('Space plays after a button, checkbox or section was clicked, not pressing it again', async ({
+  page,
+}) => {
+  const video = page.locator('video');
+  await page.getByRole('button', { name: 'Add cue' }).click();
+  await expect(status(page)).toContainText(`${SAMPLE_CUES + 1} cues`);
+  await page.keyboard.press('Space');
+  await expect(video).toHaveJSProperty('paused', false);
+  await page.keyboard.press('Space');
+  await expect(video).toHaveJSProperty('paused', true);
+  await expect(status(page)).toContainText(`${SAMPLE_CUES + 1} cues`);
+
+  const loop = page.getByLabel('Loop cue');
+  await loop.click();
+  await expect(loop).toBeChecked();
+  await page.keyboard.press('Space');
+  await expect(video).toHaveJSProperty('paused', false);
+  await page.keyboard.press('Space');
+  await expect(video).toHaveJSProperty('paused', true);
+  await expect(loop).toBeChecked();
+
+  const settings = page.locator('details.settings');
+  await settings.locator('summary').click();
+  await expect(settings).toHaveJSProperty('open', true);
+  await page.keyboard.press('Space');
+  await expect(video).toHaveJSProperty('paused', false);
+  await page.keyboard.press('Space');
+  await expect(settings).toHaveJSProperty('open', true);
+
+  // From the keyboard, a button keeps focus and Space presses it, as usual.
+  const add = page.getByRole('button', { name: 'Add cue' });
+  await add.focus();
+  await page.keyboard.press('Space');
+  await expect(status(page)).toContainText(`${SAMPLE_CUES + 2} cues`);
+  await expect(add).toBeFocused();
+});
+
 test('loops the selected cue', async ({ page }) => {
   await rows(page).nth(2).click(); // 3.08–5.53 s
   await cueList(page).focus();

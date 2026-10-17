@@ -276,7 +276,9 @@ test('taps word timings while the media plays', async ({ page }) => {
   await expect(tap).toBeFocused();
   await expect(panel.getByRole('status')).toContainText('Next: two (2 of 3)');
   await page.waitForTimeout(400);
-  await page.keyboard.press('Space');
+  // Clicked with the mouse, Tap keeps focus, so Space goes on tapping.
+  await tap.click();
+  await expect(tap).toBeFocused();
   await expect(panel.getByRole('status')).toContainText('Next: three (3 of 3)');
   await page.waitForTimeout(400);
   await page.keyboard.press('Space');
