@@ -965,6 +965,12 @@ they come in as GitHub issues (bug report and feature request templates) and are
 - **2026-10-17 (owner):** Feedback is no longer planned as phases. It comes in as GitHub issues
   (the repository is public, for CI) through bug and feature templates, and is logged in
   `FEEDBACK.md`. The templates ask for a few hand-trimmed cues, not whole files or media.
+- **2026-10-17 (owner):** With the repository public, commits and pull requests follow
+  Conventional Commits 1.0.0, checked on pull request titles in CI, and pull requests are
+  squash-merged. Versions follow SemVer 2.0.0, starting at 0.1.0. The public API is the
+  user-facing contract (files written and read, shortcuts and documented behaviour, what is kept
+  in the browser, the single-file build), not the code. Rules in `CONTRIBUTING.md`; changes in
+  `CHANGELOG.md`.
 
 ## Open questions for the owner
 

@@ -21,7 +21,8 @@ Real files used for testing stay in `tests/private-fixtures/`, which is never co
 2. **Fix.** A pull request that says `Fixes #N` closes the issue when it merges. Design choices the
    owner makes along the way also go in the decisions log in [PLAN.md](PLAN.md).
 3. **Record.** The item moves to **Done**, with the date, the pull request, and a few lines on what
-   changed. Anything that changes how the editor is used also goes in [MANUAL.md](MANUAL.md).
+   changed. Like any change users can notice, it also gets a [CHANGELOG.md](../CHANGELOG.md)
+   entry, and anything that changes how the editor is used goes in [MANUAL.md](MANUAL.md).
 
 Ideas that come up but nobody has committed to go under **Ideas**, so they are not lost.
 
