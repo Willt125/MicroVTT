@@ -1,0 +1,53 @@
+name: Release
+
+# Pushing a version tag (vX.Y.Z, on the squash commit of a "chore(release): X.Y.Z" pull request)
+# publishes the GitHub release: the changelog's section as notes, and the single-file build
+# attached. See CONTRIBUTING.md, "Releasing".
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      # Passed through the environment, never interpolated into scripts.
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The tag must be there for the build to show the plain version.
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Check the tag and write the release notes
+        run: node scripts/release.mjs "$TAG" > release-notes.md
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:single
+      - name: Check the build shows the release version
+        run: |
+          version="${TAG#v}"
+          file=apps/web/dist-single/microvtt.html
+          if ! grep -qF "MicroVTT ${version}" "$file" || grep -qF "${version}+" "$file"; then
+            echo "The build does not show plain $version, so it is not a clean build of $TAG." >&2
+            exit 1
+          fi
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${TAG#v}"
+          prerelease=()
+          if [[ "$version" == *-* ]]; then prerelease=(--prerelease); fi
+          gh release create "$TAG" apps/web/dist-single/microvtt.html \
+            --verify-tag --title "MicroVTT $version" --notes-file release-notes.md "${prerelease[@]}"
