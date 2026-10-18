@@ -112,10 +112,14 @@ Releases are cut by the maintainer, from `main`:
    - set `"version"` to `X.Y.Z` in every `package.json`;
    - rename **Unreleased** in `CHANGELOG.md` to `[X.Y.Z] - YYYY-MM-DD`, start a new empty
      **Unreleased** above it, and update the comparison links at the bottom.
-3. After it merges, tag that commit with an annotated tag, `git tag -a vX.Y.Z -m "MicroVTT X.Y.Z"`,
-   and push the tag.
-4. Publish a GitHub release for the tag, with the changelog section as its notes and the
-   single-file build (`pnpm build:single`, `apps/web/dist-single/microvtt.html`) attached.
+3. After it merges, tag its squash commit with an annotated tag and push the tag:
+   `git tag -a vX.Y.Z -m "MicroVTT X.Y.Z" <commit>`, then `git push origin vX.Y.Z`.
+4. The **Release** workflow then publishes the GitHub release. It checks that the tag is a SemVer
+   version matching every `package.json`, takes the changelog's section for the version as the
+   notes, builds `microvtt.html` from the tag (which then shows the plain version), and attaches
+   it. A version with a pre-release part, such as `1.0.0-rc.1`, is marked as a pre-release. If a
+   check fails, nothing is published: fix the cause on `main` in a new pull request, then delete
+   the tag and tag again.
 
 Builds handed out between releases come from `main` and are not versions. Hand out a tagged
 release when you can.
