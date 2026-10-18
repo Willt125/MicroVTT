@@ -7,8 +7,9 @@ is set out in [CONTRIBUTING.md](CONTRIBUTING.md#versioning).
 
 ## [Unreleased]
 
-The first tagged release will be 0.1.0. Everything below is what it contains. While the version
-is 0.y.z, anything may still change.
+## [0.1.0] - 2026-10-18
+
+The first release. While the version is 0.y.z, anything may still change.
 
 ### Added
 
@@ -35,4 +36,5 @@ is 0.y.z, anything may still change.
 - **Version:** shown at the bottom of the keyboard shortcuts dialog (`?`). Builds between releases
   add the commit they were built from, as in `0.1.0+abc1234`.
 
-[Unreleased]: https://github.com/Willt125/MicroVTT/commits/main
+[Unreleased]: https://github.com/Willt125/MicroVTT/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Willt125/MicroVTT/releases/tag/v0.1.0

@@ -1,6 +1,6 @@
 {
   "name": "@microvtt/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Spec-conformant WebVTT parsing, validation, serialization and conversion. Zero runtime dependencies, DOM-free.",
   "license": "MIT",
