@@ -575,7 +575,9 @@ Converting an SRT to WebVTT (in Export) unlocks the WebVTT tools.
 
 ## 19. Keyboard shortcuts
 
-Press **?** in the app for this list. Single-key shortcuts work when you are not typing in a
+Press **?** in the app for this list. The bottom of that dialog shows the version, which is worth
+including in bug reports: a build handed out between releases adds the commit it came from, as in
+`0.1.0+abc1234`. Single-key shortcuts work when you are not typing in a
 field. Add **Alt** (Option on a Mac) to use them while typing.
 
 Buttons, checkboxes and section headers you click with the mouse let go of focus afterwards, so
