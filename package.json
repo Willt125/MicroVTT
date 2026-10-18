@@ -1,5 +1,6 @@
 {
   "name": "microvtt",
+  "version": "0.1.0",
   "private": true,
   "description": "An offline, fully-featured, in-browser WebVTT editor.",
   "license": "MIT",
