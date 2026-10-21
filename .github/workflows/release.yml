@@ -1,32 +1,84 @@
 name: Release
 
-# Pushing a version tag (vX.Y.Z, on the squash commit of a "chore(release): X.Y.Z" pull request)
-# publishes the GitHub release: the changelog's section as notes, and the single-file build
-# attached. See CONTRIBUTING.md, "Releasing".
+# Publishes a GitHub release: the changelog's section as notes, and the single-file build
+# attached. See CONTRIBUTING.md, "Releasing". Two ways to start it:
+# - Run workflow (Actions → Release) with the version, right after the "chore(release): X.Y.Z"
+#   pull request merges: it tags main's latest commit, which must be that release commit.
+# - Push a tag vX.Y.Z yourself, on the release commit.
+# A tag pushed by this workflow does not start it again (GITHUB_TOKEN pushes trigger nothing), so
+# the run that creates the tag also publishes the release.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, as in package.json and CHANGELOG.md (for example 0.2.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     env:
       # Passed through the environment, never interpolated into scripts.
-      TAG: ${{ github.ref_name }}
+      EVENT: ${{ github.event_name }}
+      PUSHED_TAG: ${{ github.ref_name }}
+      INPUT_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
           # The tag must be there for the build to show the plain version.
           fetch-depth: 0
           fetch-tags: true
+      - name: Work out the tag
+        run: |
+          if [[ "$EVENT" == workflow_dispatch ]]; then
+            if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+              echo "Run the release from main, not $GITHUB_REF." >&2
+              exit 1
+            fi
+            tag="v${INPUT_VERSION#v}"
+          else
+            tag="$PUSHED_TAG"
+          fi
+          # Checked in full by scripts/release.mjs next; this keeps $GITHUB_ENV to one plain line.
+          if [[ ! "$tag" =~ ^v[0-9A-Za-z.-]+$ ]]; then
+            echo "\"$tag\" is not a release tag: use vX.Y.Z." >&2
+            exit 1
+          fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
       - name: Check the tag and write the release notes
         run: node scripts/release.mjs "$TAG" > release-notes.md
+      - name: Create the tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          version="${TAG#v}"
+          subject="$(git log -1 --format=%s HEAD)"
+          # The squash commit's subject: the pull request title, then " (#N)".
+          if [[ "$subject" != "chore(release): $version" && "$subject" != "chore(release): $version ("* ]]; then
+            echo "main's latest commit is \"$subject\", not the release commit for $version." >&2
+            echo "Run this right after the release pull request merges, or tag the release commit yourself." >&2
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/$TAG" > /dev/null; then
+            # A re-run after a failure further on: the tag is already there.
+            if [[ "$(git rev-parse "$TAG^{commit}")" != "$(git rev-parse HEAD)" ]]; then
+              echo "$TAG already exists, on another commit." >&2
+              exit 1
+            fi
+            echo "$TAG already exists on this commit; using it."
+          else
+            git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              tag -a "$TAG" -m "MicroVTT $version"
+          fi
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -42,11 +94,19 @@ jobs:
             echo "The build does not show plain $version, so it is not a clean build of $TAG." >&2
             exit 1
           fi
+      - name: Push the tag
+        if: github.event_name == 'workflow_dispatch'
+        # Only once everything has been checked and built.
+        run: git push origin "refs/tags/$TAG"
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="${TAG#v}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "The release for $TAG is already published."
+            exit 0
+          fi
           prerelease=()
           if [[ "$version" == *-* ]]; then prerelease=(--prerelease); fi
           gh release create "$TAG" apps/web/dist-single/microvtt.html \
