@@ -112,14 +112,19 @@ Releases are cut by the maintainer, from `main`:
    - set `"version"` to `X.Y.Z` in every `package.json`;
    - rename **Unreleased** in `CHANGELOG.md` to `[X.Y.Z] - YYYY-MM-DD`, start a new empty
      **Unreleased** above it, and update the comparison links at the bottom.
-3. After it merges, tag its squash commit with an annotated tag and push the tag:
-   `git tag -a vX.Y.Z -m "MicroVTT X.Y.Z" <commit>`, then `git push origin vX.Y.Z`.
-4. The **Release** workflow then publishes the GitHub release. It checks that the tag is a SemVer
-   version matching every `package.json`, takes the changelog's section for the version as the
-   notes, builds `microvtt.html` from the tag (which then shows the plain version), and attaches
-   it. A version with a pre-release part, such as `1.0.0-rc.1`, is marked as a pre-release. If a
-   check fails, nothing is published: fix the cause on `main` in a new pull request, then delete
-   the tag and tag again.
+3. Right after it merges, start the **Release** workflow: on GitHub, **Actions → Release → Run
+   workflow**, on `main`, with the version (`X.Y.Z`). It only runs while `main`'s latest commit is
+   that `chore(release): X.Y.Z` squash commit, so nothing merged later slips into the release.
+   If something has been merged since, tag the release commit yourself instead:
+   `git tag -a vX.Y.Z -m "MicroVTT X.Y.Z" <commit>`, then `git push origin vX.Y.Z`, which starts
+   the same workflow.
+4. The workflow checks that the version is SemVer and matches every `package.json`, takes the
+   changelog's section for it as the notes, and builds `microvtt.html` (which then shows the plain
+   version). Only then does it push the tag `vX.Y.Z` (when run from the button, as
+   `github-actions[bot]`) and publish the GitHub release with the file attached. A version with a
+   pre-release part, such as `1.0.0-rc.1`, is marked as a pre-release. If a check fails before the
+   tag is pushed, nothing is published: fix the cause on `main` in a new pull request and start
+   again. If it fails after, re-run the failed run: it reuses the tag it pushed.
 
 Builds handed out between releases come from `main` and are not versions. Hand out a tagged
 release when you can.
