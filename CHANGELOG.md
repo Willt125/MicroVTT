@@ -7,6 +7,11 @@ is set out in [CONTRIBUTING.md](CONTRIBUTING.md#versioning).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Export:** the option to remove STYLE and REGION blocks now says it is for ffmpeg 6.1 and
+  older. ffmpeg 7.0 and later read files with those blocks.
+
 ## [0.1.0] - 2026-10-18
 
 The first release. While the version is 0.y.z, anything may still change.
