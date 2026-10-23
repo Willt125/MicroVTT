@@ -141,7 +141,7 @@ export const COMPATIBILITY_FIXES: readonly CompatibilityFix[] = [
   {
     id: 'styles-and-regions',
     label: 'Remove STYLE and REGION blocks',
-    why: 'ffmpeg (used by mpv and many media servers and converters) reads no cues after a STYLE or REGION block.',
+    why: 'ffmpeg 6.1 and older (used by mpv and many media servers and converters, and still common in Linux distributions) reads no cues after a STYLE or REGION block.',
     lossy: true,
     recommended: false,
     count: (doc) => doc.head.filter((h) => h.type === 'style' || h.type === 'region').length,

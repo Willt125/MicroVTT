@@ -1,10 +1,12 @@
 /**
  * ffmpeg's WebVTT demuxer (libavformat), which mpv and many media servers and converters read
  * subtitles with: each input goes through `ffmpeg -c copy -f webvtt` and the cues it keeps are
- * compared with ours. Runs where `ffmpeg` is installed (CI installs it).
+ * compared with ours. Runs where `ffmpeg` is installed, or the binary named by $FFMPEG (CI runs
+ * it with the distribution's 6.1 and with 7.0).
  *
- * Known differences are listed below with what triggers them and a minimal example; each
- * example is checked to still show its difference, so an ffmpeg that fixes one fails the test.
+ * Known differences are listed below with what triggers them, the versions that show them and
+ * a minimal example. Each example is checked to show its difference on those versions and not
+ * on others, so an ffmpeg that fixes one (or brings one back) fails the test.
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -20,8 +22,17 @@ import {
 } from '../../src/index.ts';
 import { Gen, generateDocument, rng } from '../fuzz/generate.ts';
 
-const version = spawnSync('ffmpeg', ['-version']);
+const FFMPEG = process.env['FFMPEG'] ?? 'ffmpeg';
+const version = spawnSync(FFMPEG, ['-version']);
 const hasFfmpeg = version.status === 0;
+/**
+ * The binary's version as major * 100 + minor ("ffmpeg version 6.1.1-3ubuntu5" is 601). Builds
+ * from the development branch ("N-…" or a commit) count as newer than any release.
+ */
+const ffmpegVersion = ((): number => {
+  const m = /ffmpeg version n?(\d+)\.(\d+)/.exec(version.stdout?.toString() ?? '');
+  return m ? Number(m[1]) * 100 + Number(m[2]) : Infinity;
+})();
 
 interface Deviation {
   /** Whether the input can show it (a RegExp, or a check of the parsed file). */
@@ -31,6 +42,8 @@ interface Deviation {
   example: string;
   /** The export compatibility fix that avoids it, if any. */
   fixedBy?: CompatibilityId;
+  /** The versions that show it, as major * 100 + minor: from (inclusive) and before. */
+  versions?: { from?: number; before?: number };
 }
 
 const DEVIATIONS: Deviation[] = [
@@ -41,6 +54,27 @@ const DEVIATIONS: Deviation[] = [
     reason: 'reads no cues after a STYLE or REGION block (the whole rest of the file is lost)',
     example: 'WEBVTT\n\nSTYLE\n::cue { color: lime }\n\n00:00.000 --> 00:01.000\nhello\n',
     fixedBy: 'styles-and-regions',
+    // 7.0 skips STYLE and REGION blocks as it does NOTE blocks.
+    versions: { before: 700 },
+  },
+  {
+    // Since 7.0 any block starting with "STYLE" or "REGION" is skipped, even a cue's id.
+    trigger: /(?:^|\n)(?:STYLE|REGION)[^\n]*\n[^\n]*-->/,
+    difference: /^\d+ cues, expected \d+$/,
+    reason: 'drops a cue whose id starts with "STYLE" or "REGION" (it skips the cue as a block)',
+    example: 'WEBVTT\n\nSTYLE1\n00:00.000 --> 00:01.000\nhello\n\n00:01.000 --> 00:02.000\nworld\n',
+    fixedBy: 'keyword-ids',
+    versions: { from: 700 },
+  },
+  {
+    // Since 7.0 REGION blocks are skipped, so their definitions are gone (the cue setting stays).
+    // Before 7.0 the block stopped reading altogether (above).
+    trigger: /(?:^|\n)REGION[ \t]*\n/,
+    difference: /^cue \d+ region: null, expected "/,
+    reason: 'drops REGION blocks, so cues lose their region',
+    example: 'WEBVTT\n\nREGION\nid:r\n\n00:00.000 --> 00:01.000 region:r\nhello\n',
+    fixedBy: 'styles-and-regions',
+    versions: { from: 700 },
   },
   {
     // The block starts with "NOTE", so it is skipped as a comment; later cues are kept.
@@ -67,9 +101,14 @@ const DEVIATIONS: Deviation[] = [
   },
 ];
 
+/** Whether the ffmpeg under test shows a deviation. */
+const shown = (d: Deviation): boolean =>
+  ffmpegVersion >= (d.versions?.from ?? 0) && ffmpegVersion < (d.versions?.before ?? Infinity);
+const ACTIVE = DEVIATIONS.filter(shown);
+
 function roundTrip(text: string): string {
   const run = spawnSync(
-    'ffmpeg',
+    FFMPEG,
     ['-loglevel', 'error', '-f', 'webvtt', '-i', '-', '-c', 'copy', '-f', 'webvtt', '-'],
     { input: text },
   );
@@ -109,7 +148,7 @@ function differences(input: string): string[] {
 }
 
 const explained = (input: string, diffs: string[]): boolean =>
-  diffs.every((d) => DEVIATIONS.some((x) => x.trigger.test(input) && x.difference.test(d)));
+  diffs.every((d) => ACTIVE.some((x) => x.trigger.test(input) && x.difference.test(d)));
 
 const load = (text: string): VttDocument => {
   const r = importDocument(text);
@@ -136,7 +175,11 @@ it.runIf(process.env['CI'])('ffmpeg is installed in CI, so the comparison runs',
   expect(hasFfmpeg).toBe(true);
 });
 
-describe.skipIf(!hasFfmpeg)('ffmpeg (libavformat) reads our files as we do', () => {
+const versionName = Number.isFinite(ffmpegVersion)
+  ? `${Math.floor(ffmpegVersion / 100)}.${ffmpegVersion % 100}`
+  : 'development build';
+
+describe.skipIf(!hasFfmpeg)(`ffmpeg ${versionName} (libavformat) reads our files as we do`, () => {
   it('on fixtures, feature examples and exported files', () => {
     const failures = inputs().flatMap(({ name, text }) => {
       const diffs = differences(text);
@@ -145,14 +188,22 @@ describe.skipIf(!hasFfmpeg)('ffmpeg (libavformat) reads our files as we do', () 
     expect(failures).toEqual([]);
   }, 60_000);
 
-  it.each(DEVIATIONS.map((d) => [d.reason, d] as const))('documented: %s', (_reason, d) => {
+  it.each(ACTIVE.map((d) => [d.reason, d] as const))('documented: %s', (_reason, d) => {
     expect(d.trigger.test(d.example)).toBe(true);
     const diffs = differences(d.example);
     expect(diffs.length).toBeGreaterThan(0);
     expect(diffs.every((x) => d.difference.test(x))).toBe(true);
   });
 
-  it.each(DEVIATIONS.flatMap((d) => (d.fixedBy ? [[d.fixedBy, d] as const] : [])))(
+  it.each(DEVIATIONS.filter((d) => !shown(d)).map((d) => [d.reason, d] as const))(
+    'not shown by this version: %s',
+    (_reason, d) => {
+      // Its example may still differ in another documented way (a REGION block before 7.0).
+      expect(differences(d.example).filter((x) => d.difference.test(x))).toEqual([]);
+    },
+  );
+
+  it.each(ACTIVE.flatMap((d) => (d.fixedBy ? [[d.fixedBy, d] as const] : [])))(
     'avoided by export fix %s',
     (id, d) => {
       expect(differences(exportDocument(load(d.example), { compatibility: [id] }).text)).toEqual(
@@ -166,7 +217,7 @@ describe.skipIf(!hasFfmpeg)('ffmpeg (libavformat) reads our files as we do', () 
     const failures = inputs().flatMap(({ name, text }) => {
       const fixed = exportDocument(load(text), { compatibility: all }).text;
       const diffs = differences(fixed);
-      const unfixed = DEVIATIONS.filter((d) => !d.fixedBy);
+      const unfixed = ACTIVE.filter((d) => !d.fixedBy);
       return diffs.every((x) => unfixed.some((d) => d.trigger.test(fixed) && d.difference.test(x)))
         ? []
         : [`${name}: ${diffs.join('; ')}`];

@@ -56,12 +56,14 @@ export type { CssDeclaration, CssRule, CssSheet } from './css.ts';
 export {
   formatDecimal,
   hasHeaderLines,
+  hasRegions,
   serialize,
   serializeChunks,
   serializeCue,
   serializeCueSettings,
   serializeCueText,
   serializeRegion,
+  serializeRegionHeader,
 } from './serialize.ts';
 export type { SerializeOptions } from './serialize.ts';
 export { repair, repairCueText } from './repair.ts';

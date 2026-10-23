@@ -31,6 +31,18 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      # The ffmpeg comparison again with ffmpeg 7.0, which reads WebVTT differently from the
+      # distribution's 6.1 (see packages/core/test/players/ffmpeg.test.ts). The binary comes in
+      # the imageio-ffmpeg wheel, pinned by its hash.
+      - name: ffmpeg 7 comparison
+        if: matrix.node == '24'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ffmpeg7"
+          echo 'imageio-ffmpeg==0.6.0 --hash=sha256:c7e46fcec401dd990405049d2e2f475e2b397779df2519b544b8aab515195282' > "$RUNNER_TEMP/ffmpeg7.txt"
+          "$RUNNER_TEMP/ffmpeg7/bin/pip" install --quiet --only-binary=:all: --require-hashes -r "$RUNNER_TEMP/ffmpeg7.txt"
+          export FFMPEG="$("$RUNNER_TEMP/ffmpeg7/bin/python" -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')"
+          "$FFMPEG" -version | head -1
+          pnpm exec vitest run --project core packages/core/test/players/ffmpeg.test.ts
       - run: pnpm build
       - run: pnpm build:single
       # The single-file editor, to download and try from disk.

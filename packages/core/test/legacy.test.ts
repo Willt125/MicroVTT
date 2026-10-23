@@ -12,6 +12,7 @@ import {
   exportDocument,
   findQuickFixes,
   hasHeaderLines,
+  hasRegions,
   importDocument,
   legacySetting,
   modernizeCueText,
@@ -304,6 +305,54 @@ describe('header lines (X-TIMESTAMP-MAP, Kind:, Language:)', () => {
 
   it('are absent from documents without them', () => {
     expect(hasHeaderLines(importDocument('WEBVTT\n\nNOTE x\n').document)).toBe(false);
+  });
+});
+
+describe('regions written as Region: header lines (regionHeaders)', () => {
+  const MODERN =
+    'WEBVTT\n\nREGION\nid:roll width:80% lines:2 regionanchor:0%,100% viewportanchor:10%,90% scroll:up\n\n' +
+    'REGION\nid:a:b\n\n00:00:00.000 --> 00:00:01.000 region:roll\nhello\n';
+
+  it('replace the REGION blocks with lines under WEBVTT, in the 2014–15 syntax', () => {
+    const { document } = importDocument(MODERN);
+    expect(hasRegions(document)).toBe(true);
+    const out = exportDocument(document, { regionHeaders: true });
+    expect(out.text).toBe(
+      'WEBVTT\n' +
+        'Region: id=roll width=80% lines=2 viewportanchor=10%,90% scroll=up\n' +
+        'Region: id=a:b\n\n00:00:00.000 --> 00:00:01.000 region:roll\nhello\n',
+    );
+    // Not conforming today: one error per line, as for header lines.
+    expect(out.diagnostics.map((d) => d.code)).toEqual([
+      'region-header-legacy',
+      'region-header-legacy',
+    ]);
+  });
+
+  it('read back as the same regions', () => {
+    const { document } = importDocument(MODERN);
+    const again = importDocument(exportDocument(document, { regionHeaders: true }).text).document;
+    // Where each item was in the file differs; nothing else may.
+    const strip = <T extends { source?: unknown }>(items: T[]) =>
+      items.map(({ source: _, ...rest }) => rest);
+    expect(strip(again.head)).toEqual(strip(document.head));
+    expect(strip(again.body)).toEqual(strip(document.body));
+  });
+
+  it('follow the header lines when both are kept', () => {
+    const { document } = importDocument(
+      'WEBVTT\nKind: captions\n\nREGION\nid:r\n\n00:00.000 --> 00:01.000 region:r\nx\n',
+    );
+    const out = exportDocument(document, { headerLines: true, regionHeaders: true });
+    expect(out.text.startsWith('WEBVTT\nKind: captions\nRegion: id=r\n\n')).toBe(true);
+  });
+
+  it('leave a file without regions as it is', () => {
+    const { document } = importDocument('WEBVTT\n\n00:00.000 --> 00:01.000\nx\n');
+    expect(hasRegions(document)).toBe(false);
+    expect(exportDocument(document, { regionHeaders: true }).text).toBe(
+      exportDocument(document).text,
+    );
   });
 });
 

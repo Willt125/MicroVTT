@@ -170,6 +170,7 @@ function exportAs(doc: VttDocument, format: FormatId, options: ExportRequest): E
       compatibility: [],
       youtube: [],
       headerLines: false,
+      regions: 0,
     };
   }
   const source = converted.document;
@@ -187,6 +188,7 @@ function exportAs(doc: VttDocument, format: FormatId, options: ExportRequest): E
     compatibility: compatibilityIssues(source).map((x) => ({ id: x.fix.id, count: x.count })),
     youtube: youtubeCheck(source).map((x) => ({ id: x.feature.id, count: x.count })),
     headerLines: hasHeaderLines(source),
+    regions: source.head.filter((h) => h.type === 'region').length,
   };
 }
 
