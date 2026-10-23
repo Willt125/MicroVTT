@@ -468,6 +468,34 @@ test.describe('web player parsers read our files as we do', () => {
     expect(failures).toEqual([]);
   });
 
+  // Neither reads REGION blocks (the 2017 syntax), but both read the 2014–15 drafts' `Region:`
+  // header lines, which export writes with `regionHeaders`.
+  test('read regions written as Region: lines, and not REGION blocks', async ({ page }) => {
+    const doc = load(
+      'WEBVTT\n\nREGION\nid:roll width:80% lines:2 viewportanchor:10%,90% scroll:up\n\n' +
+        '00:00.000 --> 00:01.000 region:roll\nhello\n',
+    );
+    const texts = [exportDocument(doc).text, exportDocument(doc, { regionHeaders: true }).text];
+    const regionOf = (cues: unknown[] | undefined) =>
+      (cues?.[0] as { region: unknown } | undefined)?.region;
+
+    const [vjsBlocks, vjsLines] = await vttjsParse(page, texts);
+    expect(regionOf(vjsBlocks)).toBeNull();
+    expect(regionOf(vjsLines)).toMatchObject({
+      width: 80,
+      lines: 2,
+      regionAnchorX: 0,
+      regionAnchorY: 100,
+      viewportAnchorX: 10,
+      viewportAnchorY: 90,
+      scroll: 'up',
+    });
+
+    const [shakaBlocks, shakaLines] = await shakaParse(page, texts);
+    expect(regionOf(shakaBlocks)).toBeNull();
+    expect(regionOf(shakaLines)).toBe('roll');
+  });
+
   test('videojs-vtt.js: documented deviations still reproduce', async ({ page }) => {
     const parsed = await vttjsParse(
       page,

@@ -526,6 +526,11 @@ Some players misread files that are perfectly valid. These fixes keep the file v
 - **Off by default**, because they change what other players show: strip whitespace-only lines,
   remove `<lang>` spans, remove STYLE and REGION blocks.
 
+One option, offered when a WebVTT file has regions, does not keep the file valid: **Write the
+regions as `Region:` lines** suits video.js and Shaka Player, which read regions only in that
+older form (Firefox and Safari read both). The file then no longer conforms to today's spec, and
+the dialog says so. MicroVTT opens such files with their regions intact.
+
 ### Header lines and YouTube
 
 - **Header lines:** files from YouTube or for HLS streaming carry lines such as `Kind:` or

@@ -38,6 +38,8 @@
   let keepEncoding = $state(false);
   let omitZeroHours = $state(false);
   let headerLines = $state(false);
+  /** Write regions as `Region:` lines under WEBVTT, for video.js and Shaka Player. */
+  let regionHeaders = $state(false);
   let result = $state.raw<ExportedFile | null>(null);
   let failure = $state<string | null>(null);
   let saving = $state(false);
@@ -105,6 +107,7 @@
       lineEnding,
       omitZeroHours,
       headerLines,
+      regionHeaders,
       fileType: editor.fileType,
       compatibility: [...compatibility],
       ...(to === 'srt'
@@ -278,6 +281,12 @@
         As chosen, the header lines make this file non-conforming WebVTT (for HLS players).
       </p>
     {/if}
+    {#if result && regionHeaders && result.diagnostics.some((d) => d.code === 'region-header-legacy')}
+      <p class="warning-text">
+        As chosen, the regions are written as <code>Region:</code> lines, which makes this file non-conforming
+        WebVTT (for video.js and Shaka Player).
+      </p>
+    {/if}
   </section>
 
   {#if result && result.compatibility.length > 0}
@@ -315,6 +324,23 @@
           <code>Language:</code>) instead of writing them as a comment
           <span class="muted small why"
             >HLS players need <code>X-TIMESTAMP-MAP</code> there, and YouTube writes its files this way.
+            Valid in the 2014–15 drafts but not today, so the file will not conform.</span
+          >
+        </span>
+      </label>
+    </fieldset>
+  {/if}
+
+  {#if to === 'webvtt' && result && result.regions > 0}
+    <fieldset class="compat">
+      <legend>Regions</legend>
+      <label class="check option">
+        <input type="checkbox" bind:checked={regionHeaders} />
+        <span>
+          Write the regions as <code>Region:</code> lines under "WEBVTT" instead of REGION blocks ({result.regions.toLocaleString()})
+          <span class="muted small why"
+            >video.js and Shaka Player read regions only this way, and Firefox and Safari read both,
+            so scrolling (roll-up) regions work in more players. Chrome has no regions either way.
             Valid in the 2014–15 drafts but not today, so the file will not conform.</span
           >
         </span>

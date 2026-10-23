@@ -23,7 +23,18 @@ export interface SerializeOptions {
    * current spec has none, so the output does not conform. Default false.
    */
   headerLines?: boolean;
+  /**
+   * Write each region as a `Region:` line under the "WEBVTT" line (the 2014–15 drafts' syntax),
+   * not as a REGION block. video.js and Shaka Player read regions only this way; Firefox and
+   * Safari read both. Parsers that follow the current spec ignore the lines (Chromium has no
+   * regions at all), so the output does not conform. Default false.
+   */
+  regionHeaders?: boolean;
 }
+
+/** Whether a document has regions, which `regionHeaders` would write as `Region:` lines. */
+export const hasRegions = (doc: VttDocument): boolean =>
+  doc.head.some((item) => item.type === 'region');
 
 /** Whether a document has header lines that `headerLines` would write. */
 export const hasHeaderLines = (doc: VttDocument): boolean =>
@@ -79,21 +90,40 @@ export function serializeCue(cue: Cue, options: SerializeOptions = {}): string {
   return `${head}${settings ? `${timing} ${settings}` : timing}\n${cue.text}`;
 }
 
-export function serializeRegion(region: Region): string {
-  const settings = [`id:${region.id}`];
-  if (region.width !== 100) settings.push(`width:${percent(region.width)}`);
-  if (region.lines !== 3) settings.push(`lines:${formatDecimal(region.lines)}`);
+/** A region's settings as name and value, defaults left out. */
+function regionSettings(region: Region): [string, string][] {
+  const settings: [string, string][] = [['id', region.id]];
+  if (region.width !== 100) settings.push(['width', percent(region.width)]);
+  if (region.lines !== 3) settings.push(['lines', formatDecimal(region.lines)]);
   if (region.regionAnchorX !== 0 || region.regionAnchorY !== 100) {
-    settings.push(`regionanchor:${percent(region.regionAnchorX)},${percent(region.regionAnchorY)}`);
+    settings.push([
+      'regionanchor',
+      `${percent(region.regionAnchorX)},${percent(region.regionAnchorY)}`,
+    ]);
   }
   if (region.viewportAnchorX !== 0 || region.viewportAnchorY !== 100) {
-    settings.push(
-      `viewportanchor:${percent(region.viewportAnchorX)},${percent(region.viewportAnchorY)}`,
-    );
+    settings.push([
+      'viewportanchor',
+      `${percent(region.viewportAnchorX)},${percent(region.viewportAnchorY)}`,
+    ]);
   }
-  if (region.scroll === 'up') settings.push('scroll:up');
-  return `REGION\n${settings.join(' ')}`;
+  if (region.scroll === 'up') settings.push(['scroll', 'up']);
+  return settings;
 }
+
+export const serializeRegion = (region: Region): string =>
+  `REGION\n${regionSettings(region)
+    .map(([name, value]) => `${name}:${value}`)
+    .join(' ')}`;
+
+/**
+ * A region as a `Region:` header line, as in the 2014–15 drafts: the same settings and defaults
+ * as a REGION block, written `name=value`.
+ */
+export const serializeRegionHeader = (region: Region): string =>
+  `Region: ${regionSettings(region)
+    .map(([name, value]) => `${name}=${value}`)
+    .join(' ')}`;
 
 const serializeStyle = (style: Style): string => `STYLE\n${style.css}`;
 const serializeNote = (note: Note): string => `NOTE${note.text}`;
@@ -111,7 +141,14 @@ export function* serializeChunks(
   const header = options.headerLines
     ? doc.head.filter((item): item is Note => item.type === 'note' && item.preserved === 'header')
     : [];
-  const headerText = header.map((note) => `${fix(note.text.replace(/^\n/, ''))}${eol}`).join('');
+  const regionLines = options.regionHeaders
+    ? doc.head.flatMap((item) =>
+        item.type === 'region' ? [`${serializeRegionHeader(item)}${eol}`] : [],
+      )
+    : [];
+  const headerText =
+    header.map((note) => `${fix(note.text.replace(/^\n/, ''))}${eol}`).join('') +
+    regionLines.join('');
   yield `${bom}WEBVTT${doc.title === '' ? '' : ` ${doc.title}`}${eol}${headerText}${eol}`;
   let first = true;
   const block = (text: string): string => {
@@ -121,6 +158,7 @@ export function* serializeChunks(
   };
   for (const item of doc.head) {
     if (header.includes(item as Note)) continue;
+    if (options.regionHeaders && item.type === 'region') continue;
     yield block(
       item.type === 'region'
         ? serializeRegion(item)

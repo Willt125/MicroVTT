@@ -7,6 +7,12 @@ is set out in [CONTRIBUTING.md](CONTRIBUTING.md#versioning).
 
 ## [Unreleased]
 
+### Added
+
+- **Export:** an option to write regions as `Region:` lines under `WEBVTT`, the 2014–15 form,
+  for video.js and Shaka Player, which ignore REGION blocks. It is off by default, and the file
+  then no longer conforms to today's spec.
+
 ### Fixed
 
 - **Export:** the option to remove STYLE and REGION blocks now says it is for ffmpeg 6.1 and

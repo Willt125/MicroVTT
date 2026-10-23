@@ -79,6 +79,8 @@ export interface ExportedFile {
   compatibility: { id: CompatibilityId; count: number }[];
   /** Whether the source had text under the "WEBVTT" line (`X-TIMESTAMP-MAP`, `Kind:`, …). */
   headerLines: boolean;
+  /** How many regions the document defines (`regionHeaders` writes them as `Region:` lines). */
+  regions: number;
   /** Features YouTube does not keep or reports on upload, and how many cues or blocks use them. */
   youtube: { id: FeatureId; count: number }[];
 }

@@ -61,3 +61,29 @@ test('offers player-compatibility fixes and the YouTube check on export', async 
   await expect(youtube).toContainText('Avoided: "Remove STYLE and REGION blocks" is ticked.');
   await expect(youtube.getByRole('button', { name: 'Tick the fixes for YouTube' })).toBeHidden();
 });
+
+test('writes regions as Region: lines when asked, for video.js and Shaka Player', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await vttInput(page).setInputFiles({
+    name: 'regions.vtt',
+    mimeType: 'text/vtt',
+    buffer: Buffer.from(
+      'WEBVTT\n\nREGION\nid:roll lines:2 scroll:up\n\n00:00.000 --> 00:01.000 region:roll\nhello\n',
+    ),
+  });
+  await expect(status(page)).toContainText('1 cue');
+  await page.keyboard.press('ControlOrMeta+s');
+  const dialog = page.getByRole('dialog');
+  const option = dialog
+    .getByRole('group', { name: 'Regions' })
+    .getByRole('checkbox', { name: /Write the regions as Region: lines/ });
+  await expect(option).not.toBeChecked();
+  await option.check();
+  await expect(dialog).toContainText('which makes this file non-conforming WebVTT');
+  const text = await exportText(page);
+  expect(text).toBe(
+    'WEBVTT\nRegion: id=roll lines=2 scroll=up\n\n00:00:00.000 --> 00:00:01.000 region:roll\nhello\n',
+  );
+});

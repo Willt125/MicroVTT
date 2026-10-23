@@ -460,7 +460,7 @@ browsers.
 | Input (minimal example)                                  | Spec (and MicroVTT) |                    ffmpeg                     |  video.js   |            Shaka Player            | Export option             |
 | -------------------------------------------------------- | ------------------- | :-------------------------------------------: | :---------: | :--------------------------------: | ------------------------- |
 | a STYLE or REGION block                                  | read                |    **6.1: no cues after it**; 7.0: skipped    |             |                                    | remove (lossy)            |
-| a REGION block                                           | region defined      | 7.0: block skipped, so cues lose their region |   ignored   |              ignored               |                           |
+| a REGION block                                           | region defined      | 7.0: block skipped, so cues lose their region |   ignored   |              ignored               | write as `Region:` lines  |
 | cue id starting with `NOTE` (`NOTE 1`, `NOTES`)          | id kept             |                  cue dropped                  | cue dropped |  `NOTE` or `NOTE …`: cue dropped   | remove keyword ids        |
 | cue id `STYLE` or `REGION`                               | id kept             |     7.0: cue dropped (any id starting so)     |             |            cue dropped             | remove keyword ids        |
 | two cues with the same times and text                    | both shown          |                  one dropped                  |             |                                    |                           |
@@ -511,6 +511,15 @@ text tree.
 | Remove `<lang>` spans                          |   off   | language-dependent rendering                    |
 | Remove STYLE and REGION blocks                 |   off   | styles and regions                              |
 
+**Regions as `Region:` lines** (off; offered when a WebVTT export has regions): video.js and
+Shaka Player read regions only in the 2014–15 form, `Region: id=… width=… lines=…
+regionanchor=… viewportanchor=… scroll=up` lines under `WEBVTT`, and ignore REGION blocks. The
+option writes each region that way instead of as a REGION block. Firefox and WebKit read both
+forms; ffmpeg skips the whole header; Chromium has no regions. Today's spec ignores such lines,
+so the file no longer conforms: the export's validation reports `region-header-legacy` for each,
+and the dialog says so. MicroVTT reads the lines back as regions (see below), so nothing is lost
+on a round trip. Settings at their defaults are left out, as in REGION blocks.
+
 The validator also warns (`cue-id-keyword`) about cue ids that start with a block keyword: they
 are valid, but every player tested misreads them.
 
@@ -551,7 +560,7 @@ Candidate Recommendation Draft.
 | **Blocks**                                                                         |                       |                           |                                         |                                                     |                                                 |                                   |                                       |                                                       |                                                                                                           |
 | STYLE block                                                                        | style sheet           | ✓                         | ✓                                       | ✓                                                   | **6.1: reads no cues after it**†; 7.0: ignored  | ✓                                 | ✓                                     | accepted; ignored                                     | ffmpeg: none. YouTube: 2014 (STYLE came in 2015)                                                          |
 | REGION block                                                                       | region defined        | no regions at all         | ignored after header text or a comment† | ignored if a timing line follows with no blank line | **6.1: reads no cues after it**†; 7.0: ignored† | ignored                           | ignored                               | upload error; ignored                                 | Chromium, ffmpeg, Firefox, WebKit: none. video.js, Shaka, YouTube: 2014–15 (regions from `Region:` lines) |
-| `Region:` header line                                                              | ignored               | ✓                         | defines a region                        | defines a region                                    | ·                                               | ·                                 | ·                                     | ·                                                     | 2014–15                                                                                                   |
+| `Region:` header line                                                              | ignored               | ✓                         | defines a region                        | defines a region                                    | ✓ (header skipped)                              | defines a region                  | defines a region                      | ·                                                     | 2014–15                                                                                                   |
 | Timing line after two text lines, or in the header                                 | block ends, no id     | previous line taken as id | same                                    | same                                                | ·                                               | ·                                 | ·                                     | ·                                                     | none                                                                                                      |
 | NOTE whose first line is `STYLE`, before the first cue                             | a comment             | next cue's id wrong†      | ✓                                       | ✓                                                   | ·                                               | ·                                 | ·                                     | ·                                                     | none                                                                                                      |
 | **Cue ids and cues**                                                               |                       |                           |                                         |                                                     |                                                 |                                   |                                       |                                                       |                                                                                                           |
@@ -595,5 +604,7 @@ How export handles the † rows:
 - **Fixed by opt-in options**, because they change what conforming players show: trimming
   whitespace lines (Firefox, Shaka and YouTube), removing `<lang>` spans (Shaka), and removing
   STYLE and REGION blocks (ffmpeg 6.1 and older).
+- **Regions for video.js and Shaka:** writing regions as `Region:` lines, an opt-in option that
+  makes the file non-conforming (see "Player-compatibility export options").
 - **No export fix:** Chromium's ignored alignment suffixes, ffmpeg's dropped duplicates, Shaka's
   `size:0%`, and the YouTube rendering rows (left to YouTube by decision; see PLAN.md).
