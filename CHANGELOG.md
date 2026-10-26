@@ -14,6 +14,11 @@ is set out in [CONTRIBUTING.md](CONTRIBUTING.md#versioning).
   them, and they are kept in the browser per video. The Netflix rulesets check cues against
   them (timing guide sections 2 and 4) and offer fixes.
 
+## [0.2.1] - 2026-10-24
+
+This section was written after the release, whose notes on GitHub predate it. The tag `v0.2.0`
+was pushed by mistake, on a commit still versioned 0.1.0; there is no 0.2.0 release.
+
 ### Added
 
 - **Export:** an option to write regions as `Region:` lines under `WEBVTT`, the 2014–15 form,
@@ -54,5 +59,6 @@ The first release. While the version is 0.y.z, anything may still change.
 - **Version:** shown at the bottom of the keyboard shortcuts dialog (`?`). Builds between releases
   add the commit they were built from, as in `0.1.0+abc1234`.
 
-[Unreleased]: https://github.com/Willt125/MicroVTT/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Willt125/MicroVTT/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/Willt125/MicroVTT/releases/tag/v0.2.1
 [0.1.0]: https://github.com/Willt125/MicroVTT/releases/tag/v0.1.0
