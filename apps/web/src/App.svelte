@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { FILE_ENCODINGS, FORMATS, languageName } from '@microvtt/core';
+  import { FILE_ENCODINGS, FORMATS, formatTimestamp, languageName } from '@microvtt/core';
   import CleanupDialog from './lib/components/CleanupDialog.svelte';
   import CueEditor from './lib/components/CueEditor.svelte';
   import CueTable from './lib/components/CueTable.svelte';
@@ -12,6 +12,7 @@
   import MediaPanel from './lib/components/MediaPanel.svelte';
   import QualityPanel from './lib/components/QualityPanel.svelte';
   import RulesDialog from './lib/components/RulesDialog.svelte';
+  import ShotChangesDialog from './lib/components/ShotChangesDialog.svelte';
   import Timeline from './lib/components/Timeline.svelte';
   import TimingDialog from './lib/components/TimingDialog.svelte';
   import RollUpDialog from './lib/components/RollUpDialog.svelte';
@@ -21,10 +22,11 @@
   import Toolbar from './lib/components/Toolbar.svelte';
   import { Editor } from './lib/editor.svelte.ts';
   import { ACCEPT, canSaveInPlace, droppedHandle, pickSubtitleFile } from './lib/files.ts';
-  import { standardRate, stepFrame } from './lib/frames.ts';
+  import { frameAt, frameStartMs, standardRate, stepFrame } from './lib/frames.ts';
   import { isMediaFile, splitOffset, splitTime } from './lib/media.ts';
   import { Player } from './lib/player.svelte.ts';
   import { actionFor, type Action } from './lib/shortcuts.ts';
+  import { ShotChanges } from './lib/shotchanges.svelte.ts';
   import { loadThemeChoice, resolveTheme, saveThemeChoice } from './lib/themes.ts';
   import { VttWorker } from './lib/worker/client.ts';
   import { Waveform } from './lib/waveform/waveform.svelte.ts';
@@ -48,6 +50,10 @@
   let regionsOpen = $state(false);
   let stylesOpen = $state(false);
   let rulesOpen = $state(false);
+  let shotsOpen = $state(false);
+  /** What the last shot-change key press did, shown on the timeline. */
+  let shotNotice = $state('');
+  const shots = new ShotChanges();
   const waveform = new Waveform();
   /** The frame rate frame stepping uses: chosen, or measured from the video. */
   const fps = $derived(
@@ -56,6 +62,11 @@
   // Frame-based style rules (Netflix's frame gaps) use the video's rate.
   $effect(() => {
     editor.mediaFps = player.hasMedia ? fps : null;
+  });
+  // Shot changes are kept per video, and checked by the Netflix rulesets.
+  $effect(() => shots.open(player.file));
+  $effect(() => {
+    editor.shotChanges = shots.times;
   });
   // The waveform follows the loaded media.
   $effect(() => {
@@ -225,6 +236,14 @@
         return;
       case 'to-pointer':
         if (media && pointerMs !== null) player.seek(pointerMs);
+        return;
+      case 'shot-change':
+        if (media) {
+          // On the first frame of the shot at the playhead, when the frame rate is known.
+          const at = fps ? frameStartMs(frameAt(player.currentMs, fps), fps) : player.currentMs;
+          const added = shots.toggle(at, fps ? 500 / fps : 20);
+          shotNotice = `Shot change ${added ? 'marked' : 'removed'} at ${formatTimestamp(at)}.`;
+        }
         return;
       case 'loop':
         if (media) player.loop = !player.loop;
@@ -488,7 +507,16 @@
       </div>
     </main>
     {#if player.hasMedia}
-      <Timeline {editor} {player} {waveform} onpointertime={(ms) => (pointerMs = ms)} />
+      <Timeline
+        {editor}
+        {player}
+        {waveform}
+        {fps}
+        shotChanges={shots.times}
+        notice={shotNotice}
+        onshotchanges={() => (shotsOpen = true)}
+        onpointertime={(ms) => (pointerMs = ms)}
+      />
     {/if}
   {:else}
     <main class="start">
@@ -532,6 +560,7 @@
   <RegionsDialog {editor} bind:open={regionsOpen} />
   <StylesDialog {editor} bind:open={stylesOpen} />
   <RulesDialog {editor} bind:open={rulesOpen} />
+  <ShotChangesDialog {shots} {player} {fps} bind:open={shotsOpen} />
 </div>
 
 <style>

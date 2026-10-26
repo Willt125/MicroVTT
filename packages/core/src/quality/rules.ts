@@ -10,6 +10,7 @@ import { composite, contrastRatio, hexOf, parseColour, type Rgba } from './colou
 import { breakUnits, joinLines, type BreakUnit } from '../script.ts';
 import { displayLength, formatCount, graphemeLength, wordCount } from './measure.ts';
 import { isPlain, markupPattern } from './markup.ts';
+import { shotChangesBetween } from '../shotchanges.ts';
 import { NETFLIX_GLYPH_RANGES } from './netflix-glyphs.generated.ts';
 import { CJK_RULES } from './rules-cjk.ts';
 import { FINNISH_RULES } from './rules-fi.ts';
@@ -26,6 +27,10 @@ export interface CueInfo {
   dialect: TextDialect;
   /** The next cue in the file, or null. */
   next: CueInfo | null;
+  /** The previous cue in the file, or null. */
+  previous: CueInfo | null;
+  /** The video's shot changes (ms, sorted), when known; empty if none are marked. */
+  shotChanges: readonly number[];
 }
 
 export interface Emitted {
@@ -315,6 +320,110 @@ const RULE_LIST: RuleDefinition[] = [
               fix: {
                 label: 'End where the next starts',
                 change: { kind: 'times', startMs: cue.startMs, endMs: next.cue.startMs },
+              },
+            }
+          : {}),
+      });
+    },
+  },
+  {
+    id: 'shot-changes',
+    category: 'timing',
+    title: 'Shot changes',
+    description:
+      'Cues timed to the shot changes marked for the video: starting on the cut, or at least half a second before it; ending two frames before it, or at least half a second after it.',
+    params: [
+      { key: 'halfMs', label: 'Keep clear of a cut by', unit: 'ms', min: 0, max: 2000, step: 10 },
+      { key: 'frames', label: 'Gap before a cut', unit: 'frames', min: 0, max: 24, step: 1 },
+      { key: 'fps', label: 'Frame rate', unit: 'fps', min: 1, max: 120, step: 0.001 },
+    ],
+    defaults: { halfMs: 500, frames: 2, fps: 24 },
+    cue(info, { halfMs = 500, frames = 2, fps = 24 }, emit) {
+      const { cue, index, previous, next, shotChanges } = info;
+      if (shotChanges.length === 0) return;
+      // Worked in frames, as the guide is: times are whole ms, so frames are rounded.
+      const frameOf = (ms: number): number => Math.round((ms * fps) / 1000);
+      const msOf = (frame: number): number =>
+        frame <= 0 ? 0 : Math.ceil((frame * 1000) / fps - 1e-6);
+      const half = (halfMs * fps) / 1000;
+      const halfUp = Math.ceil(half - 1e-6);
+      const count = (n: number): string => `${n} ${n === 1 ? 'frame' : 'frames'}`;
+      const halfText = `half a second (${count(halfUp)})`;
+      const s = frameOf(cue.startMs);
+      const e = frameOf(cue.endMs);
+      const prevEnd = previous ? frameOf(previous.cue.endMs) : -Infinity;
+      const nextStart = next ? frameOf(next.cue.startMs) : Infinity;
+      const near = shotChangesBetween(
+        shotChanges,
+        cue.startMs - halfMs - 100,
+        cue.endMs + halfMs + 100,
+      ).map(frameOf);
+      const messages: string[] = [];
+      let start = s;
+      let end = e;
+      let fixable = true;
+
+      // The in-time: on the cut, or at least half a second before it (sections 2 and 4).
+      const cutAtStart = near.find((k) => s - k > -half && s - k < half && s !== k);
+      if (cutAtStart !== undefined) {
+        const k = cutAtStart;
+        const d = s - k;
+        const options: number[] = [];
+        if (d > 0) {
+          messages.push(`Starts ${count(d)} after a shot change; start on the cut.`);
+          options.push(k);
+        } else {
+          messages.push(
+            `Starts ${count(-d)} before a shot change; start on the cut, or at least ${halfText} before it.`,
+          );
+          // Nearer half a second before: brought forward; nearer the cut: moved to it.
+          const forward = k - halfUp;
+          options.push(...(-d > half / 2 ? [forward, k] : [k, forward]));
+        }
+        const choice = options.find((t) => t >= 0 && t - prevEnd >= frames && t < e);
+        if (choice === undefined) fixable = false;
+        else start = choice;
+      }
+
+      // The out-time: two frames before the cut, or at least half a second after it.
+      const cutAtEnd = near.find(
+        (k) => k > start && e - k > -frames - half && e - k < half && e - k !== -frames,
+      );
+      if (cutAtEnd !== undefined) {
+        const k = cutAtEnd;
+        const g = e - k;
+        const before = k - frames;
+        const after = k + halfUp;
+        const canEndBefore = before > start;
+        const canEndAfter = nextStart - after >= frames;
+        if (g < -frames) {
+          messages.push(
+            `Ends ${count(-g)} before a shot change; end ${count(frames)} before the cut.`,
+          );
+          if (nextStart - before >= frames) end = before;
+          else fixable = false;
+        } else {
+          messages.push(
+            `${g === 0 ? 'Ends on a shot change' : g < 0 ? `Ends ${count(-g)} before a shot change` : `Ends ${count(g)} after a shot change`}; end ${count(frames)} before the cut, or at least ${halfText} after it.`,
+          );
+          // Not crossing the cut is preferred, unless that leaves the cue under half a second.
+          if (canEndBefore && (before - start >= half || !canEndAfter)) end = before;
+          else if (canEndAfter) end = after;
+          else fixable = false;
+        }
+      }
+
+      if (messages.length === 0) return;
+      const startMs = start === s ? cue.startMs : msOf(start);
+      const endMs = end === e ? cue.endMs : msOf(end);
+      emit({
+        index,
+        message: messages.join(' '),
+        ...(fixable && endMs > startMs && (startMs !== cue.startMs || endMs !== cue.endMs)
+          ? {
+              fix: {
+                label: 'Time to the shot changes',
+                change: { kind: 'times', startMs, endMs },
               },
             }
           : {}),

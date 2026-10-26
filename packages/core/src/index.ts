@@ -260,3 +260,13 @@ export {
 export type { FileTypeGuess } from './metadata.ts';
 export { DEFAULT_ROLL_UP, cueLines, makeRollUp } from './rollup.ts';
 export type { RollUpForm, RollUpLine, RollUpOptions, RollUpResult } from './rollup.ts';
+export {
+  formatShotChanges,
+  normalizeShotChanges,
+  parseShotChanges,
+  shotChangeIndex,
+  shotChangesBetween,
+  snapToFrame,
+  toggleShotChange,
+} from './shotchanges.ts';
+export type { ShotChangeList, ShotChangeReadOptions, ShotChangeUnit } from './shotchanges.ts';

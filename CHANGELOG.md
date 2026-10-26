@@ -9,6 +9,13 @@ is set out in [CONTRIBUTING.md](CONTRIBUTING.md#versioning).
 
 ### Added
 
+- **Shot changes:** mark the cuts in a video with `C`, or import a list from Subtitle Edit,
+  ffmpeg's scene detection, ffprobe or timecodes. They show on the timeline, cue edges snap to
+  them, and they are kept in the browser per video. The Netflix rulesets check cues against
+  them (timing guide sections 2 and 4) and offer fixes.
+
+### Added
+
 - **Export:** an option to write regions as `Region:` lines under `WEBVTT`, the 2014–15 form,
   for video.js and Shaka Player, which ignore REGION blocks. It is off by default, and the file
   then no longer conforms to today's spec.

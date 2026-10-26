@@ -85,7 +85,7 @@ const netflix = (children: boolean): Ruleset => ({
   sources: [NETFLIX_GENERAL, NETFLIX_EN_US, NETFLIX_TIMING, NETFLIX_GLYPHS],
   notChecked: [
     'Accuracy and completeness against the audio, italics use, numbers, punctuation style and quotations (judgement, or need the audio).',
-    'Timing to the audio and to shot changes (need the audio and the picture).',
+    'Timing to the audio (needs the audio). Shot changes are checked only once marked for the video.',
   ],
   rules: {
     'empty-cue': { severity: 'warning' },
@@ -106,6 +106,12 @@ const netflix = (children: boolean): Ruleset => ({
       params: { frames: 2, closeBelowMs: 500 },
       source: 'netflix-timing',
       section: '5: Gaps between subtitles',
+    },
+    'shot-changes': {
+      severity: 'warning',
+      params: { halfMs: 500, frames: 2 },
+      source: 'netflix-timing',
+      section: '2: Timing to the shot change; 4: Dialogue that crosses shot changes',
     },
     'max-lines': {
       severity: 'warning',
@@ -194,7 +200,7 @@ const netflixTemplate = (children: boolean): Ruleset => ({
   sources: [NETFLIX_TEMPLATES, NETFLIX_TIMING, NETFLIX_EN_US, NETFLIX_GLYPHS],
   notChecked: [
     'Coverage, annotations, forced narratives and segmentation (judgement).',
-    'Timing to the audio and to shot changes (need the audio and the picture).',
+    'Timing to the audio (needs the audio). Shot changes are checked only once marked for the video.',
   ],
   rules: {
     'empty-cue': { severity: 'warning' },
@@ -215,6 +221,12 @@ const netflixTemplate = (children: boolean): Ruleset => ({
       params: { frames: 2, closeBelowMs: 500 },
       source: 'netflix-timing',
       section: '5: Gaps between subtitles',
+    },
+    'shot-changes': {
+      severity: 'warning',
+      params: { halfMs: 500, frames: 2 },
+      source: 'netflix-timing',
+      section: '2: Timing to the shot change; 4: Dialogue that crosses shot changes',
     },
     'max-lines': {
       severity: 'warning',
@@ -295,7 +307,7 @@ const netflixFinnish = (sdh: boolean, children: boolean): Ruleset => {
     notChecked: [
       'Condensing, merging and segmentation, italics, quotes and the rest of Kotus’s punctuation conventions (judgement).',
       'Spelled-out numbers (1–10, and at the start of a sentence).',
-      'Timing to the audio and to shot changes (need the audio and the picture).',
+      'Timing to the audio (needs the audio). Shot changes are checked only once marked for the video.',
     ],
     rules: {
       'empty-cue': { severity: 'warning' },
@@ -316,6 +328,12 @@ const netflixFinnish = (sdh: boolean, children: boolean): Ruleset => {
         params: { frames: 2, closeBelowMs: 500 },
         source: 'netflix-timing',
         section: '5: Gaps between subtitles',
+      },
+      'shot-changes': {
+        severity: 'warning',
+        params: { halfMs: 500, frames: 2 },
+        source: 'netflix-timing',
+        section: '2: Timing to the shot change; 4: Dialogue that crosses shot changes',
       },
       'max-lines': {
         severity: 'warning',
@@ -466,6 +484,12 @@ const netflixTiming = (
     source: 'netflix-timing',
     section: '5: Gaps between subtitles',
   },
+  'shot-changes': {
+    severity: 'warning',
+    params: { halfMs: 500, frames: 2 },
+    source: 'netflix-timing',
+    section: '2: Timing to the shot change; 4: Dialogue that crosses shot changes',
+  },
 });
 
 const variantName = (sdh: boolean, children: boolean): string =>
@@ -495,7 +519,7 @@ const netflixChinese = (traditional: boolean, sdh: boolean, children: boolean): 
       'Names, nicknames and interpuncts in foreign names; titles in 《》 (judgement, and the approved translations).',
       'Ellipses for pauses and interruptions, and the rest of continuity (judgement).',
       'Spelled-out numbers 1–10, money, times and dates (judgement).',
-      'Forced narratives in parentheses, positioning, and timing to the audio and to shot changes (need the picture and the audio).',
+      'Forced narratives in parentheses, positioning, and timing to the audio (needs the audio).',
     ],
     rules: {
       ...netflixTiming(),
@@ -604,7 +628,7 @@ const netflixKorean = (sdh: boolean, children: boolean): Ruleset => {
       'Transliteration of names, honorifics, and the treatment of quotes and forced narratives (judgement).',
       'Ellipses for pauses and interruptions (judgement).',
       'Exceptions to one line when it fits: three or more punctuation marks, or a quotation (judgement).',
-      'Timing to the audio and to shot changes (need the audio and the picture).',
+      'Timing to the audio (needs the audio). Shot changes are checked only once marked for the video.',
     ],
     rules: {
       ...netflixTiming(),
@@ -695,7 +719,7 @@ const netflixJapanese = (sdh: boolean): Ruleset => {
       'Netflix takes Japanese subtitles only as IMSC 1.1 (TTML), not WebVTT (I.1); the Japanese IMSC 1.1 Creation Guide sets its attributes.',
       'Ruby and bouten placement, vertical positioning and kumi-moji (tate-chū-yoko) numbers in vertical cues.',
       'Italics for forced narratives, voices through devices, narration and lyrics; two-em dashes for continuity and the three-dot leader; chidori lyrics (judgement).',
-      'Kanji for children’s content, names, and timing to the audio and to shot changes.',
+      'Kanji for children’s content, names, and timing to the audio.',
     ],
     rules: {
       ...(sdh ? netflixTiming() : netflixTiming(500, 'netflix-ja', 'I.9. Duration (0.5 second)')),

@@ -52,6 +52,8 @@ export interface QualityRequest {
   overrides: RuleOverrides;
   /** The video's frame rate, for frame-based rules, when known. */
   fps?: number;
+  /** The video's shot changes (ms, sorted), when any are marked. */
+  shotChanges?: number[];
 }
 
 export type { AutoCaptionInfo, CleanupOptions, CleanupResult, ReviewMarker };

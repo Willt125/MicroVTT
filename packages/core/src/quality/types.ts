@@ -15,6 +15,7 @@ export type QualityRuleId =
   | 'min-gap'
   | 'frame-gaps'
   | 'overlap'
+  | 'shot-changes'
   | 'chars-per-second'
   | 'words-per-minute'
   | 'max-lines'

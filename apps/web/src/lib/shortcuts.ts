@@ -15,6 +15,7 @@ export type Action =
   | 'set-start'
   | 'set-end'
   | 'to-pointer'
+  | 'shot-change'
   | 'loop'
   | 'add'
   | 'split'
@@ -95,6 +96,13 @@ export const SHORTCUTS: readonly Shortcut[] = [
     code: 'KeyP',
     label: 'P',
     description: 'Move the playhead to the mouse pointer on the timeline',
+  },
+  {
+    action: 'shot-change',
+    keys: ['c'],
+    code: 'KeyC',
+    label: 'C',
+    description: 'Mark a shot change (a cut) at the playhead, or remove the one there',
   },
   { action: 'loop', keys: ['r'], code: 'KeyR', label: 'R', description: 'Loop the cue on or off' },
   {

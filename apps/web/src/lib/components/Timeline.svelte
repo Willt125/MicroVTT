@@ -3,12 +3,13 @@
   Scroll to move through time, Ctrl/⌘ + scroll (or the buttons) to zoom; click to seek, click a
   cue to select it (Ctrl/⌘ and Shift add to the selection). Drag a cue's edge to retime it, or
   the cue to move it with the rest of the selection; edges snap to other cues' edges, word
-  timings and the playhead (hold Alt not to snap). Peaks for the visible range are read from
-  the waveform worker, so a 12-hour file draws as cheaply as a short one.
+  timings, the playhead and shot changes (hold Alt not to snap). Shot changes are drawn as
+  lines across the waveform. Peaks for the visible range are read from the waveform worker, so
+  a 12-hour file draws as cheaply as a short one.
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { textTimestamps, type Cue } from '@microvtt/core';
+  import { shotChangesBetween, textTimestamps, type Cue } from '@microvtt/core';
   import type { Editor } from '../editor.svelte.ts';
   import type { Player } from '../player.svelte.ts';
   import {
@@ -31,11 +32,28 @@
     editor: Editor;
     player: Player;
     waveform: Waveform;
+    /** The video's shot changes (ms, sorted). */
+    shotChanges?: readonly number[];
+    /** The frame rate, when known: edges also snap two frames before a shot change. */
+    fps?: number | null;
+    /** A short message about the last change to the shot changes, read out by screen readers. */
+    notice?: string;
+    /** Opens the shot changes dialog. */
+    onshotchanges?: () => void;
     /** Called with the time under the mouse pointer, or null when it leaves the timeline. */
     onpointertime?: (ms: number | null) => void;
   }
 
-  let { editor, player, waveform, onpointertime }: Props = $props();
+  let {
+    editor,
+    player,
+    waveform,
+    shotChanges = [],
+    fps = null,
+    notice = '',
+    onshotchanges,
+    onpointertime,
+  }: Props = $props();
 
   const RULER_PX = 18;
   const CUE_LANE_PX = 26;
@@ -58,6 +76,8 @@
   let frame = 0;
   /** Word-timing ticks in the last frame drawn (for tests: the canvas cannot be read back). */
   let drawnTicks = $state(0);
+  /** Shot changes in the last frame drawn (for tests, as above). */
+  let drawnCuts = $state(0);
 
   const durationMs = $derived(
     Math.max(player.durationMs, waveform.durationMs, lastCueEnd(editor.doc.body)),
@@ -142,7 +162,16 @@
 
   // Redraw whenever anything drawn changes.
   $effect(() => {
-    void [view, width, height, editor.doc, editor.selection, player.currentMs, waveform.state];
+    void [
+      view,
+      width,
+      height,
+      editor.doc,
+      editor.selection,
+      player.currentMs,
+      waveform.state,
+      shotChanges,
+    ];
     schedule();
   });
 
@@ -159,6 +188,7 @@
     cue: string;
     accent: string;
     playhead: string;
+    cut: string;
   }
 
   function colors(): Colors {
@@ -172,6 +202,7 @@
       cue: get('--selected'),
       accent: get('--accent'),
       playhead: get('--error'),
+      cut: get('--warning'),
     };
   }
 
@@ -229,8 +260,31 @@
       ctx.stroke();
     }
 
-    // Cues, in the lane at the bottom.
+    // Shot changes: lines from the ruler to the cue lane, with a notch in the ruler.
     const laneTop = height - CUE_LANE_PX;
+    const cuts = shotChangesBetween(shotChanges, view.startMs, endMs);
+    ctx.strokeStyle = c.cut;
+    ctx.fillStyle = c.cut;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (const ms of cuts) {
+      const px = Math.round(x(ms));
+      ctx.moveTo(px, RULER_PX - 6);
+      ctx.lineTo(px, laneTop);
+    }
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    for (const ms of cuts) {
+      const px = Math.round(x(ms));
+      ctx.beginPath();
+      ctx.moveTo(px - 4, RULER_PX - 6);
+      ctx.lineTo(px + 4, RULER_PX - 6);
+      ctx.lineTo(px, RULER_PX);
+      ctx.fill();
+    }
+    drawnCuts = cuts.length;
+
+    // Cues, in the lane at the bottom.
     let ticks = 0;
     ctx.font = '12px system-ui, sans-serif';
     for (const i of editor.cueRows) {
@@ -400,14 +454,21 @@
   }
 
   /**
-   * What edges can snap to: edges of the cues that stay put, word timings, and the playhead.
-   * Only cues near the view are looked at, as a drag does not go much further.
+   * What edges can snap to: edges of the cues that stay put, word timings, the playhead, and
+   * shot changes (and, when the frame rate is known, two frames before each, where Netflix's
+   * guide ends a cue). Only times near the view are looked at, as a drag does not go much
+   * further.
    */
   function snapTargets(moving: Set<number>, kind: DragKind, dragged: number): number[] {
     const span = view.msPerPx * width;
     const from = view.startMs - span;
     const to = view.startMs + 2 * span;
     const targets = [player.currentMs];
+    const gapMs = fps ? Math.round(2000 / fps) : 0;
+    for (const ms of shotChangesBetween(shotChanges, from, to)) {
+      targets.push(ms);
+      if (gapMs > 0) targets.push(ms - gapMs);
+    }
     for (const i of editor.cueRows) {
       const cue = editor.doc.body[i] as Cue;
       if (cue.endMs < from || cue.startMs > to) continue;
@@ -545,9 +606,15 @@
   data-start-ms={Math.round(view.startMs)}
   data-ms-per-px={view.msPerPx}
   data-ticks={drawnTicks}
+  data-cuts={drawnCuts}
 >
   <div class="bar">
-    <span class="status muted" aria-live="polite">{status}</span>
+    <span class="status muted" aria-live="polite">{notice || status}</span>
+    {#if onshotchanges}
+      <button onclick={onshotchanges} title="Mark, import or save the video’s shot changes"
+        >Shot changes ({shotChanges.length.toLocaleString()})</button
+      >
+    {/if}
     <button onclick={() => zoom(0.5)} title="Zoom in (Ctrl/⌘ + scroll)" aria-label="Zoom in"
       >+</button
     >

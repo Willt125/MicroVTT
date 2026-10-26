@@ -106,6 +106,7 @@ async function handle(request: WorkerRequest): Promise<unknown> {
           ? checkQuality(request.document, ruleset, request.quality?.overrides, {
               dialect: formatById(request.format).text,
               ...(request.quality?.fps ? { fps: request.quality.fps } : {}),
+              ...(request.quality?.shotChanges ? { shotChanges: request.quality.shotChanges } : {}),
             })
           : [],
       } satisfies Checked;

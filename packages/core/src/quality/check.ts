@@ -12,6 +12,8 @@ export interface QualityContext {
   fps?: number;
   /** How the document's cue text is written (WebVTT by default). */
   dialect?: TextDialect;
+  /** The video's shot changes (ms, sorted), for the shot-change rule. */
+  shotChanges?: readonly number[];
 }
 
 /** A ruleset's rules after the user's changes: enabled ones, with their settings. */
@@ -79,9 +81,14 @@ export function checkQuality(
           lines: dialect.readableLines(item.text),
           dialect,
           next: null,
+          previous: null,
+          shotChanges: context.shotChanges ?? [],
         });
     });
-    infos.forEach((info, i) => (info.next = infos[i + 1] ?? null));
+    infos.forEach((info, i) => {
+      info.next = infos[i + 1] ?? null;
+      info.previous = infos[i - 1] ?? null;
+    });
     for (const info of infos) {
       for (const { id, severity, params } of cueRules) {
         RULES[id].cue?.(info, params, emitFor(id, severity));
