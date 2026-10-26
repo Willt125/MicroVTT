@@ -87,3 +87,27 @@ test('imports a list, checks Netflix’s shot-change timing, and saves the list'
   await expect.poll(async () => (await selectedCells(page)).end).toContain('09.917');
   await expect(quality(page).getByText('Shot changes (1)')).toHaveCount(0);
 });
+
+/**
+ * Six seconds at 25 fps, in three shots with cuts at 2 s and 4 s (made with ffmpeg 6.1:
+ * `-f lavfi -i "testsrc2=s=128x72:r=25:d=2" -f lavfi -i "smptebars=s=128x72:r=25:d=2"
+ * -f lavfi -i "mandelbrot=s=128x72:r=25,trim=duration=2" -filter_complex
+ * "[1:v]noise=alls=12:allf=t[b];[0:v][b][2:v]concat=n=3:v=1:a=0,format=yuv420p[v]"
+ * -map "[v]" -c:v libvpx -b:v 50k -g 50`). ffmpeg's own scene detection finds the same two.
+ */
+const CUTS_VIDEO = new URL('./media/cuts-25fps.webm', import.meta.url).pathname;
+
+test('finds the shot changes in the video', async ({ page }) => {
+  await open(page, 'WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nHello\n', CUTS_VIDEO);
+  await timeline(page).getByRole('button', { name: 'Shot changes (0)' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Shot changes' });
+  await dialog.getByRole('button', { name: 'Find shot changes' }).click();
+  const found = dialog.getByText('Found 2 shot changes.');
+  const unavailable = dialog.getByText(/Cannot find them here/);
+  await expect(found.or(unavailable)).toBeVisible({ timeout: 30_000 });
+  // Where this browser cannot decode VP8 in a worker, it says so and points to ffmpeg.
+  if (await unavailable.isVisible()) return;
+  await expect(dialog).toContainText('00:00:02.000, 00:00:04.000');
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(timeline(page)).toHaveAttribute('data-cuts', '2');
+});

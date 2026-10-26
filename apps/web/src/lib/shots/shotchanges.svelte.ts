@@ -4,7 +4,7 @@
  * when the same video is opened again. They are not part of the caption file.
  */
 import { normalizeShotChanges, toggleShotChange } from '@microvtt/core';
-import { cacheKey } from './waveform/cache.ts';
+import { cacheKey } from '../waveform/cache.ts';
 
 const STORE_KEY = 'microvtt.shotChanges';
 /** Videos whose shot changes are kept; the least recently used go first. */

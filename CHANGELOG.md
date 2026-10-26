@@ -9,8 +9,8 @@ is set out in [CONTRIBUTING.md](CONTRIBUTING.md#versioning).
 
 ### Added
 
-- **Shot changes:** mark the cuts in a video with `C`, or import a list from Subtitle Edit,
-  ffmpeg's scene detection, ffprobe or timecodes. They show on the timeline, cue edges snap to
+- **Shot changes:** find the cuts in a video automatically, mark them with `C`, or import a list
+  from Subtitle Edit, ffmpeg's scene detection, ffprobe or timecodes. They show on the timeline, cue edges snap to
   them, and they are kept in the browser per video. The Netflix rulesets check cues against
   them (timing guide sections 2 and 4) and offer fixes.
 

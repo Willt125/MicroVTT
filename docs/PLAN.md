@@ -499,7 +499,8 @@ in `docs/QUALITY-RULES.md`.
       Kotus abbreviations and state body names.
 - [x] Shot-change timing (Netflix timing guide 2 and 4), on cuts marked by hand (`C`) or
       imported from Subtitle Edit, ffmpeg or ffprobe lists.
-- [ ] Later: finding shot changes automatically (scene detection in a worker).
+- [x] Finding shot changes automatically: hard cuts, after PySceneDetect's adaptive detector,
+      in the media worker (see BENCHMARKS.md).
 - [ ] Later: more Netflix languages; the DCMP
       Captioning Key and FCC caption-quality rules; checks for speaker identification and sound
       descriptions.

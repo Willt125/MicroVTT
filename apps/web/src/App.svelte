@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { FILE_ENCODINGS, FORMATS, formatTimestamp, languageName } from '@microvtt/core';
   import CleanupDialog from './lib/components/CleanupDialog.svelte';
   import CueEditor from './lib/components/CueEditor.svelte';
@@ -26,7 +26,8 @@
   import { isMediaFile, splitOffset, splitTime } from './lib/media.ts';
   import { Player } from './lib/player.svelte.ts';
   import { actionFor, type Action } from './lib/shortcuts.ts';
-  import { ShotChanges } from './lib/shotchanges.svelte.ts';
+  import { ShotChanges } from './lib/shots/shotchanges.svelte.ts';
+  import { ShotDetection } from './lib/shots/detection.svelte.ts';
   import { loadThemeChoice, resolveTheme, saveThemeChoice } from './lib/themes.ts';
   import { VttWorker } from './lib/worker/client.ts';
   import { Waveform } from './lib/waveform/waveform.svelte.ts';
@@ -54,6 +55,13 @@
   /** What the last shot-change key press did, shown on the timeline. */
   let shotNotice = $state('');
   const shots = new ShotChanges();
+  const detection = new ShotDetection();
+  /** What the timeline says about shot changes: finding them, or the last key press. */
+  const shotStatus = $derived(
+    detection.state === 'running'
+      ? `Finding shot changes… ${Math.floor(detection.progress * 100)}%`
+      : shotNotice,
+  );
   const waveform = new Waveform();
   /** The frame rate frame stepping uses: chosen, or measured from the video. */
   const fps = $derived(
@@ -64,7 +72,12 @@
     editor.mediaFps = player.hasMedia ? fps : null;
   });
   // Shot changes are kept per video, and checked by the Netflix rulesets.
-  $effect(() => shots.open(player.file));
+  $effect(() => {
+    const file = player.file;
+    // Another video: stop finding the last one's cuts.
+    untrack(() => detection.stop());
+    shots.open(file);
+  });
   $effect(() => {
     editor.shotChanges = shots.times;
   });
@@ -513,7 +526,7 @@
         {waveform}
         {fps}
         shotChanges={shots.times}
-        notice={shotNotice}
+        notice={shotStatus}
         onshotchanges={() => (shotsOpen = true)}
         onpointertime={(ms) => (pointerMs = ms)}
       />
@@ -560,7 +573,7 @@
   <RegionsDialog {editor} bind:open={regionsOpen} />
   <StylesDialog {editor} bind:open={stylesOpen} />
   <RulesDialog {editor} bind:open={rulesOpen} />
-  <ShotChangesDialog {shots} {player} {fps} bind:open={shotsOpen} />
+  <ShotChangesDialog {shots} {detection} {player} {fps} bind:open={shotsOpen} />
 </div>
 
 <style>

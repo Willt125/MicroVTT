@@ -1,5 +1,6 @@
 /**
- * Computes waveform peaks off the main thread. The audio track is read from the `File` a chunk
+ * Computes waveform peaks off the main thread (and, in an instance of its own, finds shot
+ * changes: see shots/detect-video.ts). The audio track is read from the `File` a chunk
  * at a time (Mediabunny's `BlobSource`) and decoded with WebCodecs; each decoded chunk is
  * reduced to peaks and released at once, so memory does not grow with the media's length. The
  * fine peaks go to OPFS (see cache.ts), and later opens of the same file reuse them.
@@ -8,10 +9,12 @@ import { ALL_FORMATS, AudioSampleSink, BlobSource, Input } from 'mediabunny';
 import { openCache, overviewOf, type OpenedCache } from './cache.ts';
 import { BINS_PER_SECOND, PeakReducer, loudest, peaksForView, type PeakStore } from './peaks.ts';
 import type { WaveformRequest, WaveformResponse } from './protocol.ts';
+import { detectShots } from '../shots/detect-video.ts';
+import type { ShotRequest, ShotResponse } from '../shots/protocol.ts';
 
 const scope = self as unknown as {
-  onmessage: ((event: MessageEvent<WaveformRequest>) => void) | null;
-  postMessage(message: WaveformResponse, transfer?: Transferable[]): void;
+  onmessage: ((event: MessageEvent<WaveformRequest | ShotRequest>) => void) | null;
+  postMessage(message: WaveformResponse | ShotResponse, transfer?: Transferable[]): void;
 };
 const post = (message: WaveformResponse, transfer: Transferable[] = []): void =>
   scope.postMessage(message, transfer);
@@ -176,6 +179,15 @@ scope.onmessage = (event) => {
     }
     case 'close':
       reset();
+      break;
+    // Shot detection runs in an instance of its own (see shots/detection.svelte.ts).
+    case 'detect':
+      detectShots(request, (message) => scope.postMessage(message)).catch((error: unknown) =>
+        scope.postMessage({
+          type: 'error',
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
       break;
   }
 };

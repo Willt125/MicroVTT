@@ -1,30 +1,41 @@
 <!--
-  The video's shot changes: how many are marked, importing a list from another tool (Subtitle
-  Edit, ffmpeg's scene detection, timecodes), saving the list, and clearing it. Marking one at
+  The video's shot changes: how many are marked, finding them in the video, importing a list from
+  another tool (Subtitle Edit, ffmpeg's scene detection, timecodes), saving the list, and
+  clearing it. Marking one at
   the playhead is the C key; the timeline draws them and cue edges snap to them.
 -->
 <script lang="ts">
-  import { formatShotChanges, formatTimestamp, parseShotChanges } from '@microvtt/core';
+  import {
+    formatShotChanges,
+    formatTimestamp,
+    parseShotChanges,
+    snapToFrame,
+  } from '@microvtt/core';
   import type { ShotChangeUnit } from '@microvtt/core';
   import type { Player } from '../player.svelte.ts';
-  import type { ShotChanges } from '../shotchanges.svelte.ts';
+  import type { ShotChanges } from '../shots/shotchanges.svelte.ts';
+  import type { ShotDetection } from '../shots/detection.svelte.ts';
+  import { DEFAULT_DETECTOR } from '../shots/detect.ts';
   import { rateLabel } from '../frames.ts';
 
   interface Props {
     shots: ShotChanges;
+    detection: ShotDetection;
     player: Player;
     /** The frame rate, when known: needed for lists in frames, and to snap times to frames. */
     fps: number | null;
     open: boolean;
   }
 
-  let { shots, player, fps, open = $bindable() }: Props = $props();
+  let { shots, detection, player, fps, open = $bindable() }: Props = $props();
 
   let dialog: HTMLDialogElement | undefined = $state();
   let fileInput: HTMLInputElement | undefined = $state();
   let text = $state('');
   let unit = $state<ShotChangeUnit>('seconds');
   let replace = $state(true);
+  /** How far above its neighbours a frame must change to count as a cut. */
+  let threshold = $state(DEFAULT_DETECTOR.threshold);
   let status = $state('');
 
   $effect(() => {
@@ -38,6 +49,38 @@
   });
 
   const preview = $derived(text.trim() === '' ? null : parseShotChanges(text, { unit, fps }));
+
+  /** Detected or imported times, on frames when the rate is known. */
+  const onFrames = (times: readonly number[]): number[] =>
+    times.map((t) => (fps ? snapToFrame(t, fps) : Math.round(t)));
+
+  function find(): void {
+    const file = player.file;
+    if (!file) return;
+    const replacing = replace;
+    status = '';
+    detection.start(file, { threshold }, (cuts) => {
+      const times = onFrames(cuts);
+      shots.set(replacing ? times : [...shots.times, ...times]);
+      status = `Found ${times.length.toLocaleString()} shot ${times.length === 1 ? 'change' : 'changes'}.`;
+    });
+  }
+
+  /** Stops finding, and keeps what was found so far. */
+  function stop(): void {
+    detection.stop();
+    const times = onFrames(detection.cuts);
+    if (times.length === 0) {
+      status = 'Stopped; no shot changes found yet.';
+      return;
+    }
+    shots.set(
+      replace
+        ? [...shots.times.filter((t) => t > detection.doneMs), ...times]
+        : [...shots.times, ...times],
+    );
+    status = `Stopped at ${formatTimestamp(Math.round(detection.doneMs))}; kept the ${times.length.toLocaleString()} found so far.`;
+  }
 
   function use(): void {
     if (!preview) return;
@@ -101,6 +144,43 @@
       >{/if}
   </p>
 
+  <p class="row">
+    <label><input type="checkbox" bind:checked={replace} /> Replace the marked ones</label>
+    <span class="muted">(otherwise found and imported ones are added)</span>
+  </p>
+
+  <fieldset>
+    <legend>Find them in the video</legend>
+    <p class="muted">
+      Reads every frame of the video in the background, in this browser: about as long as playing it
+      at several times the speed. Fades and dissolves are not found, only cuts.
+    </p>
+    <p class="row">
+      <label
+        >Sensitivity
+        <select bind:value={threshold} disabled={detection.state === 'running'}>
+          <option value={2}>More cuts</option>
+          <option value={DEFAULT_DETECTOR.threshold}>Normal</option>
+          <option value={4.5}>Fewer cuts</option>
+        </select></label
+      >
+      {#if detection.state === 'running'}
+        <button onclick={stop}>Stop</button>
+        <progress max="1" value={detection.progress} aria-label="Finding shot changes"></progress>
+        <span class="muted"
+          >{Math.floor(detection.progress * 100)}%, {detection.cuts.length.toLocaleString()} found</span
+        >
+      {:else}
+        <button class="primary" disabled={!player.file} onclick={find}>Find shot changes</button>
+      {/if}
+    </p>
+    {#if detection.state === 'unavailable' || detection.state === 'error'}
+      <p class="muted">
+        Cannot find them here: {detection.reason}. ffmpeg can, and its log can be imported below.
+      </p>
+    {/if}
+  </fieldset>
+
   <fieldset>
     <legend>Import a list</legend>
     <p class="muted">
@@ -133,7 +213,6 @@
       aria-label="Shot-change list"
       placeholder="Or paste it here"></textarea>
     <p class="row">
-      <label><input type="checkbox" bind:checked={replace} /> Replace the marked ones</label>
       <button class="primary" disabled={!preview || preview.times.length === 0} onclick={use}
         >{replace ? 'Import' : 'Add'}{preview
           ? ` ${preview.times.length.toLocaleString()}`
@@ -177,7 +256,12 @@
     margin-top: 0;
     font-size: 0.9rem;
   }
+  progress {
+    flex: 1;
+    min-width: 6rem;
+  }
   fieldset {
+    margin-bottom: 0.75rem;
     border: 1px solid var(--border);
     border-radius: var(--radius);
   }
