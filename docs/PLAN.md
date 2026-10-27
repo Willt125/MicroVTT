@@ -497,7 +497,11 @@ in `docs/QUALITY-RULES.md`.
 - [x] The Netflix Glyph List (version 2), generated into core as code-point ranges.
 - [x] Netflix Finnish (subtitles and SDH, adult and children's; guide of 2025-12-19), with
       Kotus abbreviations and state body names.
-- [ ] Later: shot-change timing (needs shot detection); more Netflix languages; the DCMP
+- [x] Shot-change timing (Netflix timing guide 2 and 4), on cuts marked by hand (`C`) or
+      imported from Subtitle Edit, ffmpeg or ffprobe lists.
+- [x] Finding shot changes automatically: hard cuts, after PySceneDetect's adaptive detector,
+      in the media worker (see BENCHMARKS.md).
+- [ ] Later: more Netflix languages; the DCMP
       Captioning Key and FCC caption-quality rules; checks for speaker identification and sound
       descriptions.
 - **Note on WCAG:** WCAG requires captions (1.2.2, 1.2.4) but sets few measurable values for

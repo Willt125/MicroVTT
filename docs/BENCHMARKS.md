@@ -114,3 +114,19 @@ codec's own rate first, so its peak cost is large:
 
 About 45 MB per minute of stereo, so the fallback is capped at 10 minutes (about 450 MB at
 worst); longer media without streamed decoding gets the timeline without a waveform.
+
+## Shot detection (headless Chromium)
+
+Same machine, no GPU, so video is decoded in software. Each frame is drawn 128 pixels wide and
+scored (`apps/web/src/lib/shots`); memory does not grow with the video's length, as each frame
+is released once scored.
+
+| Video                             | Length | Time to find cuts | Speed |
+| --------------------------------- | -----: | ----------------: | ----: |
+| 1280×720, 24 fps, VP9 at 1 Mbit/s |   60 s |             8.8 s |  6.8× |
+
+At that speed a two-hour film takes about 18 minutes; hardware decoding is faster. The video
+was ffmpeg's `testsrc2`, which moves in every frame: no cuts were reported in it.
+
+The single-file build grows by 55 KB (13 KB gzipped): detection runs in the media worker's code,
+so Mediabunny is not built in twice.

@@ -280,8 +280,8 @@ The timeline shows a time ruler, the audio **waveform**, a lane of cue blocks, a
 - Drag a cue's body to move it, together with the rest of the selection.
 - Drag near a cue's edge to change just that start or end.
 
-Edges **snap** to neighbouring cue edges, word timings and the playhead; a dashed line shows the
-snap. Hold **Alt** while dragging to turn snapping off.
+Edges **snap** to neighbouring cue edges, word timings, the playhead and shot changes; a dashed
+line shows the snap. Hold **Alt** while dragging to turn snapping off.
 
 **Word timings** show as short ticks at the top and bottom of a cue's block. They move with the
 cue when you drag it, and stay put when you drag one of its edges.
@@ -291,6 +291,37 @@ moment you want and press `P` (`Alt+P` while typing).
 
 The waveform is computed in the background and cached in the browser, so reopening the same media
 is instant.
+
+### Shot changes
+
+**Shot changes** (cuts) are drawn as lines across the waveform, with a notch in the ruler. They
+are for timing cues to the edit: Netflix's timing guide starts cues on a cut, and ends them two
+frames before one. With a Netflix ruleset chosen, the style checks report cues timed too close to
+a cut and offer a fix (see section 8).
+
+- **Find them:** **Find shot changes**, in the dialog that **Shot changes (N)** on the timeline opens, reads every frame of the video in the
+  background and marks the cuts it finds (hard cuts; fades and dissolves are not cuts). It
+  works at several times real time, depending on the computer: a two-hour film can take a
+  quarter of an hour or more. **Sensitivity** chooses between more and fewer cuts; the timeline
+  shows how far it has got, and **Stop** keeps the cuts found so far. Check the result: cuts
+  can be missed, and flashes or very fast motion can be taken for cuts. Where the browser
+  cannot decode the video this way, the dialog says so; ffmpeg's scene detection can be
+  imported instead.
+- **Mark one:** step to the first frame of the new shot (`,` and `.`) and press `C` (`Alt+C`
+  while typing). Pressing `C` on a marked cut removes it. With a frame rate (measured or chosen
+  in the media panel), the mark goes on the first frame at the playhead.
+- **Import a list:** the same dialog reads a Subtitle
+  Edit `.shotchanges` file, the log of ffmpeg's scene detection
+  (`ffmpeg -i video.mp4 -vf "select='gt(scene,0.3)',showinfo" -f null -`), ffprobe output, or
+  one time per line (seconds, milliseconds or frames, or timecodes). **Replace the marked ones** decides whether found and imported cuts
+  replace the marked ones or are added to them.
+- **Save the list** as a `.shotchanges` file (seconds, one per line), which Subtitle Edit and
+  MicroVTT read.
+- Edges snap to each cut, and, when the frame rate is known, to two frames before it.
+
+Shot changes belong to the video, not the caption file: they are kept in this browser for each
+media file (by its name, size and date), and come back when the same file is opened again.
+Undo does not cover them.
 
 ## 7. Problems: conformance checks
 
@@ -596,6 +627,7 @@ presses it as usual. While tap timing, the **Tap** button keeps focus so `Space`
 | `,` / `.`                           | Back / forward one frame                               |
 | `[` / `]`                           | Set the cue's start / end to the playhead              |
 | `P`                                 | Move the playhead to the mouse pointer on the timeline |
+| `C`                                 | Mark a shot change at the playhead, or remove it       |
 | `R`                                 | Loop the cue on or off                                 |
 | `N`                                 | New cue (at the playhead when media is open)           |
 | `S`                                 | Split the cue (see [section 4](#4-the-cue-list))       |

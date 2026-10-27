@@ -8,6 +8,6 @@
 export const createVttWorker = (): Worker =>
   new Worker(new URL('./worker/vtt.worker.ts', import.meta.url), { type: 'module' });
 
-/** The waveform worker: decodes the media and reduces it to peaks. */
+/** The media worker: decodes the media and reduces it to peaks; also finds shot changes. */
 export const createWaveformWorker = (): Worker =>
   new Worker(new URL('./waveform/waveform.worker.ts', import.meta.url), { type: 'module' });
