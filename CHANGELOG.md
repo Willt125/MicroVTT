@@ -5,7 +5,7 @@ All notable changes to MicroVTT are recorded here. The format follows
 [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html); what counts as the public API
 is set out in [CONTRIBUTING.md](CONTRIBUTING.md#versioning).
 
-## [0.2.2] - 2026-10-26
+## [Unreleased]
 
 ### Added
 
